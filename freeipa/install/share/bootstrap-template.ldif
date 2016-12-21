@@ -388,7 +388,7 @@ ipaGroupSearchFields: cn,description
 ipaSearchTimeLimit: 2
 ipaSearchRecordsLimit: 100
 ipaHomesRootDir: /home
-ipaDefaultLoginShell: /bin/sh
+ipaDefaultLoginShell: /bin/bash
 ipaDefaultPrimaryGroup: ipausers
 ipaMaxUsernameLength: 32
 ipaPwdExpAdvNotify: 4
