@@ -27,6 +27,7 @@ import sys
 from ipaplatform.base.paths import BasePathNamespace
 
 class ALTLinuxPathNamespace(BasePathNamespace):
+    SH = "/bin/bash"
     BIN_HOSTNAMECTL = "/usr/bin/hostnamectl"
     CACERT_PEM = "/var/lib/kerberos/krb5kdc/cacert.pem"
     CERTMONGER_DOGTAG_SUBMIT = "/usr/lib/certmonger/dogtag-submit"
