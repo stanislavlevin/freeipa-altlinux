@@ -64,6 +64,7 @@ if six.PY3:
 
 logger = logging.getLogger(__name__)
 
+
 named_conf_section_ipa_start_re = re.compile('\s*dyndb\s+"ipa"\s+"[^"]+"\s+{')
 named_conf_section_options_start_re = re.compile('\s*options\s+{')
 named_conf_section_end_re = re.compile('};')
@@ -1001,7 +1002,7 @@ class BindInstance(service.Service):
 
         sysupgrade.set_upgrade_state('dns', 'server_config_to_ldap', True)
 
-    def __setup_resolv_conf(self):
+    def __setup_resolv_conf_direct(self):
         if not self.fstore.has_file(paths.RESOLV_CONF):
             self.fstore.backup_file(paths.RESOLV_CONF)
 
@@ -1028,6 +1029,55 @@ class BindInstance(service.Service):
             # python DNS might have global resolver cached in this variable
             # we have to re-initialize it because resolv.conf has changed
             dns.resolver.default_resolver = None
+
+    def __setup_resolvconf(self):
+        if not self.fstore.has_file(paths.RESOLVCONF_CONF):
+            self.fstore.backup_file(paths.RESOLVCONF_CONF)
+
+        # Drop existing values
+        # TODO: save them
+        ipautil.run(['sed', '-i', '-r',
+                     '/^(name_servers|search_domains)=/d',
+                     paths.RESOLVCONF_CONF], raiseonerr=False)
+
+        resolv_txt = (
+            "\n# Added by FreeIPA server installer\nsearch_domains=" +
+            self.domain + "\n"
+        )
+
+        resolv_txt += "name_servers='"
+        ss = ''
+
+        for ip_address in self.ip_addresses:
+            if ip_address.version == 4:
+                resolv_txt += "127.0.0.1"
+                ss = ' '
+                break
+
+        for ip_address in self.ip_addresses:
+            if ip_address.version == 6:
+                resolv_txt += ss + "::1"
+                break
+
+        resolv_txt += "'\n"
+        try:
+            resolv_fd = open(paths.RESOLVCONF_CONF, 'a')
+            resolv_fd.write(resolv_txt)
+            resolv_fd.close()
+        except IOError as e:
+            logger.error('Could not write to resolvconf.conf: %s', e)
+        else:
+            # python DNS might have global resolver cached in this variable
+            # we have to re-initialize it because resolv.conf has changed
+            dns.resolver.default_resolver = None
+
+        ipautil.run(['resolvconf', '-u'])
+
+    def __setup_resolv_conf(self):
+       if os.path.exists(paths.RESOLVCONF_CONF):
+           self.__setup_resolvconf()
+       else:
+           self.__setup_resolv_conf_direct()
 
     def __adjust_config_paths(self):
         ipautil.run(['sed', '-i', '-r',
@@ -1223,13 +1273,16 @@ class BindInstance(service.Service):
 
         self.dns_backup.clear_records(self.api.Backend.ldap2.isconnected())
 
-        for f in [paths.NAMED_CONF, paths.RESOLV_CONF]:
+
+        for f in [paths.NAMED_CONF, paths.RESOLV_CONF, paths.RESOLVCONF_CONF]:
             try:
                 self.fstore.restore_file(f)
             except ValueError as error:
                 logger.debug('%s', error)
 
         installutils.rmtree(paths.BIND_LDAP_DNS_IPA_WORKDIR)
+
+        ipautil.run(['resolvconf', '-u'])
 
         # disabled by default, by ldap_configure()
         if enabled:

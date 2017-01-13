@@ -112,6 +112,7 @@ class BasePathNamespace(object):
     PKI_TOMCAT_PASSWORD_CONF = "/etc/pki/pki-tomcat/password.conf"
     ETC_REDHAT_RELEASE = "/etc/redhat-release"
     RESOLV_CONF = "/etc/resolv.conf"
+    RESOLVCONF_CONF = None
     SAMBA_KEYTAB = "/etc/samba/samba.keytab"
     SMB_CONF = "/etc/samba/smb.conf"
     LIMITS_CONF = "/etc/security/limits.conf"
