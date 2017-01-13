@@ -747,6 +747,8 @@ class BindInstance(service.Service):
 
         self.step("configuring named to start on boot", self.__enable)
         self.step("changing resolv.conf to point to ourselves", self.__setup_resolv_conf)
+        self.step("adjust paths in bind configuration files", self.__adjust_config_paths)
+        self.step("disable chroot for bind", self.__disable_chroot)
         self.start_creation()
 
     def start_named(self):
@@ -1030,6 +1032,25 @@ class BindInstance(service.Service):
             # we have to re-initialize it because resolv.conf has changed
             dns.resolver.default_resolver = None
 
+    def __adjust_config_paths(self):
+        ipautil.run(['sed', '-i', '-r',
+                     '-e', 's|^include[[:blank:]]+"/etc/rfc1912\.conf";|include "/etc/bind/rfc1912.conf";|',
+                     '-e', 's|include[[:blank:]]+"/etc/rfc1918\.conf";|include "/etc/bind/rfc1918.conf";|',
+                     '-e', 's|^include[[:blank:]]+"/etc/resolvconf-zones\.conf";|include "/etc/bind/resolvconf-zones.conf";|',
+                     '/var/lib/bind/etc/local.conf'], raiseonerr=False)
+        ipautil.run(['sed', '-i', '-r',
+                     '-e', 's|directory "/zone";|directory "/etc/bind/zone";|',
+                     '-e', 's|include[[:blank:]]+"/etc/resolvconf-options\.conf";|include "/etc/bind/resolvconf-options.conf";|',
+                     '/var/lib/bind/etc/options.conf'], raiseonerr=False)
+        ipautil.run(['sed', '-i', '-r',
+                     's|^include[[:blank:]]+"/etc/rndc\.key";|include "/etc/bind/rndc.key";|',
+                     '/var/lib/bind/etc/rndc.conf'], raiseonerr=False)
+
+    def __disable_chroot(self):
+        result = ipautil.run(['control', 'bind-chroot'], capture_output=True)
+        self.sstore.backup_state('control', 'bind-chroot', result.output)
+        ipautil.run(['control', 'bind-chroot', 'disabled'])
+
     def __generate_rndc_key(self):
         installutils.check_entropy()
         ipautil.run([paths.GENERATE_RNDC_KEY])
@@ -1222,6 +1243,10 @@ class BindInstance(service.Service):
             self.enable()
         else:
             self.disable()
+
+        value = self.sstore.restore_state('control', 'bind-chroot')
+        if value is not None:
+            ipautil.run(['control', 'bind-chroot', value])
 
         if running:
             self.restart()
