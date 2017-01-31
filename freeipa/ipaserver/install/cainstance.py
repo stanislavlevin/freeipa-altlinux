@@ -844,7 +844,7 @@ class CAInstance(DogtagInstance):
 
         agent_args = [paths.CERTMONGER_DOGTAG_SUBMIT,
                       "--cafile", chain_file.name,
-                      "--ee-url", 'http://%s:8080/ca/ee/ca/' % self.fqdn,
+                      "--ee-url", 'http://%s:8090/ca/ee/ca/' % self.fqdn,
                       "--agent-url",
                       'https://%s:8443/ca/agent/ca/' % self.fqdn,
                       "--certfile", agent_cert.name,
