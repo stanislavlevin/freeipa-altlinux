@@ -411,8 +411,8 @@ ipaDefaultEmailDomain: $DOMAIN
 ipaMigrationEnabled: FALSE
 ipaConfigString: AllowNThash
 ipaConfigString: KDC:Disable Last Success
-ipaSELinuxUserMapOrder: guest_u:s0$$xguest_u:s0$$user_u:s0$$staff_u:s0-s0:c0.c1023$$unconfined_u:s0-s0:c0.c1023
-ipaSELinuxUserMapDefault: unconfined_u:s0-s0:c0.c1023
+ipaSELinuxUserMapOrder: officer_u:s0-s3:c0.c15$$generic3_u:s3-s3:c0.c15$$generic_u2:s2-s3:c0.c15$$generic_u1:s1-s3:c0.c15$$generic_u:s0-s3:c0.c15
+ipaSELinuxUserMapDefault: generic_u:s0-s3:c0.c15
 
 dn: cn=cosTemplates,cn=accounts,$SUFFIX
 changetype: add
