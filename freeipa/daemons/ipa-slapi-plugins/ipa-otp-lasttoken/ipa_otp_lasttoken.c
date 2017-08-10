@@ -137,7 +137,7 @@ static bool is_pwd_enabled(const char *user_dn)
 static bool is_allowed(Slapi_PBlock *pb, Slapi_Entry *entry)
 {
     Slapi_DN *target_sdn = NULL;
-    const char *bind_dn;
+    const char *bind_dn = NULL;
 
     /* Ignore internal operations. */
     if (slapi_op_internal(pb))

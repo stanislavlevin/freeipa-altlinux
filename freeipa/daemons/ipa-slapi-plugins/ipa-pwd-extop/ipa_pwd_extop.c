@@ -693,7 +693,7 @@ static Slapi_Entry *get_entry_by_principal(const char *principal)
                          "krbCanonicalName",
                          "enrolledBy", NULL };
     Slapi_Entry **es = NULL;
-    int res, ret, i;
+    int res = 0, ret, i;
     Slapi_Entry *entry = NULL;
 
     /* Find ancestor base DN */
@@ -1820,7 +1820,7 @@ static int ipapwd_start( Slapi_PBlock *pb )
     krb5_context krbctx = NULL;
     krb5_error_code krberr;
     char *realm = NULL;
-    char *config_dn;
+    char *config_dn = NULL;
     Slapi_Entry *config_entry = NULL;
     int ret;
 

@@ -79,10 +79,10 @@ static int ipa_cldap_get_domain_entry(struct ipa_cldap_ctx *ctx,
                                       char **domain,
                                       char **guid, char **sid, char **name)
 {
-    Slapi_PBlock *pb;
+    Slapi_PBlock *pb = NULL;
     Slapi_Entry **e = NULL;
     const char *filter = "objectclass=ipaNTDomainAttrs";
-    int ret;
+    int ret = 0;
 
     pb = slapi_pblock_new();
     if (!pb) {

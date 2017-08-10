@@ -340,7 +340,7 @@ int ipapwd_getPolicy(const char *dn,
                       "krbPwdHistoryLength", NULL};
     Slapi_Entry **es = NULL;
     Slapi_Entry *pe = NULL;
-    int ret, res, scope, i;
+    int ret, res = 0, scope, i;
     int buffer_flags=0;
     Slapi_ValueSet* results = NULL;
     char *actual_type_name = NULL;
@@ -491,7 +491,7 @@ done:
 int ipapwd_gen_checks(Slapi_PBlock *pb, char **errMesg,
                       struct ipapwd_krbcfg **config, int check_flags)
 {
-    int ret, ssf;
+    int ret, ssf = 0;
     int rc = LDAP_SUCCESS;
     Slapi_Backend *be;
     const Slapi_DN *psdn;
@@ -958,7 +958,7 @@ done:
 int ipapwd_apply_mods(const char *dn, Slapi_Mods *mods)
 {
     Slapi_PBlock *pb;
-    int ret;
+    int ret = 0;
 
     LOG_TRACE("=>\n");
 

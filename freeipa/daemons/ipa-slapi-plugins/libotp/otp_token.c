@@ -116,7 +116,7 @@ static bool writeattr(const struct otp_token *token, const char *attr,
     Slapi_PBlock *pb = NULL;
     bool success = false;
     char value[32];
-    int ret;
+    int ret = 0;
 
     LDAPMod *mods[] = {
         &(LDAPMod) {

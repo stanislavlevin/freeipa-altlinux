@@ -8,7 +8,7 @@
 
 static int ipa_topo_pre_entry_in_scope(Slapi_PBlock *pb)
 {
-    Slapi_DN *dn;
+    Slapi_DN *dn = NULL;
     static Slapi_DN *config_dn =  NULL;;
 
     slapi_pblock_get(pb, SLAPI_TARGET_SDN, &dn);
@@ -23,9 +23,9 @@ static int ipa_topo_pre_entry_in_scope(Slapi_PBlock *pb)
 }
 int ipa_topo_is_entry_managed(Slapi_PBlock *pb)
 {
-    Slapi_Entry *e;
-    char *pi;
-    int op_type;
+    Slapi_Entry *e = NULL;
+    char *pi = NULL;
+    int op_type = 0;
 
     if (!ipa_topo_pre_entry_in_scope(pb)) {
         /* we don't care for general mods, only specific
@@ -62,7 +62,7 @@ int ipa_topo_is_entry_managed(Slapi_PBlock *pb)
 int
 ipa_topo_is_agmt_attr_restricted(Slapi_PBlock *pb)
 {
-    LDAPMod **mods;
+    LDAPMod **mods = NULL;
     int i;
     int rc = 0;
 
@@ -78,7 +78,7 @@ ipa_topo_is_agmt_attr_restricted(Slapi_PBlock *pb)
 int
 ipa_topo_is_invalid_managed_suffix(Slapi_PBlock *pb)
 {
-    LDAPMod **mods;
+    LDAPMod **mods = NULL;
     int i;
     int rc = 0;
 
@@ -106,7 +106,7 @@ ipa_topo_is_invalid_managed_suffix(Slapi_PBlock *pb)
 int
 ipa_topo_is_segm_attr_restricted(Slapi_PBlock *pb)
 {
-    LDAPMod **mods;
+    LDAPMod **mods = NULL;
     int i;
     int rc = 0;
 
@@ -315,8 +315,8 @@ int
 ipa_topo_check_segment_is_valid(Slapi_PBlock *pb, char **errtxt)
 {
     int rc = 0;
-    Slapi_Entry *add_entry;
-    char *pi;
+    Slapi_Entry *add_entry = NULL;
+    char *pi = NULL;
 
     /* we have to check if the operation is triggered by the
      * topology plugin itself - allow it
@@ -383,8 +383,8 @@ int
 ipa_topo_check_segment_updates(Slapi_PBlock *pb)
 {
     int rc = 0;
-    Slapi_Entry *mod_entry;
-    char *pi;
+    Slapi_Entry *mod_entry = NULL;
+    char *pi = NULL;
 
     /* we have to check if the operation is triggered by the
      * topology plugin itself - allow it
@@ -406,7 +406,7 @@ ipa_topo_check_entry_move(Slapi_PBlock *pb)
 {
     int rc = 0;
     int entry_type = TOPO_IGNORE_ENTRY;
-    Slapi_Entry *modrdn_entry;
+    Slapi_Entry *modrdn_entry = NULL;
     slapi_pblock_get(pb,SLAPI_MODRDN_TARGET_ENTRY,&modrdn_entry);
     entry_type = ipa_topo_check_entry_type(modrdn_entry);
     switch (entry_type) {
@@ -428,8 +428,8 @@ int
 ipa_topo_check_host_updates(Slapi_PBlock *pb)
 {
     int rc = 0;
-    Slapi_Entry *mod_entry;
-    char *pi;
+    Slapi_Entry *mod_entry = NULL;
+    char *pi = NULL;
 
     /* we have to check if the operation is triggered by the
      * topology plugin itself - allow it
@@ -450,9 +450,9 @@ int
 ipa_topo_check_topology_disconnect(Slapi_PBlock *pb)
 {
     int rc = 1;
-    Slapi_Entry *del_entry;
+    Slapi_Entry *del_entry = NULL;
     struct node_fanout *fanout = NULL;
-    char *pi;
+    char *pi = NULL;
 
     /* we have to check if the operation is triggered by the
      * topology plugin itself - allow it

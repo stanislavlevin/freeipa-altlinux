@@ -32,7 +32,7 @@ ipa_topo_util_get_entry (char *dn)
 {
     int rc = 0;
     Slapi_Entry *res_entry = NULL;
-    Slapi_Entry **entries;
+    Slapi_Entry **entries = NULL;
     Slapi_PBlock *pb = NULL;
 
     pb = slapi_pblock_new();
@@ -75,7 +75,7 @@ char *
 ipa_topo_util_get_pluginhost(void)
 {
     int rc = 0;
-    Slapi_Entry **entries;
+    Slapi_Entry **entries = NULL;
     Slapi_PBlock *pb = NULL;
     char *host = NULL;
     char *host_attrs[] = {"nsslapd-localhost", NULL};
@@ -121,7 +121,7 @@ void
 ipa_topo_util_set_domain_level(void)
 {
     int rc = 0;
-    Slapi_Entry **entries;
+    Slapi_Entry **entries = NULL;
     Slapi_PBlock *pb = NULL;
 
     pb = slapi_pblock_new();
@@ -157,7 +157,7 @@ TopoReplica *
 ipa_topo_util_get_replica_conf(char *repl_root)
 {
     int rc = 0;
-    Slapi_Entry **entries;
+    Slapi_Entry **entries = NULL;
     Slapi_PBlock *pb = NULL;
     char *filter;
     TopoReplica *topoRepl = NULL;
@@ -209,7 +209,7 @@ ipa_topo_util_get_replica_segments(TopoReplica *replica)
 {
     TopoReplicaSegment *repl_segment = NULL;
     int rc = 0;
-    Slapi_Entry **entries;
+    Slapi_Entry **entries = NULL;
     Slapi_PBlock *pb = NULL;
     char *filter;
 
@@ -248,7 +248,7 @@ int
 ipa_topo_util_setup_servers(void)
 {
     int rc = 0;
-    Slapi_Entry **entries;
+    Slapi_Entry **entries = NULL;
     Slapi_PBlock *pb = NULL;
     char *filter;
 
@@ -1122,7 +1122,7 @@ ipa_topo_util_segm_remove(TopoReplica *tconf,
 {
     Slapi_PBlock *pb;
     char *dn = NULL;
-    int ret;
+    int ret = 0;
 
     /* remove it from the database */
     dn = ipa_topo_segment_dn(tconf, tsegm->name);
@@ -1309,7 +1309,7 @@ ipa_topo_util_update_segments_for_host(TopoReplica *conf, char *hostname)
 {
     int rc = 0;
     int nentries;
-    Slapi_Entry **entries;
+    Slapi_Entry **entries = NULL;
     Slapi_Entry *repl_agmt;
     Slapi_PBlock *pb = NULL;
     char *filter;
@@ -1650,9 +1650,9 @@ ipa_topo_util_disable_repl_for_principal(char *repl_root, char *principal)
     Slapi_DN *sdn;
     char *filter;
     Slapi_PBlock *pb;
-    Slapi_Entry **entries;
+    Slapi_Entry **entries = NULL;
     Slapi_Mods *smods;
-    int ret;
+    int ret = 0;
 
     /* to disable replication for a user/principal it ahs to be removed from the
      * allowed bind dns in the replica object and from the bind dn group
@@ -1801,7 +1801,7 @@ ipa_topo_util_suffix_update(Slapi_Entry *config_post, Slapi_Entry *config_pre,
 int
 ipa_topo_util_is_tombstone_op(Slapi_PBlock *pb)
 {
-    Slapi_Operation *op;
+    Slapi_Operation *op = NULL;
 
     slapi_pblock_get(pb, SLAPI_OPERATION, &op);
     return slapi_operation_is_flag_set(op, SLAPI_OP_FLAG_TOMBSTONE_ENTRY);
@@ -1849,7 +1849,7 @@ ipa_topo_util_cleanruv_element(char *repl_root, char *hostname)
 {
     Slapi_PBlock *pb = NULL;
     char *filter = "(&(objectclass=nstombstone)(nsuniqueid=ffffffff-ffffffff-ffffffff-ffffffff))";
-    int ret;
+    int ret = 0;
     Slapi_Entry **entries = NULL;
 
     /* find ruv object */

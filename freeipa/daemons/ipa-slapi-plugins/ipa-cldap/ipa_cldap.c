@@ -49,7 +49,7 @@ Slapi_PluginDesc ipa_cldap_desc = {
 
 static int ipa_cldap_start(Slapi_PBlock *pb)
 {
-    struct ipa_cldap_ctx *ctx;
+    struct ipa_cldap_ctx *ctx = NULL;
     int ret;
 
     ret = slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &ctx);
@@ -71,7 +71,7 @@ static int ipa_cldap_start(Slapi_PBlock *pb)
 
 static int ipa_cldap_stop(Slapi_PBlock *pb)
 {
-    struct ipa_cldap_ctx *ctx;
+    struct ipa_cldap_ctx *ctx = NULL;
     void *retval;
     int ret;
 
@@ -101,9 +101,9 @@ static int ipa_cldap_stop(Slapi_PBlock *pb)
 static int ipa_cldap_init_service(Slapi_PBlock *pb,
                                   struct ipa_cldap_ctx **cldap_ctx)
 {
-    struct ipa_cldap_ctx *ctx;
+    struct ipa_cldap_ctx *ctx = NULL;
     struct sockaddr_in6 addr;
-    Slapi_Entry *e;
+    Slapi_Entry *e = NULL;
     int flags;
     int val;
     int ret;

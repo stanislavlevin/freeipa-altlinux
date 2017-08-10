@@ -80,7 +80,7 @@ static const char *ipa_realm_dn;
 static int
 ipaenrollement_secure(Slapi_PBlock *pb, char **errMesg)
 {
-    int ssf;
+    int ssf = NULL;
     int rc = LDAP_SUCCESS;
 
     LOG_TRACE("=> ipaenrollment_secure\n");
@@ -132,7 +132,7 @@ ipa_join(Slapi_PBlock *pb)
     Slapi_DN *sdn;
     Slapi_Backend *be;
     Slapi_Entry **es = NULL;
-    int rc=0, ret=0, res, i;
+    int rc=0, ret=0, res=0, i;
     int is_root=0;
     char *krbLastPwdChange = NULL;
     char *fqdn = NULL;
@@ -347,7 +347,7 @@ free_and_return:
 static int
 ipaenrollment_extop(Slapi_PBlock *pb)
 {
-    char *oid;
+    char *oid = NULL;
     char *errMesg = NULL;
     int rc, ret;
 

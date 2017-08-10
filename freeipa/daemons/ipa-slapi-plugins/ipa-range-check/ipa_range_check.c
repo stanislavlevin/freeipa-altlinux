@@ -180,7 +180,7 @@ static int build_domain_to_forest_root_map(struct domain_info **head,
     Slapi_DN *base_dn = NULL;
     char *base = NULL;
 
-    int search_result;
+    int search_result = 0;
     int ret = 0;
 
     LOG("Building forest root map \n");
@@ -475,17 +475,17 @@ static int ipa_range_check_close(Slapi_PBlock *pb)
 static int ipa_range_check_pre_op(Slapi_PBlock *pb, int modtype)
 {
     int ret;
-    int is_repl_op;
+    int is_repl_op = 0;
     struct slapi_entry *entry = NULL;
     bool free_entry = false;
     struct range_info *new_range = NULL;
     struct range_info *old_range = NULL;
-    const char *dn_str;
+    const char *dn_str = 0;
     Slapi_DN *dn = NULL;
-    struct ipa_range_check_ctx *ctx;
+    struct ipa_range_check_ctx *ctx = NULL;
     LDAPMod **mods = NULL;
     Slapi_PBlock *search_pb = NULL;
-    int search_result;
+    int search_result = 0;
     Slapi_Entry **search_entries = NULL;
     size_t c;
     int ranges_valid = 0;
@@ -717,7 +717,7 @@ static int ipa_range_check_init_ctx(Slapi_PBlock *pb,
                                     struct ipa_range_check_ctx **_ctx)
 {
     struct ipa_range_check_ctx *ctx;
-    Slapi_Entry *entry;
+    Slapi_Entry *entry = NULL;
     int ret;
 
     ctx = calloc(1, sizeof(struct ipa_range_check_ctx));

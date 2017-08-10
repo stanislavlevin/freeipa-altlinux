@@ -135,7 +135,7 @@ ipa_topo_post_mod(Slapi_PBlock *pb)
     int entry_type;
     Slapi_Entry *mod_entry = NULL;
     Slapi_Entry *pre_entry = NULL;
-    LDAPMod **mods;
+    LDAPMod **mods = NULL;
 
     slapi_log_error(SLAPI_LOG_PLUGIN, IPA_TOPO_PLUGIN_SUBSYSTEM,
                     "--> ipa_topo_post_mod\n");

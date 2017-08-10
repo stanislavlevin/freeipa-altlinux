@@ -74,7 +74,7 @@ static int ipa_extdom_extop(Slapi_PBlock *pb)
     struct berval *req_val = NULL;
     struct berval *ret_val = NULL;
     struct extdom_req *req = NULL;
-    struct ipa_extdom_ctx *ctx;
+    struct ipa_extdom_ctx *ctx = NULL;
     enum extdom_version version;
 
     ret = slapi_pblock_get(pb, SLAPI_EXT_OP_REQ_OID, &oid);
@@ -164,7 +164,7 @@ done:
 static int ipa_extdom_init_ctx(Slapi_PBlock *pb, struct ipa_extdom_ctx **_ctx)
 {
     struct ipa_extdom_ctx *ctx;
-    Slapi_Entry *e;
+    Slapi_Entry *e = NULL;
     int ret;
 
     ctx = calloc(1, sizeof(struct ipa_extdom_ctx));
