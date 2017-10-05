@@ -56,6 +56,8 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     SSHD_CONFIG = "/etc/openssh/sshd_config"
     SYSCONFIG_HTTPD = "/etc/sysconfig/httpd2"
     SYSCONFIG_NAMED = "/etc/sysconfig/bind"
+    SYSTEMD_SYSTEM_HTTPD_D_DIR = "/etc/systemd/system/httpd2.service.d/"
+    SYSTEMD_SYSTEM_HTTPD_IPA_CONF = "/etc/systemd/system/httpd2.service.d/ipa.conf"
     NAMED_PID = "/var/run/named/named.pid"
     CHROMIUM_BROWSER = "/usr/bin/chromium"
     LIB_SYSTEMD_SYSTEMD_DIR = "/lib/systemd/system/"
