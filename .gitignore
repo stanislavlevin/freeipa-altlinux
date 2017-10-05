@@ -59,7 +59,6 @@ freeipa2-dev-doc
 ~/doc/guide/Makefile
 
 # Root directory
-/freeipa.spec
 /dist/
 /.tox/
 /.cache/
