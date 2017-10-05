@@ -45,6 +45,7 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     HTTPD_SSL_CONF = "/etc/httpd2/conf/ssl.conf"
     HTTPD_PASSWORD_CONF = "/etc/httpd2/conf/password.conf"
     IPA_CUSTODIA_SOCKET = '/run/httpd2/ipa-custodia.sock'
+    IPA_ODS_EXPORTER_CCACHE = "/var/lib/opendnssec/tmp/ipa-ods-exporter.ccache"
     KDC_CERT = "/var/lib/kerberos/krb5kdc/kdc.crt"
     KDC_KEY = "/var/lib/kerberos/krb5kdc/kdc.key"
     KRB5KDC_KDC_CONF = "/var/lib/kerberos/krb5kdc/kdc.conf"
@@ -61,6 +62,7 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     NAMED_MANAGED_KEYS_DIR = "/var/named/dynamic"
     OLD_IPA_KEYTAB = "/etc/httpd2/conf/ipa.keytab"
     OLD_KRA_AGENT_PEM = "/etc/httpd2/alias/kra-agent.pem"
+    OPENDNSSEC_KASP_DB = "/var/lib/opendnssec/kasp.db"
     PAM_KRB5_SO = "/lib/security/pam_krb5.so"
     PAM_KRB5_SO_64 = "/lib64/security/pam_krb5.so"
     SSH_CONFIG_DIR = "/etc/openssh"
@@ -74,6 +76,7 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/kerberos/krb5kdc/"
     VAR_KRB5KDC_K5_REALM = "/var/lib/kerberos/krb5kdc/.k5."
     VAR_LOG_HTTPD_DIR = "/var/log/httpd2"
+    VAR_OPENDNSSEC_DIR = "/var/lib/opendnssec"
     # https://docs.python.org/2/library/platform.html#cross-platform
     if sys.maxsize > 2**32:
         LIBSOFTHSM2_SO = BasePathNamespace.LIBSOFTHSM2_SO_64
