@@ -26,6 +26,8 @@ from ipaplatform.base.constants import BaseConstantsNamespace
 
 
 class ALTLinuxConstantsNamespace(BaseConstantsNamespace):
-    pass
+    HTTPD_USER = "apache2"
+    HTTPD_GROUP = "apache2"
+
 
 constants = ALTLinuxConstantsNamespace()
