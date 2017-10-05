@@ -1,0 +1,13 @@
+# placeholder
+freeipa == @VERSION@
+ipa == @VERSION@
+# actual packages
+ipaclient == @VERSION@
+ipalib == @VERSION@
+ipaplatform == @VERSION@
+ipapython == @VERSION@
+ipaserver == @VERSION@
+ipatests == @VERSION@
+
+# we include some checks available only in pylint-1.7 and on
+pylint >= 1.7

@@ -1,0 +1,35 @@
+jobs:
+  fedora-26/build:
+    requires: []
+    priority: 100
+    job:
+      class: Build
+      args:
+        git_repo: '{git_repo}'
+        git_refspec: '{git_refspec}'
+        template: &ci-master-f26
+          name: freeipa/ci-master-f26
+          version: 0.1.2
+        timeout: 1800
+
+  fedora-26/simple_replication:
+    requires: [fedora-26/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-26/build_url}'
+        test_suite: test_integration/test_simple_replication.py
+        template: *ci-master-f26
+        timeout: 3600
+
+  fedora-26/caless:
+    requires: [fedora-26/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-26/build_url}'
+        test_suite: test_integration/test_caless.py::TestServerReplicaCALessToCAFull
+        template: *ci-master-f26
+        timeout: 3600
