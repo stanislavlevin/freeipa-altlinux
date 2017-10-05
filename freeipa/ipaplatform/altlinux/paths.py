@@ -44,6 +44,7 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     HTTPD_NSS_CONF = "/etc/httpd2/conf/nss.conf"
     HTTPD_SSL_CONF = "/etc/httpd2/conf/ssl.conf"
     HTTPD_PASSWORD_CONF = "/etc/httpd2/conf/password.conf"
+    IPA_CUSTODIA_SOCKET = '/run/httpd2/ipa-custodia.sock'
     KDC_CERT = "/var/lib/kerberos/krb5kdc/kdc.crt"
     KDC_KEY = "/var/lib/kerberos/krb5kdc/kdc.key"
     KRB5KDC_KDC_CONF = "/var/lib/kerberos/krb5kdc/kdc.conf"
