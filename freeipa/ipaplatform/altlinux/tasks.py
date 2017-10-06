@@ -23,25 +23,45 @@ This module contains default ALT Linux specific implementations of system tasks.
 '''
 
 import os
-import stat
-import socket
 
-from ipapython.ipa_log_manager import root_logger, log_mgr
 from ipapython import ipautil
-import ipapython.errors
 
-from ipaplatform.constants import constants
-from ipaplatform.base.tasks import BaseTaskNamespace
+from ipaplatform.redhat.tasks import RedHatTaskNamespace
 from ipaplatform.paths import paths
 
-class ALTLinuxTaskNamespace(BaseTaskNamespace):
+class ALTLinuxTaskNamespace(RedHatTaskNamespace):
 
-    def backup_and_replace_hostname(self, fstore, statestore, hostname):
-        """
-        Don't actually replace hostname at the time, just check it.
-        """
-        sys_hostname = socket.gethostname()
-        if sys_hostname != hostname:
-            raise RuntimeError('Hostname %s don\'t match system hostname %s.' % (hostname, sys_hostname))
+    # TODO: insert, reload, remove ca cert update
+    def reload_systemwide_ca_store(self):
+        return True
+
+    def insert_ca_certs_into_systemwide_ca_store(self, ca_certs):
+        return True
+
+    def remove_ca_certs_from_systemwide_ca_store(self):
+        return True
+    # END of TODO: insert, reload, remove ca cert update
+
+    # TODO: use Alt tool like authconfig
+    def restore_pre_ipa_client_configuration(self, fstore, statestore,
+                                                 was_sssd_installed,
+                                                 was_sssd_configured):
+        return True
+
+    def set_nisdomain(self, nisdomain):
+        return True
+
+    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore):
+        return True
+
+    def modify_pam_to_use_krb5(self, statestore):
+        return True
+
+    def backup_auth_configuration(self, path):
+        return True
+
+    def restore_auth_configuration(self, path):
+        return True
+    # END of TODO: use Alt tool like authconfig
 
 tasks = ALTLinuxTaskNamespace()
