@@ -1,0 +1,17 @@
+object 152881ed191b6d26eff99a8d344822b3f4c90065
+type commit
+tag release-4-6-1
+tagger Tomas Krizek <tkrizek@redhat.com> 1506075237 +0200
+
+tagging IPAv4 4.6.1
+-----BEGIN PGP SIGNATURE-----
+
+iQEzBAABCAAdFiEEmRJdmXAEAsSnfHFdIqKpS15JQVoFAlnE4mUACgkQIqKpS15J
+QVpkuAf+JC/AKGoTQ/1dX2DH9+swJvi/GG9Vyy1fwsoR8WCPAyh4i51GsMxBWxBe
+3HdRS9wva0+Edj93sd0hHv6MiFy8lViLsUTrSemr/r7nxijw4RWScdXR/o7tRplR
+dfj5hQqbmDptVAiNKCu7IcN5o4DDwg3W05YFMo18j31QNYhZZy1wLp0H/+FD7TxD
+BC/WDjwNtxG2IoHcKUZ1IRFHzRj+SB5qBE+bcgUN2c5QqBqTXpN4fGCb9zcri0ez
+G05ToPcFSNvjttht5SLzmAEz7fMsH20bfw/sktZY24B5sFdSznqwvpnDhXi00YW7
+PnRr3Ub6RIuJG16yJ53ZGBIwhFOG7w==
+=kHBW
+-----END PGP SIGNATURE-----

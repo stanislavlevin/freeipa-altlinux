@@ -1,0 +1,2 @@
+tar: release-4-6-1:.
+diff: release-4-6-1:. @name@ name=@name@-@version@.patch
