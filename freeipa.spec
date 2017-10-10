@@ -1,4 +1,4 @@
-%{!?ONLY_CLIENT:%global ONLY_CLIENT 0}
+%define java_bin /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.144-1.b01.x86_64/jre/bin
 %global enable_server_option --enable-server
 
 # Build with ipatests
@@ -45,11 +45,12 @@ Patch: %name-%version.patch
 
 BuildRequires(pre): rpm-build-ubt
 BuildRequires(pre): libkrb5-devel
-BuildRequires: rpm-macros-webserver-common
-BuildRequires: rpm-build-python
-BuildRequires: rpm-build-python3
-BuildRequires: rpm-macros-fedora-compat
+BuildRequires(pre): rpm-macros-webserver-common
+BuildRequires(pre): rpm-build-python
+BuildRequires(pre): rpm-build-python3
+BuildRequires(pre): rpm-macros-fedora-compat
 BuildRequires: libkrb5-devel >= %krb5_version
+BuildRequires: java-1.8.0-openjdk-headless
 BuildRequires: openldap-devel
 BuildRequires: libsasl2-devel
 BuildRequires: libsystemd-devel
@@ -64,9 +65,18 @@ BuildRequires: automake
 BuildRequires: libtool
 BuildRequires: gettext
 BuildRequires: python-dev
-BuildRequires: python-module-setuptools
+#BuildRequires: python-module-setuptools >= 36.5.0
+BuildRequires: python-module-pyparsing
+BuildRequires: python-module-execnet
+BuildRequires: python-module-mock
+BuildRequires: python-module-appdirs
+BuildRequires: python3-module-pyparsing
+BuildRequires: python3-module-execnet
+BuildRequires: python3-module-mock
+BuildRequires: python3-module-appdirs
 %if 0%{?with_python3}
 BuildRequires: python3-dev
+#BuildRequires: python3-module-setuptools >= 36.5.0
 BuildRequires: python3-module-setuptools
 %endif # with_python3
 BuildRequires: systemd
@@ -804,7 +814,7 @@ cp -r %_builddir/freeipa-%version %_builddir/freeipa-%version-python3
 # UI compilation segfaulted on some arches when the stack was lower (#1040576)
 export JAVA_STACK_SIZE="8m"
 # PATH is workaround for https://bugzilla.redhat.com/show_bug.cgi?id=1005235
-export PATH=/usr/bin:/usr/sbin:$PATH
+export PATH=%java_bin:/usr/bin:/usr/sbin:$PATH
 export PYTHON=%__python
 export SUPPORTED_PLATFORM=altlinux
 export IPA_VERSION_IS_GIT_SNAPSHOT=no
@@ -878,23 +888,24 @@ done;
 
 %make_build
 
-#%if 0%{?with_python3}
-#pushd %_builddir/freeipa-%version-python3
-#export PYTHON=%__python3
-## Workaround: make sure all shebangs are pointing to Python 3
-## This should be solved properly using setuptools
-## and this hack should be removed.
-#find \
-#	! -name '*.pyc' -a \
-#	! -name '*.pyo' -a \
-#	-type f -exec grep -qsm1 '^#!.*\bpython' {} \; \
-#	-exec sed -i -e '1 s|^#!.*\bpython[^ ]*|#!%__python3|' {} \;
-#%configure --with-vendor-suffix=-%release \
-#           %enable_server_option \
-#           %with_ipatests_option \
-#           %linter_options
-#popd
-#%endif # with_python3
+%if 0%{?with_python3}
+pushd %_builddir/freeipa-%version-python3
+export PYTHON=%__python3
+# Workaround: make sure all shebangs are pointing to Python 3
+# This should be solved properly using setuptools
+# and this hack should be removed.
+find \
+	! -name '*.pyc' -a \
+	! -name '*.pyo' -a \
+	-type f -exec grep -qsm1 '^#!.*\bpython' {} \; \
+	-exec sed -i -e '1 s|^#!.*\bpython[^ ]*|#!%__python3|' {} \;
+%autoreconf
+%configure --with-vendor-suffix=-%release \
+           %enable_server_option \
+           %with_ipatests_option \
+           %linter_options
+popd
+%endif # with_python3
 
 %check
 make %{?_smp_mflags} check VERBOSE=yes LIBDIR=%_libdir
@@ -917,16 +928,12 @@ make %{?_smp_mflags} check VERBOSE=yes LIBDIR=%_libdir
 # will overwrite /usr/bin/ipa and other scripts with variants using
 # python2 shebang.
 pushd %_builddir/freeipa-%version-python3
-(cd ipaclient && %make_install)
-(cd ipalib && %make_install)
-(cd ipaplatform && %make_install)
-(cd ipapython && %make_install)
-%if ! %ONLY_CLIENT
-(cd ipaserver && %make_install)
-%endif # ONLY_CLIENT
-%if 0%{?with_ipatests}
-(cd ipatests && %make_install)
-%endif # with_ipatests
+(cd ipaclient && %makeinstall_std)
+(cd ipalib && %makeinstall_std)
+(cd ipaplatform && %makeinstall_std)
+(cd ipapython && %makeinstall_std)
+(cd ipaserver && %makeinstall_std)
+(cd ipatests && %makeinstall_std)
 popd
 
 %if 0%{?with_ipatests}
@@ -941,7 +948,7 @@ ln -s %_bindir/ipa-test-task-%_python3_version %buildroot%_bindir/ipa-test-task-
 %endif # with_python3
 
 # Python 2 installation
-%make_install
+%makeinstall_std
 
 %if 0%{?with_ipatests}
 mv %buildroot%_bindir/ipa-run-tests %buildroot%_bindir/ipa-run-tests-%__python_version
@@ -961,7 +968,6 @@ find %buildroot -wholename '*/site-packages/*/install_files.txt' -exec rm {} \;
 
 %find_lang %gettext_domain
 
-%if ! %ONLY_CLIENT
 # Remove .la files from libtool - we don't want to package
 # these files
 rm %buildroot/%plugin_dir/libipa_pwd_extop.la
@@ -997,19 +1003,14 @@ mkdir -p %buildroot%_sysconfdir/httpd/conf.d/
 mkdir -p %buildroot%_libdir/krb5/plugins/libkrb5
 touch %buildroot%_libdir/krb5/plugins/libkrb5/winbind_krb5_locator.so
 
-%endif # ONLY_CLIENT
 
 /bin/touch %buildroot%_sysconfdir/ipa/default.conf
 /bin/touch %buildroot%_sysconfdir/ipa/ca.crt
 
-%if ! %ONLY_CLIENT
 mkdir -p %buildroot%_sysconfdir/cron.d
-%endif # ONLY_CLIENT
 
 %clean
 rm -rf %buildroot
-
-%if ! %ONLY_CLIENT
 
 %post server
 # NOTE: systemd specific section
@@ -1104,7 +1105,6 @@ if [ $1 -eq 0 ]; then
     /bin/systemctl reload-or-try-restart oddjobd
 fi
 
-%endif # ONLY_CLIENT
 
 %post client
 if [ $1 -gt 1 ] ; then
@@ -1178,7 +1178,6 @@ fi
 #    fi
 #fi
 
-%if ! %ONLY_CLIENT
 
 %files server
 %doc README.md Contributors.txt
@@ -1392,7 +1391,6 @@ fi
 %_sysconfdir/oddjobd.conf.d/oddjobd-ipa-trust.conf
 %%attr(755,root,root) %_libexecdir/ipa/oddjob/com.redhat.idm.trust-fetch-domains
 
-%endif # ONLY_CLIENT
 
 %files client
 %doc README.md Contributors.txt
