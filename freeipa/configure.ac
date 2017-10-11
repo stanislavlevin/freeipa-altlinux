@@ -525,13 +525,6 @@ AC_SUBST(LDFLAGS)
 
 
 # Files
-AC_CONFIG_LINKS([ipaplatform/__init__.py:ipaplatform/$IPAPLATFORM/__init__.py
-                 ipaplatform/constants.py:ipaplatform/$IPAPLATFORM/constants.py
-                 ipaplatform/paths.py:ipaplatform/$IPAPLATFORM/paths.py
-                 ipaplatform/services.py:ipaplatform/$IPAPLATFORM/services.py
-                 ipaplatform/tasks.py:ipaplatform/$IPAPLATFORM/tasks.py
-		])
-
 AC_CONFIG_FILES([
     Makefile
     asn1/Makefile
@@ -599,7 +592,6 @@ AC_CONFIG_FILES([
     pypi/Makefile
     pypi/freeipa/Makefile
     pypi/ipa/Makefile
-    pypi/ipaplatform/Makefile
     pypi/ipaserver/Makefile
     pypi/ipatests/Makefile
     po/Makefile.in
