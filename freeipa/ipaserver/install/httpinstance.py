@@ -233,6 +233,14 @@ class HTTPInstance(service.Service):
         http_fd.close()
         os.chmod(target_fname, 0o644)
 
+        # Enable apache2 modules and ipa configs
+        for a2m in ["nss", "auth_gssapi", "rewrite", "wsgi", "proxy", "filter",
+                    "deflate", "headers", "authn_core", "authz_user", "expires",
+                    "lookup_identity","session","session_cookie","proxy_ajp",
+                    "proxy_http"]:
+            ipautil.run(["a2enmod", a2m])
+        ipautil.run(["a2ensite", "ipa"])
+
     def configure_gssproxy(self):
         tasks.configure_http_gssproxy_conf(IPAAPI_USER)
         services.knownservices.gssproxy.restart()
@@ -548,6 +556,9 @@ class HTTPInstance(service.Service):
 
         db = certs.CertDB(self.realm, paths.HTTPD_ALIAS_DIR)
         db.restore()
+
+        # Disable apache2 ipa configs
+        ipautil.run(["a2dissite", "ipa"], raiseonerr=False)
 
         for f in [paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF, paths.HTTPD_NSS_CONF]:
             try:
