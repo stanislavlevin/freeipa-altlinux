@@ -1,39 +1,37 @@
+%define _unpackaged_files_terminate_build 1
+
 %define java_bin /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.144-1.b01.x86_64/jre/bin
-%global enable_server_option --enable-server
+%define _libexecdir /usr/libexec
+%define plugin_dir %_libdir/dirsrv/plugins
+%define _localstatedir %_var
 
 # Build with ipatests
-%global with_ipatests 1
-%global with_ipatests_option --with-ipatests
+%define with_ipatests 1
+%define with_ipatests_option --with-ipatests
 
-%global with_python3 1
+%define with_python3 0
 
 # lint is not executed during rpmbuild
-# %%global with_lint 1
+# %%define with_lint 1
 %if 0%{?with_lint}
-    %global linter_options --enable-pylint --with-jslint
+    %define linter_options --enable-pylint --with-jslint
 %else
-    %global linter_options --disable-pylint --without-jslint
+    %define linter_options --disable-pylint --without-jslint
 %endif
 
-%global alt_name ipa
-# %%global krb5_version 1.15.1-7
-%global krb5_version 1.14.5
-%global python_netaddr_version 0.7.5-8
+%define krb5_version 1.15.2
+%define python_netaddr_version 0.7.5
 # 0.7.16: https://github.com/drkjam/netaddr/issues/71
 # Require 4.7.0 which brings Python 3 bindings
-%global samba_version 4.7.0
-%global selinux_policy_version 3.13.1-158.4
-%global slapi_nis_version 0.56.1
+%define samba_version 4.6.8
+%define selinux_policy_version 3.11.1
+%define slapi_nis_version 0.56.1
 
-%define krb5_base_version %(LC_ALL=C rpm -q --qf '%%{VERSION}' libkrb5-devel | grep -Eo '^[^.]+\.[^.]+')
-
-%global plugin_dir %_libdir/dirsrv/plugins
-%global etc_systemd_dir %_sysconfdir/systemd/system
-%global gettext_domain ipa
-%global VERSION 4.6.1
+%define plugin_dir %_libdir/dirsrv/plugins
+%define etc_systemd_dir %_sysconfdir/systemd/system
 
 Name: freeipa
-Version: %VERSION
+Version: 4.6.1
 Release: alt1%ubt
 Summary: The Identity, Policy and Audit system
 
@@ -41,22 +39,20 @@ Group: System/Base
 License: GPLv3+
 Url: http://www.freeipa.org/
 Source0: %name-%version.tar
-Patch: %name-%version.patch
+Source1: freeipa-server.filetrigger 
+Patch: %name-%version-alt.patch
 
 BuildRequires(pre): rpm-build-ubt
-BuildRequires(pre): libkrb5-devel
-BuildRequires(pre): rpm-macros-webserver-common
-BuildRequires(pre): rpm-build-python
-BuildRequires(pre): rpm-build-python3
 BuildRequires(pre): rpm-macros-fedora-compat
+BuildRequires(pre): rpm-macros-apache2
+BuildRequires: rpm-macros-webserver-common
+BuildRequires: rpm-build-python
+BuildRequires: rpm-build-python3
 BuildRequires: libkrb5-devel >= %krb5_version
 BuildRequires: java-1.8.0-openjdk-headless
-BuildRequires: openldap-devel
+BuildRequires: libldap-devel
 BuildRequires: libsasl2-devel
 BuildRequires: libsystemd-devel
-# For KDB DAL version, make explicit dependency so that increase of version
-# will cause the build to fail due to unsatisfied dependencies.
-# DAL version change may cause code crash or memory leaks, it is better to fail early.
 
 BuildRequires: libxmlrpc-devel
 BuildRequires: libpopt-devel
@@ -65,7 +61,7 @@ BuildRequires: automake
 BuildRequires: libtool
 BuildRequires: gettext
 BuildRequires: python-dev
-#BuildRequires: python-module-setuptools >= 36.5.0
+BuildRequires: python-module-setuptools >= 36.5.0
 BuildRequires: python-module-pyparsing
 BuildRequires: python-module-execnet
 BuildRequires: python-module-mock
@@ -76,8 +72,7 @@ BuildRequires: python3-module-mock
 BuildRequires: python3-module-appdirs
 %if 0%{?with_python3}
 BuildRequires: python3-dev
-#BuildRequires: python3-module-setuptools >= 36.5.0
-BuildRequires: python3-module-setuptools
+BuildRequires: python3-module-setuptools >= 36.5.0
 %endif # with_python3
 BuildRequires: systemd
 BuildRequires: apache2-base
@@ -85,7 +80,7 @@ BuildRequires: libnspr-devel
 BuildRequires: libnss-devel
 BuildRequires: libssl-devel
 BuildRequires: libini_config-devel
-BuildRequires: cyrus-sasl2
+BuildRequires: libsasl2-devel
 BuildRequires: 389-ds-base-devel >= 1.3.3.9
 BuildRequires: libsvrcore-devel
 BuildRequires: samba-devel >= 4.0.0
@@ -106,8 +101,8 @@ BuildRequires: python-module-lesscpy
 #
 BuildRequires: python-module-pyldap
 BuildRequires: python-module-netaddr
-BuildRequires: python-module-pyasn1
-BuildRequires: python-module-pyasn1-modules
+BuildRequires: python-module-pyasn1 >= 0.3.2
+BuildRequires: python-module-pyasn1-modules >= 0.1.5
 BuildRequires: python-module-dns
 BuildRequires: python-module-six
 BuildRequires: python-module-sss_nss_idmap
@@ -134,23 +129,23 @@ BuildRequires: python-module-cffi
 #
 %if 0%{?with_lint}
 BuildRequires: python-module-cryptography >= 1.6
-BuildRequires: python-module-gssapi >= 1.2.0-5
+BuildRequires: python-module-gssapi >= 1.2.2
 BuildRequires: pylint >= 1.7
 BuildRequires: python-module-polib
 BuildRequires: python-module-ipa_hbac
 BuildRequires: python-module-lxml
 BuildRequires: python-module-qrcode >= 5.0.0
 BuildRequires: python-module-dns >= 1.15
-#xzBuildRequires:  jsl
+#BuildRequires:  jsl
 BuildRequires: python-module-yubico
 # pki Python package
-BuildRequires: pki-base-python
+BuildRequires: pki-base
 BuildRequires: python-module-pytest-multihost
 BuildRequires: python-module-pytest_sourceorder
 # 0.4.2: Py3 fix https://bugzilla.redhat.com/show_bug.cgi?id=1476150
 BuildRequires: python-module-jwcrypto >= 0.4.2
 # 0.3: sd_notify (https://pagure.io/freeipa/issue/5825)
-BuildRequires: python-module-custodia >= 0.3.1
+BuildRequires: python-module-custodia >= 0.5.0
 BuildRequires: python-module-dbus
 BuildRequires: python-module-dateutil
 BuildRequires: python-module-enum34
@@ -165,11 +160,11 @@ BuildRequires: python-module-jinja2
 BuildRequires: python-module-augeas
 
 %if 0%{?with_python3}
-#xzBuildRequires:  python3-samba added smbc
+#BuildRequires:  python3-module-samba added smbc
 BuildRequires: python3-module-smbc
 # 1.6: x509.Name.rdns (https://github.com/pyca/cryptography/issues/3199)
 BuildRequires: python3-module-cryptography >= 1.6
-BuildRequires: python3-module-gssapi >= 1.2.0
+BuildRequires: python3-module-gssapi >= 1.2.2
 BuildRequires: pylint-py3 >= 1.7
 # workaround for https://bugzilla.redhat.com/show_bug.cgi?id=1096506
 BuildRequires: python3-module-polib
@@ -186,7 +181,7 @@ BuildRequires: python3-module-pytest_sourceorder
 # 0.4.2: Py3 fix https://bugzilla.redhat.com/show_bug.cgi?id=1476150
 BuildRequires: python3-module-jwcrypto >= 0.4.2
 # 0.3: sd_notify (https://pagure.io/freeipa/issue/5825)
-BuildRequires: python3-module-custodia >= 0.3.1
+BuildRequires: python3-module-custodia >= 0.5.0
 BuildRequires: python3-module-dbus
 BuildRequires: python3-module-dateutil
 BuildRequires: python3-module-enum34
@@ -228,78 +223,65 @@ Requires: %name-server-common = %version-%release
 Requires: %name-client = %version-%release
 Requires: %name-common = %version-%release
 %if 0%{?with_python3}
-Requires: python3-ipaserver = %version-%release
+Requires: python3-module-ipaserver = %version-%release
 %else
-Requires: python2-ipaserver = %version-%release
+Requires: python-module-ipaserver = %version-%release
 %endif
 Requires: 389-ds-base >= 1.3.5.14
-Requires: openldap-clients > 2.4.35-4
-Requires: nss >= 3.14.3-12.0
-Requires: nss-tools >= 3.14.3-12.0
-Requires(post): krb5-server >= %krb5_version
-Requires(post): krb5-server >= %krb5_base_version
-Requires: krb5-pkinit-openssl >= %krb5_version
-Requires: cyrus-sasl-gssapi%{?_isa}
+Requires: openldap-clients > 2.4.35
+Requires: libnss >= 3.14.3
+Requires: nss-utils >= 3.14.3
+Requires: krb5-kdc >= %krb5_version
+Requires: krb5-kinit >= %krb5_version
+Requires: libsasl2-plugin-gssapi
 Requires: ntp
-Requires: httpd >= 2.4.6-31
+Requires: apache2-base >= 2.4.6
 %if 0%with_python3
 Requires: python3-mod_wsgi
 %else
-Requires: mod_wsgi
+Requires: apache2-mod_wsgi
 %endif
-Requires: mod_auth_gssapi >= 1.5.0
+Requires: apache2-mod_auth_gssapi >= 1.6.0
 # 1.0.14-3: https://bugzilla.redhat.com/show_bug.cgi?id=1431206
-Requires: mod_nss >= 1.0.14-3
-Requires: mod_session
+Requires: apache2-mod_nss >= 1.0.14-alt3
 # 0.9.9: https://github.com/adelton/mod_lookup_identity/pull/3
-Requires: mod_lookup_identity >= 0.9.9
-Requires: python-ldap >= 2.4.15
-Requires: python-gssapi >= 1.2.0-5
+Requires: mod_lookup_identity >= 1.0.0
+Requires: python-module-pyldap >= 2.4.15
+Requires: python-module-gssapi >= 1.2.2
 Requires: acl
-Requires: systemd-units >= 38
+Requires: systemd >= 38
 Requires(pre): shadow-utils
-Requires(pre): systemd-units
-Requires(post): systemd-units
 Requires: selinux-policy >= %selinux_policy_version
 Requires(post): selinux-policy-base >= %selinux_policy_version
 Requires: slapi-nis >= %slapi_nis_version
-Requires: pki-ca >= 10.4.0-1
-Requires: pki-kra >= 10.4.0-1
-Requires(preun): python systemd-units
-Requires(postun): python systemd-units
-Requires: policycoreutils >= 2.1.12-5
+Requires: pki-ca >= 10.4.8
+Requires: pki-kra >= 10.4.8
+Requires: python-module-systemd
+Requires: policycoreutils >= 2.1.5
 Requires: tar
 # certmonger-0.79.4-2 fixes newlines in PEM files
-Requires(pre): certmonger >= 0.79.4-2
-Requires(pre): 389-ds-base >= 1.3.5.14
-Requires: fontawesome-fonts
-Requires: open-sans-fonts
+#Requires(pre): certmonger >= 0.79.4
+Requires(pre): certmonger
+Requires: 389-ds-base >= 1.3.5.14
+Requires: fonts-font-awesome
+Requires: fonts-ttf-open-sans
 Requires: openssl
-Requires: softhsm >= 2.0.0rc1-1
-Requires: p11-kit
-Requires: systemd-python
+Requires: softhsm >= 2.0.0
+Requires: libp11-kit
 Requires: %etc_systemd_dir
 Requires: gzip
 Requires: oddjob
 # 0.7.0-2: https://pagure.io/gssproxy/pull-request/172
-Requires: gssproxy >= 0.7.0-2
+Requires: gssproxy >= 0.7.0
 # 1.15.2: FindByNameAndCertificate (https://pagure.io/SSSD/sssd/issue/3050)
 Requires: sssd-dbus >= 1.15.2
-
-Provides: %alt_name-server = %version
-Conflicts: %alt_name-server
-Obsoletes: %alt_name-server < %version
-
-# With FreeIPA 3.3, package freeipa-server-selinux was obsoleted as the
-# entire SELinux policy is stored in the system policy
-Obsoletes: freeipa-server-selinux < 3.3.0
 
 # upgrade path from monolithic -server to -server + -server-dns
 Obsoletes: %name-server <= 4.2.0
 
 # Versions of nss-pam-ldapd < 0.8.4 require a mapping from uniqueMember to
 # member.
-Conflicts: nss-pam-ldapd < 0.8.4
+Conflicts: nss-ldapd < 0.8.4
 
 %description server
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -309,29 +291,27 @@ features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If you are installing an IPA server, you need to install this package.
 
-%package -n python2-ipaserver
+%package -n python-module-ipaserver
 Summary: Python libraries used by IPA server
 Group: System/Libraries
 BuildArch: noarch
-%{?python_provide:%python_provide python2-ipaserver}
-%{!?python_provide:Provides: python-ipaserver = %version-%release}
 Requires: %name-server-common = %version-%release
 Requires: %name-common = %version-%release
-Requires: python2-ipaclient = %version-%release
-Requires: python2-custodia >= 0.3.1
-Requires: python-ldap >= 2.4.15
-Requires: python2-lxml
-Requires: python-gssapi >= 1.2.0-5
-Requires: python2-sssdconfig
-Requires: python2-pyasn1 >= 0.3.2-2
-Requires: dbus-python
-Requires: python2-dns >= 1.15
-Requires: python-kdcproxy >= 0.3
-Requires: rpm-libs
-Requires: pki-base-python2
-Requires: python2-augeas
+Requires: python-module-ipaclient = %version-%release
+Requires: python-module-custodia >= 0.5.0
+Requires: python-module-pyldap >= 2.4.15
+Requires: python-module-lxml
+Requires: python-module-gssapi >= 1.2.2
+Requires: python-module-sssdconfig
+Requires: python-module-pyasn1 >= 0.3.2
+Requires: python-module-dbus
+Requires: python-module-dns >= 1.15
+Requires: python-module-kdcproxy >= 0.3
+#Requires: rpm-libs
+Requires: pki-base
+Requires: python-module-augeas
 
-%description -n python2-ipaserver
+%description -n python-module-ipaserver
 IPA is an integrated solution to provide centrally managed Identity (users,
 hosts, services), Authentication (SSO, 2FA), and Authorization
 (host access control, SELinux user roles, services). The solution provides
@@ -341,29 +321,27 @@ If you are installing an IPA server, you need to install this package.
 
 %if 0%{?with_python3}
 
-%package -n python3-ipaserver
+%package -n python3-module-ipaserver
 Summary: Python libraries used by IPA server
 Group: System/Libraries
 BuildArch: noarch
-%{?python_provide:%python_provide python3-ipaserver}
 Requires: %name-server-common = %version-%release
 Requires: %name-common = %version-%release
-Requires: python3-ipaclient = %version-%release
-Requires: python3-custodia >= 0.3.1
-# we need pre-requires since earlier versions may break upgrade
-Requires(pre): python3-pyldap >= 2.4.35.1-2
-Requires: python3-lxml
-Requires: python3-gssapi >= 1.2.0
-Requires: python3-sssdconfig
-Requires: python3-pyasn1 >= 0.3.2-2
-Requires: python3-dbus
-Requires: python3-dns >= 1.15
-Requires: python3-kdcproxy >= 0.3
-Requires: python3-augeas
-Requires: rpm-libs
-Requires: pki-base-python3
+Requires: python3-module-ipaclient = %version-%release
+Requires: python3-module-custodia >= 0.5.0
+Requires(pre): python3-module-pyldap >= 2.4.35
+Requires: python3-module-lxml
+Requires: python3-module-gssapi >= 1.2.2
+#Requires: python3-module-sssdconfig
+Requires: python3-module-pyasn1 >= 0.3.2
+Requires: python3-module-dbus
+Requires: python3-module-dns >= 1.15
+#Requires: python3-module-kdcproxy >= 0.3
+Requires: python3-module-augeas
+#Requires: rpm-libs
+#Requires: pki-base-python3
 
-%description -n python3-ipaserver
+%description -n python3-module-ipaserver
 IPA is an integrated solution to provide centrally managed Identity (users,
 hosts, services), Authentication (SSO, 2FA), and Authorization
 (host access control, SELinux user roles, services). The solution provides
@@ -378,13 +356,12 @@ Summary: Common files used by IPA server
 Group: System/Base
 BuildArch: noarch
 Requires: %name-client-common = %version-%release
-Requires: httpd >= 2.4.6-31
-Requires: systemd-units >= 38
-Requires: custodia >= 0.3.1
+Requires: apache2-base >= 2.4.6
+Requires: systemd >= 38
+Requires: custodia >= 0.5.0
+Requires: fonts-font-awesome
+Requires: fonts-ttf-open-sans
 
-Provides: %alt_name-server-common = %version
-Conflicts: %alt_name-server-common
-Obsoletes: %alt_name-server-common < %version
 
 %description server-common
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -399,20 +376,15 @@ Summary: IPA integrated DNS server with support for automatic DNSSEC signing
 Group: System/Base
 BuildArch: noarch
 Requires: %name-server = %version-%release
-Requires: bind-dyndb-ldap >= 11.0-2
-Requires: bind >= 9.11.0-6.P2
-Requires: bind-utils >= 9.11.0-6.P2
-Requires: bind-pkcs11 >= 9.11.0-6.P2
-Requires: bind-pkcs11-utils >= 9.11.0-6.P2
-Requires: opendnssec >= 1.4.6-4
+Requires: bind-dyndb-ldap >= 11.0
+Requires: bind >= 9.11.0
+Requires: bind-utils >= 9.11.0
+Requires: opendnssec >= 1.4.6
 # Keep python2 dependencies until DNSSEC daemons are ported to Python 3
-Requires: python2
-Requires: python2-ipalib
-Requires: python2-ipaserver
+Requires: python
+Requires: python-module-freeipa
+Requires: python-module-ipaserver
 
-Provides: %alt_name-server-dns = %version
-Conflicts: %alt_name-server-dns
-Obsoletes: %alt_name-server-dns < %version
 
 # upgrade path from monolithic -server to -server + -server-dns
 Obsoletes: %name-server <= 4.2.0
@@ -432,27 +404,15 @@ Requires: samba-winbind
 Requires: libsss_idmap
 
 %if 0%{?with_python3}
-Requires: python3-samba
-Requires: python3-libsss_nss_idmap
-Requires: python3-sss
+Requires: python3-module-samba
+Requires: python3-module-sss_nss_idmap
+Requires: python3-module-sss
 %else
-Requires: python2-samba
-Requires: python2-libsss_nss_idmap
-Requires: python2-sss
+Requires: python-module-samba
+Requires: python-module-sss_nss_idmap
+Requires: python-module-sss
 %endif  # with_python3
 
-# We use alternatives to divert winbind_krb5_locator.so plugin to libkrb5
-# on the installes where server-trust-ad subpackage is installed because
-# IPA AD trusts cannot be used at the same time with the locator plugin
-# since Winbindd will be configured in a different mode
-Requires(post): %_sbindir/update-alternatives
-Requires(post): python
-Requires(postun): %_sbindir/update-alternatives
-Requires(preun): %_sbindir/update-alternatives
-
-Provides: %alt_name-server-trust-ad = %version
-Conflicts: %alt_name-server-trust-ad
-Obsoletes: %alt_name-server-trust-ad < %version
 
 %description server-trust-ad
 Cross-realm trusts with Active Directory in IPA require working Samba 4
@@ -465,44 +425,39 @@ Group: System/Base
 Requires: %name-client-common = %version-%release
 Requires: %name-common = %version-%release
 %if 0%{?with_python3}
-Requires: python3-ipaclient = %version-%release
+Requires: python3-module-ipaclient = %version-%release
 %else
-Requires: python2-ipaclient = %version-%release
+Requires: python-module-ipaclient = %version-%release
 %endif
-Requires: python-ldap
-Requires: cyrus-sasl-gssapi%{?_isa}
+Requires: python-module-pyldap
+Requires: libsasl2-plugin-gssapi
 Requires: ntp
-Requires: krb5-workstation >= %krb5_version
-Requires: authconfig
 Requires: curl
 # NIS domain name config: /usr/lib/systemd/system/*-domainname.service
-Requires: initscripts
-Requires: libcurl >= 7.21.7-2
+#Requires: initscripts
+Requires: libcurl >= 7.21.7
 Requires: xmlrpc-c >= 1.27.4
 Requires: sssd >= 1.14.0
-Requires: python-sssdconfig
+Requires: sssd-krb5
+Requires: sssd-ipa
+Requires: libsss_sudo
+Requires: python-module-sssdconfig
 # certmonger-0.79.4-2 fixes newlines in PEM files
-Requires: certmonger >= 0.79.4-2
-Requires: nss-tools
+#Requires: certmonger >= 0.79.4
+Requires: certmonger
+Requires: nss-utils
 Requires: bind-utils
 Requires: oddjob-mkhomedir
-Requires: python-gssapi >= 1.2.0-5
+Requires: python-module-gssapi >= 1.2.2
 Requires: libsss_autofs
 Requires: autofs
 Requires: libnfsidmap
 Requires: nfs-utils
 Requires(post): policycoreutils
 
-Provides: %alt_name-client = %version
-Conflicts: %alt_name-client
-Obsoletes: %alt_name-client < %version
-
-Provides: %alt_name-admintools = %version
-Conflicts: %alt_name-admintools
-Obsoletes: %alt_name-admintools < 4.4.1
 
 Obsoletes: %name-admintools < 4.4.1
-Provides: %name-admintools = %version-%release
+Provides: %name-admintools = %EVR
 
 %description client
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -514,19 +469,17 @@ If your network uses IPA for authentication, this package should be
 installed on every client machine.
 This package provides command-line tools for IPA administrators.
 
-%package -n python2-ipaclient
+%package -n python-module-ipaclient
 Summary: Python libraries used by IPA client
 Group: System/Libraries
 BuildArch: noarch
-%{?python_provide:%python_provide python2-ipaclient}
-%{!?python_provide:Provides: python-ipaclient = %version-%release}
 Requires: %name-client-common = %version-%release
 Requires: %name-common = %version-%release
-Requires: python2-ipalib = %version-%release
-Requires: python2-dns >= 1.15
-Requires: python2-jinja2
+Requires: python-module-freeipa = %version-%release
+Requires: python-module-dns >= 1.15
+Requires: python-module-jinja2
 
-%description -n python2-ipaclient
+%description -n python-module-ipaclient
 IPA is an integrated solution to provide centrally managed Identity (users,
 hosts, services), Authentication (SSO, 2FA), and Authorization
 (host access control, SELinux user roles, services). The solution provides
@@ -537,18 +490,17 @@ installed on every client machine.
 
 %if 0%{?with_python3}
 
-%package -n python3-ipaclient
+%package -n python3-module-ipaclient
 Summary: Python libraries used by IPA client
 Group: System/Libraries
 BuildArch: noarch
-%{?python_provide:%python_provide python3-ipaclient}
 Requires: %name-client-common = %version-%release
 Requires: %name-common = %version-%release
-Requires: python3-ipalib = %version-%release
-Requires: python3-dns >= 1.15
-Requires: python3-jinja2
+Requires: python3-module-freeipa = %version-%release
+Requires: python3-module-dns >= 1.15
+Requires: python3-module-jinja2
 
-%description -n python3-ipaclient
+%description -n python3-module-ipaclient
 IPA is an integrated solution to provide centrally managed Identity (users,
 hosts, services), Authentication (SSO, 2FA), and Authorization
 (host access control, SELinux user roles, services). The solution provides
@@ -564,9 +516,6 @@ Summary: Common files used by IPA client
 Group: System/Base
 BuildArch: noarch
 
-Provides: %alt_name-client-common = %version
-Conflicts: %alt_name-client-common
-Obsoletes: %alt_name-client-common < %version
 
 %description client-common
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -577,81 +526,41 @@ and integration with Active Directory based infrastructures (Trusts).
 If your network uses IPA for authentication, this package should be
 installed on every client machine.
 
-%package python-compat
-Summary: Compatiblity package for Python libraries used by IPA
-Group: System/Libraries
-BuildArch: noarch
-Obsoletes: %name-python < 4.2.91
-Provides: %name-python = %version-%release
-Requires: %name-common = %version-%release
-%if 0%{?with_python3}
-Requires: python3-ipalib = %version-%release
-%else
-Requires: python2-ipalib = %version-%release
-%endif
 
-Provides: %alt_name-python-compat = %version
-Conflicts: %alt_name-python-compat
-Obsoletes: %alt_name-python-compat < %version
-
-Obsoletes: %alt_name-python < 4.2.91
-Provides: %alt_name-python = %version
-
-%description python-compat
-IPA is an integrated solution to provide centrally managed Identity (users,
-hosts, services), Authentication (SSO, 2FA), and Authorization
-(host access control, SELinux user roles, services). The solution provides
-features for further integration with Linux based clients (SUDO, automount)
-and integration with Active Directory based infrastructures (Trusts).
-This is a compatibility package to accommodate %name-python split into
-python2-ipalib and %name-common. Packages still depending on
-%name-python should be fixed to depend on python2-ipaclient or
-%name-common instead.
-
-%package -n python2-ipalib
+%package -n python-module-freeipa
 Summary: Python libraries used by IPA
 Group: System/Libraries
 BuildArch: noarch
-Conflicts: %name-python < 4.2.91
-%{?python_provide:%python_provide python2-ipalib}
-%{!?python_provide:Provides: python-ipalib = %version-%release}
-Provides: python2-ipapython = %version-%release
-%{?python_provide:%python_provide python2-ipapython}
-%{!?python_provide:Provides: python-ipapython = %version-%release}
-Provides: python2-ipaplatform = %version-%release
-%{?python_provide:%python_provide python2-ipaplatform}
-%{!?python_provide:Provides: python-ipaplatform = %version-%release}
 Requires: %name-common = %version-%release
-Requires: python-gssapi >= 1.2.0-5
+Requires: python-module-gssapi >= 1.2.2
 Requires: gnupg
-Requires: keyutils
-Requires: pyOpenSSL
+Requires: libkeyutils
+Requires: python-module-OpenSSL
 Requires: python >= 2.7.9
-Requires: python2-cryptography >= 1.6
-Requires: python-netaddr >= %python_netaddr_version
-Requires: python2-libipa_hbac
-Requires: python-qrcode-core >= 5.0.0
-Requires: python2-pyasn1 >= 0.3.2-2
-Requires: python2-pyasn1-modules >= 0.3.2-2
-Requires: python2-dateutil
-Requires: python2-yubico >= 1.2.3
-Requires: python2-sss-murmur
-Requires: dbus-python
-Requires: python2-setuptools
-Requires: python-six
+Requires: python-module-cryptography >= 1.6
+Requires: python-module-netaddr >= %python_netaddr_version
+Requires: python-module-ipa_hbac
+Requires: python-module-qrcode >= 5.0.0
+Requires: python-module-pyasn1 >= 0.3.2
+Requires: python-module-pyasn1-modules >= 0.1.5
+Requires: python-module-dateutil
+Requires: python-module-yubico >= 1.2.3
+Requires: python-module-sss-murmur
+Requires: python-module-dbus
+Requires: python-module-setuptools
+Requires: python-module-six
 # 0.4.2: Py3 fix https://bugzilla.redhat.com/show_bug.cgi?id=1476150
-Requires: python-jwcrypto >= 0.4.2
-Requires: python2-cffi
-Requires: python-ldap >= 2.4.15
-Requires: python2-requests
-Requires: python2-dns >= 1.15
-Requires: python-enum34
-Requires: python-netifaces >= 0.10.4
-Requires: pyusb
+Requires: python-module-jwcrypto >= 0.4.2
+Requires: python-module-cffi
+Requires: python-module-pyldap >= 2.4.15
+Requires: python-module-requests
+Requires: python-module-dns >= 1.15
+Requires: python-module-enum34
+Requires: python-module-netifaces >= 0.10.4
+Requires: python-module-pyusb
 
-Conflicts: %alt_name-python < %version
 
-%description -n python2-ipalib
+%description -n python-module-freeipa
 IPA is an integrated solution to provide centrally managed Identity (users,
 hosts, services), Authentication (SSO, 2FA), and Authorization
 (host access control, SELinux user roles, services). The solution provides
@@ -661,44 +570,39 @@ If you are using IPA, you need to install this package.
 
 %if 0%{?with_python3}
 
-%package -n python3-ipalib
+%package -n python3-module-freeipa
 Summary: Python3 libraries used by IPA
 Group: System/Libraries
 BuildArch: noarch
-%{?python_provide:%python_provide python3-ipalib}
-Provides: python3-ipapython = %version-%release
-%{?python_provide:%python_provide python3-ipapython}
-Provides: python3-ipaplatform = %version-%release
-%{?python_provide:%python_provide python3-ipaplatform}
 Requires: %name-common = %version-%release
-Requires: python3-gssapi >= 1.2.0
+Requires: python3-module-gssapi >= 1.2.2
 Requires: gnupg
 Requires: keyutils
-Requires: python3-pyOpenSSL
-Requires: python3-cryptography >= 1.6
-Requires: python3-netaddr >= %python_netaddr_version
-Requires: python3-libipa_hbac
-Requires: python3-qrcode-core >= 5.0.0
-Requires: python3-pyasn1 >= 0.3.2-2
-Requires: python3-pyasn1-modules >= 0.3.2-2
-Requires: python3-dateutil
+Requires: python3-python-module-OpenSSL
+Requires: python3-module-cryptography >= 1.6
+Requires: python3-module-netaddr >= %python_netaddr_version
+#Requires: python3-module-ipa_hbac
+Requires: python3-module-qrcode >= 5.0.0
+Requires: python3-module-pyasn1 >= 0.3.2
+Requires: python3-module-pyasn1-modules >= 0.1.5
+Requires: python3-module-dateutil
 # fixes searching for yubikeys in python3
-Requires: python3-yubico >= 1.3.2-7
-Requires: python3-sss-murmur
-Requires: python3-dbus
-Requires: python3-setuptools
-Requires: python3-six
+#Requires: python3-module-yubico >= 1.3.2-7
+Requires: python3-module-sss-murmur
+Requires: python3-module-dbus
+Requires: python3-module-setuptools
+Requires: python3-module-six
 # 0.4.2: Py3 fix https://bugzilla.redhat.com/show_bug.cgi?id=1476150
-Requires: python3-jwcrypto >= 0.4.2
-Requires: python3-cffi
+Requires: python3-module-jwcrypto >= 0.4.2
+Requires: python3-module-cffi
 # we need pre-requires since earlier versions may break upgrade
-Requires(pre): python3-pyldap >= 2.4.35.1-2
-Requires: python3-requests
-Requires: python3-dns >= 1.15
-Requires: python3-netifaces >= 0.10.4
-Requires: python3-pyusb
+Requires: python3-module-pyldap >= 2.4.35
+Requires: python3-module-requests
+Requires: python3-module-dns >= 1.15
+Requires: python3-module-netifaces >= 0.10.4
+#Requires: python3-module-pyusb
 
-%description -n python3-ipalib
+%description -n python3-module-freeipa
 IPA is an integrated solution to provide centrally managed Identity (users,
 hosts, services), Authentication (SSO, 2FA), and Authorization
 (host access control, SELinux user roles, services). The solution provides
@@ -712,13 +616,7 @@ If you are using IPA with Python 3, you need to install this package.
 Summary: Common files used by IPA
 Group: System/Libraries
 BuildArch: noarch
-Conflicts: %name-python < 4.2.91
 
-Provides: %alt_name-common = %version
-Conflicts: %alt_name-common
-Obsoletes: %alt_name-common < %version
-
-Conflicts: %alt_name-python < %version
 
 %description common
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -730,36 +628,32 @@ If you are using IPA, you need to install this package.
 
 %if 0%{?with_ipatests}
 
-%package -n python2-ipatests
+%package -n python-module-ipatests
 Summary: IPA tests and test tools
 Group: System/Base
 BuildArch: noarch
-Obsoletes: %name-tests < 4.2.91
-Provides: %name-tests = %version-%release
-%{?python_provide:%python_provide python2-ipatests}
-%{!?python_provide:Provides: python-ipatests = %version-%release}
-Requires: python2-ipaclient = %version-%release
-Requires: python2-ipaserver = %version-%release
+Obsoletes: %name-tests <= 4.4.4
+Provides: %name-tests = %EVR
+Requires: python-module-ipaclient = %version-%release
+Requires: python-module-ipaserver = %version-%release
 Requires: tar
 Requires: xz
-Requires: python2-nose
+Requires: python-module-nose
 Requires: pytest >= 2.6
-Requires: python2-paste
-Requires: python2-coverage
+Requires: python-module-paste
+Requires: python-module-coverage
 # workaround for https://bugzilla.redhat.com/show_bug.cgi?id=1096506
-Requires: python2-polib
-Requires: python-pytest-multihost >= 0.5
-Requires: python-pytest-sourceorder
-Requires: ldns-utils
-Requires: python2-sssdconfig
-Requires: python2-cryptography >= 1.6
+Requires: python-module-polib
+#Requires: python-pytest-multihost >= 0.5
+Requires: python-module-pytest-multihost
+Requires: python-module-pytest_sourceorder
+#Requires: ldns-utils
+Requires: python-module-sssdconfig
+Requires: python-module-cryptography >= 1.6
 Requires: iptables
 
-Provides: %alt_name-tests = %version
-Conflicts: %alt_name-tests
-Obsoletes: %alt_name-tests < %version
 
-%description -n python2-ipatests
+%description -n python-module-ipatests
 IPA is an integrated solution to provide centrally managed Identity (users,
 hosts, services), Authentication (SSO, 2FA), and Authorization
 (host access control, SELinux user roles, services). The solution provides
@@ -769,27 +663,26 @@ This package contains tests that verify IPA functionality.
 
 %if 0%{?with_python3}
 
-%package -n python3-ipatests
+%package -n python3-module-ipatests
 Summary: IPA tests and test tools
 Group: System/Base
 BuildArch: noarch
-%{?python_provide:%python_provide python3-ipatests}
-Requires: python3-ipaclient = %version-%release
-Requires: python3-ipaserver = %version-%release
+Requires: python3-module-ipaclient = %version-%release
+Requires: python3-module-ipaserver = %version-%release
 Requires: tar
 Requires: xz
-Requires: python3-nose
-Requires: python3-pytest >= 2.6
-Requires: python3-coverage
-Requires: python3-polib
-Requires: python3-pytest-multihost >= 0.5
-Requires: python3-pytest-sourceorder
-Requires: ldns-utils
-Requires: python3-sssdconfig
-Requires: python3-cryptography >= 1.6
+Requires: python3-module-nose
+Requires: python3-module-pytest >= 2.6
+Requires: python3-module-coverage
+Requires: python3-module-polib
+Requires: python3-module-pytest-multihost >= 0.5
+#Requires: python3-module-pytest_sourceorder
+#Requires: ldns-utils
+Requires: python3-module-sssdconfig
+Requires: python3-module-cryptography >= 1.6
 Requires: iptables
 
-%description -n python3-ipatests
+%description -n python3-module-ipatests
 IPA is an integrated solution to provide centrally managed Identity (users,
 hosts, services), Authentication (SSO, 2FA), and Authorization
 (host access control, SELinux user roles, services). The solution provides
@@ -816,8 +709,6 @@ export JAVA_STACK_SIZE="8m"
 # PATH is workaround for https://bugzilla.redhat.com/show_bug.cgi?id=1005235
 export PATH=%java_bin:/usr/bin:/usr/sbin:$PATH
 export PYTHON=%__python
-export SUPPORTED_PLATFORM=altlinux
-export IPA_VERSION_IS_GIT_SNAPSHOT=no
 # Workaround: make sure all shebangs are pointing to Python 2
 # This should be solved properly using setuptools
 # and this hack should be removed.
@@ -882,8 +773,10 @@ done;
 %endif # with_python3
 %autoreconf
 %configure --with-vendor-suffix=-%release \
-           %enable_server_option \
-           %with_ipatests_option \
+           --enable-server \
+           --with-ipatests \
+	   --with-ipaplatform=altlinux \
+	   IPA_VERSION_IS_GIT_SNAPSHOT=no \
            %linter_options
 
 %make_build
@@ -899,16 +792,16 @@ find \
 	! -name '*.pyo' -a \
 	-type f -exec grep -qsm1 '^#!.*\bpython' {} \; \
 	-exec sed -i -e '1 s|^#!.*\bpython[^ ]*|#!%__python3|' {} \;
-%autoreconf
+%autoreconf 
 %configure --with-vendor-suffix=-%release \
-           %enable_server_option \
-           %with_ipatests_option \
+           --enable-server \
+           --with-ipatests \
+	   --with-ipaplatform=altlinux \
+	   IPA_VERSION_IS_GIT_SNAPSHOT=no \
            %linter_options
 popd
 %endif # with_python3
 
-%check
-make %{?_smp_mflags} check VERBOSE=yes LIBDIR=%_libdir
 
 %install
 # Please put as much logic as possible into make install. It allows:
@@ -966,7 +859,8 @@ ln -s %_bindir/ipa-test-task-%__python_version %buildroot%_bindir/ipa-test-task
 # remove files which are useful only for make uninstall
 find %buildroot -wholename '*/site-packages/*/install_files.txt' -exec rm {} \;
 
-%find_lang %gettext_domain
+
+%find_lang ipa
 
 # Remove .la files from libtool - we don't want to package
 # these files
@@ -990,72 +884,93 @@ rm %buildroot/%_libdir/krb5/plugins/kdb/ipadb.la
 rm %buildroot/%_libdir/samba/pdb/ipasam.la
 
 # So we can own our Apache configuration
-mkdir -p %buildroot%_sysconfdir/httpd/conf.d/
-/bin/touch %buildroot%_sysconfdir/httpd/conf.d/ipa.conf
-/bin/touch %buildroot%_sysconfdir/httpd/conf.d/ipa-kdc-proxy.conf
-/bin/touch %buildroot%_sysconfdir/httpd/conf.d/ipa-pki-proxy.conf
-/bin/touch %buildroot%_sysconfdir/httpd/conf.d/ipa-rewrite.conf
-/bin/touch %buildroot%_usr/share/ipa/html/ca.crt
-/bin/touch %buildroot%_usr/share/ipa/html/krb.con
-/bin/touch %buildroot%_usr/share/ipa/html/krb5.ini
-/bin/touch %buildroot%_usr/share/ipa/html/krbrealm.con
+mkdir -p %buildroot%apache2_confdir/{sites-available,extra-available,extra-enabled}
+/bin/touch %buildroot%apache2_sites_available/ipa.conf
+/bin/touch %buildroot%apache2_extra_enabled/ipa-kdc-proxy.conf
+/bin/touch %buildroot%apache2_extra_enabled/ipa-pki-proxy.conf
+/bin/touch %buildroot%apache2_confdir/ipa-rewrite.conf
+/bin/touch %buildroot%_datadir/ipa/html/ca.crt
+/bin/touch %buildroot%_datadir/ipa/html/krb.con
+/bin/touch %buildroot%_datadir/ipa/html/krb5.ini
+/bin/touch %buildroot%_datadir/ipa/html/krbrealm.con
 
-mkdir -p %buildroot%_libdir/krb5/plugins/libkrb5
-touch %buildroot%_libdir/krb5/plugins/libkrb5/winbind_krb5_locator.so
+#mkdir -p %%buildroot%%_libdir/krb5/plugins/libkrb5
+#touch %%buildroot%%_libdir/krb5/plugins/libkrb5/winbind_krb5_locator.so
 
 
 /bin/touch %buildroot%_sysconfdir/ipa/default.conf
 /bin/touch %buildroot%_sysconfdir/ipa/ca.crt
 
+mkdir -p %buildroot%etc_systemd_dir/httpd2.service.d
+touch %buildroot%etc_systemd_dir/httpd2.service.d/ipa.conf
+
 mkdir -p %buildroot%_sysconfdir/cron.d
 
-%clean
-rm -rf %buildroot
+mkdir -p %buildroot%_sharedstatedir/kdcproxy
+mkdir -p %buildroot%_sharedstatedir/ipa/backup
+mkdir -p %buildroot%_sharedstatedir/ipa/gssproxy
+mkdir -p %buildroot%_sharedstatedir/ipa/sysrestore
+mkdir -p %buildroot%_sharedstatedir/ipa/sysupgrade
+mkdir -p %buildroot%_sharedstatedir/ipa/pki-ca
+mkdir -p %buildroot%_sharedstatedir/bind/zone/dyndb-ldap
+mkdir -p %buildroot%_sharedstatedir/bind/data
+mkdir -p %buildroot%_sharedstatedir/bind/dynamic
+touch %buildroot%_sharedstatedir/bind/zone/dyndb-ldap/ipa
+touch %buildroot%_sharedstatedir/ipa/pki-ca/publish
+touch %buildroot%_sysconfdir/ipa/kdcproxy/ipa-kdc-proxy.conf
+
+# NSS
+touch %buildroot%_sysconfdir/ipa/nssdb/cert8.db
+touch %buildroot%_sysconfdir/ipa/nssdb/key3.db
+touch %buildroot%_sysconfdir/ipa/nssdb/secmod.db
+touch %buildroot%_sysconfdir/ipa/nssdb/pwdfile.txt
+
+mkdir -p %buildroot%_sysconfdir/pki/ca-trust/source
+touch %buildroot%_sysconfdir/pki/ca-trust/source/ipa.p11-kit
+
+mkdir -p %buildroot%_sharedstatedir/ipa-client
+mkdir -p %buildroot%_sharedstatedir/ipa-client/pki
+mkdir -p %buildroot%_sharedstatedir/ipa-client/sysrestore
+
+mkdir -p %buildroot%_runtimedir
+install -d -m 0700 %buildroot%_runtimedir/ipa/
+
+# install filetrigger
+mkdir -p %buildroot%_rpmlibdir
+install -D -p -m 0755 %SOURCE1 %buildroot%_rpmlibdir/freeipa-server.filetrigger
+
+%check
+%make %{?_smp_mflags} check VERBOSE=yes LIBDIR=%_libdir
 
 %post server
 # NOTE: systemd specific section
-    /bin/systemctl --system daemon-reload 2>&1 || :
+    /bin/systemctl --system daemon-reload 2>&1 ||:
 # END
 if [ $1 -gt 1 ] ; then
-    /bin/systemctl condrestart certmonger.service 2>&1 || :
+    /bin/systemctl condrestart certmonger.service 2>&1 ||:
 fi
-/bin/systemctl reload-or-try-restart dbus
-/bin/systemctl reload-or-try-restart oddjobd
+/bin/systemctl reload-or-try-restart dbus ||:
+/bin/systemctl reload-or-try-restart oddjobd ||:
 
 %tmpfiles_create ipa.conf
-
-#%%posttrans server
-## don't execute upgrade and restart of IPA when server is not installed
-#python2 -c "import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);" > /dev/null 2>&1
-#
-#if [  $? -eq 0 ]; then
-#    # This is necessary for Fedora system upgrades which by default
-#    # work with the network being offline
-#    /bin/systemctl start network-online.target
-#
-#    # This must be run in posttrans so that updates from previous
-#    # execution that may no longer be shipped are not applied.
-#    /usr/sbin/ipa-server-upgrade --quiet >/dev/null || :
-#
-#    # Restart IPA processes. This must be also run in postrans so that plugins
-#    # and software is in consistent state
-#    # NOTE: systemd specific section
-#
-#    /bin/systemctl is-enabled ipa.service >/dev/null 2>&1
-#    if [  $? -eq 0 ]; then
-#        /bin/systemctl restart ipa.service >/dev/null 2>&1 || :
-#    fi
-#fi
-## END
 
 %preun server
 if [ $1 = 0 ]; then
 # NOTE: systemd specific section
-    /bin/systemctl --quiet stop ipa.service || :
-    /bin/systemctl --quiet disable ipa.service || :
-    /bin/systemctl reload-or-try-restart dbus
-    /bin/systemctl reload-or-try-restart oddjobd
+    /bin/systemctl --quiet stop ipa.service ||:
+    /bin/systemctl --quiet disable ipa.service ||:
+    /bin/systemctl reload-or-try-restart dbus ||:
+    /bin/systemctl reload-or-try-restart oddjobd ||:
 # END
+fi
+
+%triggerpostun server-common -- freeipa-server-common <= 4.6.1
+if /usr/bin/python -c "import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);" > /dev/null 2>&1; then
+        a2dismod ipa-nss >/dev/null 2>&1 ||:
+
+        if systemctl is-enabled httpd2.service >/dev/null 2>&1; then
+                systemctl try-restart httpd2.service >/dev/null 2>&1 ||:
+        fi
 fi
 
 %pre server
@@ -1063,32 +978,20 @@ fi
 # zombie process when we're done.
 if [ -e /usr/sbin/ipa_kpasswd ]; then
 # NOTE: systemd specific section
-    /bin/systemctl stop ipa_kpasswd.service >/dev/null 2>&1 || :
+    /bin/systemctl stop ipa_kpasswd.service >/dev/null 2>&1 ||:
 # END
 fi
 
 # create users and groups
 # create kdcproxy group and user
-getent group kdcproxy >/dev/null || groupadd -f -r kdcproxy
-getent passwd kdcproxy >/dev/null || useradd -r -g kdcproxy -s /sbin/nologin -d / -c "IPA KDC Proxy User" kdcproxy
+getent group kdcproxy >/dev/null || groupadd -f -r kdcproxy ||:
+getent passwd kdcproxy >/dev/null || useradd -r -g kdcproxy -s /sbin/nologin -d / -c "IPA KDC Proxy User" kdcproxy ||:
 # create ipaapi group and user
-getent group ipaapi >/dev/null || groupadd -f -r ipaapi
-getent passwd ipaapi >/dev/null || useradd -r -g ipaapi -s /sbin/nologin -d / -c "IPA Framework User" ipaapi
+getent group ipaapi >/dev/null || groupadd -f -r ipaapi ||:
+getent passwd ipaapi >/dev/null || useradd -r -g ipaapi -s /sbin/nologin -d / -c "IPA Framework User" ipaapi ||:
 # add apache to ipaaapi group
-id -Gn apache | grep '\bipaapi\b' >/dev/null || usermod apache -a -G ipaapi
+id -Gn apache2 | grep '\bipaapi\b' >/dev/null || usermod apache2 -a -G ipaapi ||:
 
-%postun server-trust-ad
-if [ "$1" -ge "1" ]; then
-    if [ "`readlink %_sysconfdir/alternatives/winbind_krb5_locator.so`" == "/dev/null" ]; then
-        %_sbindir/alternatives --set winbind_krb5_locator.so /dev/null
-    fi
-fi
-
-%post server-trust-ad
-%_sbindir/update-alternatives --install %_libdir/krb5/plugins/libkrb5/winbind_krb5_locator.so \
-        winbind_krb5_locator.so /dev/null 90
-/bin/systemctl reload-or-try-restart dbus
-/bin/systemctl reload-or-try-restart oddjobd
 
 #%%posttrans server-trust-ad
 #python2 -c "import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);" > /dev/null 2>&1
@@ -1098,19 +1001,12 @@ fi
 ## END
 #fi
 
-%preun server-trust-ad
-if [ $1 -eq 0 ]; then
-    %_sbindir/update-alternatives --remove winbind_krb5_locator.so /dev/null
-    /bin/systemctl reload-or-try-restart dbus
-    /bin/systemctl reload-or-try-restart oddjobd
-fi
-
 
 %post client
 if [ $1 -gt 1 ] ; then
     # Has the client been configured?
     restore=0
-    test -f '/var/lib/ipa-client/sysrestore/sysrestore.index' && restore=$(wc -l '/var/lib/ipa-client/sysrestore/sysrestore.index' | awk '{print $1}')
+    test -f '/var/lib/ipa-client/sysrestore/sysrestore.index' && restore=$(wc -l '/var/lib/ipa-client/sysrestore/sysrestore.index' | awk '{print $1}') ||:
 
     if [ -f '/etc/sssd/sssd.conf' -a $restore -ge 2 ]; then
         if ! grep -E -q '/var/lib/sss/pubconf/krb5.include.d/' /etc/krb5.conf  2>/dev/null ; then
@@ -1134,7 +1030,7 @@ if [ $1 -gt 1 ] ; then
             sed -r '/OPTIONS=/ { s/\s+-u ntp:ntp\s+/ /; s/\s*-u ntp:ntp\s*// }' /etc/sysconfig/ntpd >/etc/sysconfig/ntpd.ipanew
             mv -Z /etc/sysconfig/ntpd.ipanew /etc/sysconfig/ntpd
 
-            /bin/systemctl condrestart ntpd.service 2>&1 || :
+            /bin/systemctl condrestart ntpd.service 2>&1 ||:
         fi
     fi
 
@@ -1143,45 +1039,44 @@ if [ $1 -gt 1 ] ; then
     fi
 fi
 
-#%%triggerin client -- openssh-server
-## Has the client been configured?
-#restore=0
-#test -f '/var/lib/ipa-client/sysrestore/sysrestore.index' && restore=$(wc -l '/var/lib/ipa-client/sysrestore/sysrestore.index' | awk '{print $1}')
-#
-#if [ -f '/etc/ssh/sshd_config' -a $restore -ge 2 ]; then
-#    if grep -E -q '^(AuthorizedKeysCommand /usr/bin/sss_ssh_authorizedkeys|PubKeyAgent /usr/bin/sss_ssh_authorizedkeys %%u)$' /etc/ssh/sshd_config 2>/dev/null; then
-#        sed -r '
-#            /^(AuthorizedKeysCommand(User|RunAs)|PubKeyAgentRunAs)[ \t]/ d
-#        ' /etc/ssh/sshd_config >/etc/ssh/sshd_config.ipanew
-#
-#        if /usr/sbin/sshd -t -f /dev/null -o 'AuthorizedKeysCommand=/usr/bin/sss_ssh_authorizedkeys' -o 'AuthorizedKeysCommandUser=nobody' 2>/dev/null; then
-#            sed -ri '
-#                s/^PubKeyAgent (.+) %%u$/AuthorizedKeysCommand \1/
-#                s/^AuthorizedKeysCommand .*$/\0\nAuthorizedKeysCommandUser nobody/
-#            ' /etc/ssh/sshd_config.ipanew
-#        elif /usr/sbin/sshd -t -f /dev/null -o 'AuthorizedKeysCommand=/usr/bin/sss_ssh_authorizedkeys' -o 'AuthorizedKeysCommandRunAs=nobody' 2>/dev/null; then
-#            sed -ri '
-#                s/^PubKeyAgent (.+) %%u$/AuthorizedKeysCommand \1/
-#                s/^AuthorizedKeysCommand .*$/\0\nAuthorizedKeysCommandRunAs nobody/
-#            ' /etc/ssh/sshd_config.ipanew
-#        elif /usr/sbin/sshd -t -f /dev/null -o 'PubKeyAgent=/usr/bin/sss_ssh_authorizedkeys %%u' -o 'PubKeyAgentRunAs=nobody' 2>/dev/null; then
-#            sed -ri '
-#                s/^AuthorizedKeysCommand (.+)$/PubKeyAgent \1 %%u/
-#                s/^PubKeyAgent .*$/\0\nPubKeyAgentRunAs nobody/
-#            ' /etc/ssh/sshd_config.ipanew
-#        fi
-#
-#        mv -Z /etc/ssh/sshd_config.ipanew /etc/ssh/sshd_config
-#        chmod 600 /etc/ssh/sshd_config
-#
-#        /bin/systemctl condrestart sshd.service 2>&1 || :
-#    fi
-#fi
+%triggerin client -- openssh-server
+# Has the client been configured?
+restore=0
+test -f '/var/lib/ipa-client/sysrestore/sysrestore.index' && restore=$(wc -l '/var/lib/ipa-client/sysrestore/sysrestore.index' | awk '{print $1}') ||:
+
+if [ -f '/etc/openssh/sshd_config' -a $restore -ge 2 ]; then
+    if grep -E -q '^(AuthorizedKeysCommand /usr/bin/sss_ssh_authorizedkeys|PubKeyAgent /usr/bin/sss_ssh_authorizedkeys %%u)$' /etc/openssh/sshd_config 2>/dev/null; then
+        sed -r '
+            /^(AuthorizedKeysCommand(User|RunAs)|PubKeyAgentRunAs)[ \t]/ d
+        ' /etc/openssh/sshd_config >/etc/openssh/sshd_config.ipanew
+
+        if /usr/sbin/sshd -t -f /dev/null -o 'AuthorizedKeysCommand=/usr/bin/sss_ssh_authorizedkeys' -o 'AuthorizedKeysCommandUser=nobody' 2>/dev/null; then
+            sed -ri '
+                s/^PubKeyAgent (.+) %%u$/AuthorizedKeysCommand \1/
+                s/^AuthorizedKeysCommand .*$/\0\nAuthorizedKeysCommandUser nobody/
+            ' /etc/openssh/sshd_config.ipanew
+        elif /usr/sbin/sshd -t -f /dev/null -o 'AuthorizedKeysCommand=/usr/bin/sss_ssh_authorizedkeys' -o 'AuthorizedKeysCommandRunAs=nobody' 2>/dev/null; then
+            sed -ri '
+                s/^PubKeyAgent (.+) %%u$/AuthorizedKeysCommand \1/
+                s/^AuthorizedKeysCommand .*$/\0\nAuthorizedKeysCommandRunAs nobody/
+            ' /etc/openssh/sshd_config.ipanew
+        elif /usr/sbin/sshd -t -f /dev/null -o 'PubKeyAgent=/usr/bin/sss_ssh_authorizedkeys %%u' -o 'PubKeyAgentRunAs=nobody' 2>/dev/null; then
+            sed -ri '
+                s/^AuthorizedKeysCommand (.+)$/PubKeyAgent \1 %%u/
+                s/^PubKeyAgent .*$/\0\nPubKeyAgentRunAs nobody/
+            ' /etc/openssh/sshd_config.ipanew
+        fi
+
+        mv -Z /etc/openssh/sshd_config.ipanew /etc/openssh/sshd_config
+        chmod 600 /etc/openssh/sshd_config
+
+        /bin/systemctl condrestart sshd.service 2>&1 ||:
+    fi
+fi
 
 
 %files server
-%doc README.md Contributors.txt
-%license COPYING
+%doc COPYING README.md Contributors.txt
 %_sbindir/ipa-backup
 %_sbindir/ipa-restore
 %_sbindir/ipa-ca-install
@@ -1268,26 +1163,26 @@ fi
 %_mandir/man1/ipa-winsync-migrate.1*
 %_mandir/man1/ipa-pkinit-manage.1*
 
-%files -n python2-ipaserver
-%doc README.md Contributors.txt
-%license COPYING
-%python_sitelibdir/ipaserver
-%python_sitelibdir/ipaserver-*.egg-info
+%_rpmlibdir/freeipa-server.filetrigger
+
+%files -n python-module-ipaserver
+%doc COPYING README.md Contributors.txt
+%python_sitelibdir_noarch/ipaserver
+%python_sitelibdir_noarch/ipaserver-*.egg-info
 
 %if 0%{?with_python3}
 
-%files -n python3-ipaserver
-%doc README.md Contributors.txt
-%license COPYING
-%python3_sitelibdir/ipaserver
-%python3_sitelibdir/ipaserver-*.egg-info
+%files -n python3-module-ipaserver
+%doc COPYING README.md Contributors.txt
+%python3_sitelibdir_noarch/ipaserver
+%python3_sitelibdir_noarch/ipaserver-*.egg-info
 
 %endif # with_python3
 
 %files server-common
-%doc README.md Contributors.txt
-%license COPYING
-%ghost %verify(not owner group) %dir %_sharedstatedir/kdcproxy
+%doc COPYING README.md Contributors.txt
+%dir %attr(0700,root,root) %_runtimedir/ipa
+%ghost %verify(not user group) %dir %_sharedstatedir/kdcproxy
 %dir %attr(0755,root,root) %_sysconfdir/ipa/kdcproxy
 %config(noreplace) %_sysconfdir/sysconfig/ipa-dnskeysyncd
 %config(noreplace) %_sysconfdir/sysconfig/ipa-ods-exporter
@@ -1295,106 +1190,105 @@ fi
 # NOTE: systemd specific section
 %_tmpfilesdir/ipa.conf
 %attr(644,root,root) %_unitdir/ipa-custodia.service
-%ghost %attr(644,root,root) %etc_systemd_dir/httpd.d/ipa.conf
+%ghost %attr(644,root,root) %etc_systemd_dir/httpd2.service.d/ipa.conf
 # END
-%dir %_usr/share/ipa
-%_usr/share/ipa/wsgi.py*
-%_usr/share/ipa/kdcproxy.wsgi
-%_usr/share/ipa/*.ldif
-%_usr/share/ipa/*.uldif
-%_usr/share/ipa/*.template
-%dir %_usr/share/ipa/advise
-%dir %_usr/share/ipa/advise/legacy
-%_usr/share/ipa/advise/legacy/*.template
-%dir %_usr/share/ipa/profiles
-%_usr/share/ipa/profiles/README
-%_usr/share/ipa/profiles/*.cfg
-%dir %_usr/share/ipa/html
-%_usr/share/ipa/html/ssbrowser.html
-%_usr/share/ipa/html/unauthorized.html
-%dir %_usr/share/ipa/migration
-%_usr/share/ipa/migration/error.html
-%_usr/share/ipa/migration/index.html
-%_usr/share/ipa/migration/invalid.html
-%_usr/share/ipa/migration/migration.py*
-%dir %_usr/share/ipa/ui
-%_usr/share/ipa/ui/index.html
-%_usr/share/ipa/ui/reset_password.html
-%_usr/share/ipa/ui/sync_otp.html
-%_usr/share/ipa/ui/*.ico
-%_usr/share/ipa/ui/*.css
-%_usr/share/ipa/ui/*.js
-%dir %_usr/share/ipa/ui/css
-%_usr/share/ipa/ui/css/*.css
-%dir %_usr/share/ipa/ui/js
-%dir %_usr/share/ipa/ui/js/dojo
-%_usr/share/ipa/ui/js/dojo/dojo.js
-%dir %_usr/share/ipa/ui/js/libs
-%_usr/share/ipa/ui/js/libs/*.js
-%dir %_usr/share/ipa/ui/js/freeipa
-%_usr/share/ipa/ui/js/freeipa/app.js
-%_usr/share/ipa/ui/js/freeipa/core.js
-%dir %_usr/share/ipa/ui/js/plugins
-%dir %_usr/share/ipa/ui/images
-%_usr/share/ipa/ui/images/*.jpg
-%_usr/share/ipa/ui/images/*.png
-%dir %_usr/share/ipa/wsgi
-%_usr/share/ipa/wsgi/plugins.py*
+%dir %_datadir/ipa
+%_datadir/ipa/wsgi.py*
+%_datadir/ipa/kdcproxy.wsgi
+%_datadir/ipa/*.ldif
+%_datadir/ipa/*.uldif
+%_datadir/ipa/*.template
+%dir %_datadir/ipa/advise
+%dir %_datadir/ipa/advise/legacy
+%_datadir/ipa/advise/legacy/*.template
+%dir %_datadir/ipa/profiles
+%_datadir/ipa/profiles/README
+%_datadir/ipa/profiles/*.cfg
+%dir %_datadir/ipa/html
+%_datadir/ipa/html/ssbrowser.html
+%_datadir/ipa/html/unauthorized.html
+%dir %_datadir/ipa/migration
+%_datadir/ipa/migration/error.html
+%_datadir/ipa/migration/index.html
+%_datadir/ipa/migration/invalid.html
+%_datadir/ipa/migration/migration.py*
+%dir %_datadir/ipa/ui
+%_datadir/ipa/ui/index.html
+%_datadir/ipa/ui/reset_password.html
+%_datadir/ipa/ui/sync_otp.html
+%_datadir/ipa/ui/*.ico
+%_datadir/ipa/ui/*.css
+%_datadir/ipa/ui/*.js
+%dir %_datadir/ipa/ui/css
+%_datadir/ipa/ui/css/*.css
+%dir %_datadir/ipa/ui/js
+%dir %_datadir/ipa/ui/js/dojo
+%_datadir/ipa/ui/js/dojo/dojo.js
+%dir %_datadir/ipa/ui/js/libs
+%_datadir/ipa/ui/js/libs/*.js
+%dir %_datadir/ipa/ui/js/freeipa
+%_datadir/ipa/ui/js/freeipa/app.js
+%_datadir/ipa/ui/js/freeipa/core.js
+%dir %_datadir/ipa/ui/js/plugins
+%dir %_datadir/ipa/ui/images
+%_datadir/ipa/ui/images/*.jpg
+%_datadir/ipa/ui/images/*.png
+%dir %_datadir/ipa/wsgi
+%_datadir/ipa/wsgi/plugins.py*
 %dir %_sysconfdir/ipa
 %dir %_sysconfdir/ipa/html
 %config(noreplace) %_sysconfdir/ipa/html/ssbrowser.html
 %config(noreplace) %_sysconfdir/ipa/html/unauthorized.html
-%ghost %attr(0644,root,apache) %config(noreplace) %_sysconfdir/httpd/conf.d/ipa-rewrite.conf
-%ghost %attr(0644,root,apache) %config(noreplace) %_sysconfdir/httpd/conf.d/ipa.conf
-%ghost %attr(0644,root,apache) %config(noreplace) %_sysconfdir/httpd/conf.d/ipa-kdc-proxy.conf
-%ghost %attr(0644,root,apache) %config(noreplace) %_sysconfdir/httpd/conf.d/ipa-pki-proxy.conf
-%ghost %attr(0644,root,apache) %config(noreplace) %_sysconfdir/ipa/kdcproxy/ipa-kdc-proxy.conf
+%ghost %attr(0644,root,apache2) %config(noreplace) %apache2_confdir/ipa-rewrite.conf
+%ghost %attr(0644,root,apache2) %config(noreplace) %apache2_sites_available/ipa.conf
+%ghost %attr(0644,root,apache2) %config(noreplace) %apache2_extra_enabled/ipa-kdc-proxy.conf
+%ghost %attr(0644,root,apache2) %config(noreplace) %apache2_extra_enabled/ipa-pki-proxy.conf
+%ghost %attr(0644,root,apache2) %config(noreplace) %_sysconfdir/ipa/kdcproxy/ipa-kdc-proxy.conf
 %dir %attr(0755,root,root) %_sysconfdir/ipa/dnssec
-%_usr/share/ipa/ipa.conf
-%_usr/share/ipa/ipa-rewrite.conf
-%_usr/share/ipa/ipa-pki-proxy.conf
-%ghost %attr(0644,root,apache) %config(noreplace) %_usr/share/ipa/html/ca.crt
-%ghost %attr(0644,root,apache) %_usr/share/ipa/html/krb.con
-%ghost %attr(0644,root,apache) %_usr/share/ipa/html/krb5.ini
-%ghost %attr(0644,root,apache) %_usr/share/ipa/html/krbrealm.con
-%dir %_usr/share/ipa/updates/
-%_usr/share/ipa/updates/*
-%dir %_localstatedir/lib/ipa
-%attr(700,root,root) %dir %_localstatedir/lib/ipa/backup
-%attr(700,root,root) %dir %_localstatedir/lib/ipa/gssproxy
-%attr(711,root,root) %dir %_localstatedir/lib/ipa/sysrestore
-%attr(700,root,root) %dir %_localstatedir/lib/ipa/sysupgrade
-%attr(755,root,root) %dir %_localstatedir/lib/ipa/pki-ca
-%ghost %_localstatedir/lib/ipa/pki-ca/publish
-%ghost %_localstatedir/named/dyndb-ldap/ipa
+%_datadir/ipa/ipa.conf
+%_datadir/ipa/ipa-rewrite.conf
+%_datadir/ipa/ipa-pki-proxy.conf
+%ghost %attr(0644,root,apache2) %config(noreplace) %_datadir/ipa/html/ca.crt
+%ghost %attr(0644,root,apache2) %_datadir/ipa/html/krb.con
+%ghost %attr(0644,root,apache2) %_datadir/ipa/html/krb5.ini
+%ghost %attr(0644,root,apache2) %_datadir/ipa/html/krbrealm.con
+%dir %_datadir/ipa/updates/
+%_datadir/ipa/updates/*
+%dir %_sharedstatedir/ipa
+%attr(700,root,root) %dir %_sharedstatedir/ipa/backup
+%attr(700,root,root) %dir %_sharedstatedir/ipa/gssproxy
+%attr(711,root,root) %dir %_sharedstatedir/ipa/sysrestore
+%attr(700,root,root) %dir %_sharedstatedir/ipa/sysupgrade
+%attr(755,root,root) %dir %_sharedstatedir/ipa/pki-ca
+%attr(770,root,named) %dir %_sharedstatedir/bind/data
+%attr(770,root,named) %dir %_sharedstatedir/bind/dynamic
+%ghost %_sharedstatedir/ipa/pki-ca/publish
+%ghost %_sharedstatedir/bind/zone/dyndb-ldap/ipa
+
 %dir %attr(0700,root,root) %_sysconfdir/ipa/custodia
-%dir %_usr/share/ipa/schema.d
-%attr(0644,root,root) %_usr/share/ipa/schema.d/README
-%attr(0644,root,root) %_usr/share/ipa/gssapi.login
-%_usr/share/ipa/ipakrb5.aug
+%dir %_datadir/ipa/schema.d
+%attr(0644,root,root) %_datadir/ipa/schema.d/README
+%attr(0644,root,root) %_datadir/ipa/gssapi.login
+%_datadir/ipa/ipakrb5.aug
 
 %files server-dns
-%doc README.md Contributors.txt
-%license COPYING
+%doc COPYING README.md Contributors.txt
 %_sbindir/ipa-dns-install
 %_mandir/man1/ipa-dns-install.1*
 
 %files server-trust-ad
-%doc README.md Contributors.txt
-%license COPYING
+%doc COPYING README.md Contributors.txt
 %_sbindir/ipa-adtrust-install
-%_usr/share/ipa/smb.conf.empty
+%_datadir/ipa/smb.conf.empty
 %attr(755,root,root) %_libdir/samba/pdb/ipasam.so
 %_mandir/man1/ipa-adtrust-install.1*
-%ghost %_libdir/krb5/plugins/libkrb5/winbind_krb5_locator.so
 %_sysconfdir/dbus-1/system.d/oddjob-ipa-trust.conf
 %_sysconfdir/oddjobd.conf.d/oddjobd-ipa-trust.conf
 %%attr(755,root,root) %_libexecdir/ipa/oddjob/com.redhat.idm.trust-fetch-domains
 
 
 %files client
-%doc README.md Contributors.txt
-%license COPYING
+%doc COPYING README.md Contributors.txt
 %_sbindir/ipa-client-install
 %_sbindir/ipa-client-automount
 %_sbindir/ipa-certupdate
@@ -1411,123 +1305,113 @@ fi
 %_mandir/man1/ipa-certupdate.1*
 %_mandir/man1/ipa-join.1*
 
-%files -n python2-ipaclient
-%doc README.md Contributors.txt
-%license COPYING
-%dir %python_sitelibdir/ipaclient
-%python_sitelibdir/ipaclient/*.py*
-%dir %python_sitelibdir/ipaclient/install
-%python_sitelibdir/ipaclient/install/*.py*
-%dir %python_sitelibdir/ipaclient/plugins
-%python_sitelibdir/ipaclient/plugins/*.py*
-%dir %python_sitelibdir/ipaclient/remote_plugins
-%python_sitelibdir/ipaclient/remote_plugins/*.py*
-%dir %python_sitelibdir/ipaclient/remote_plugins/2_*
-%python_sitelibdir/ipaclient/remote_plugins/2_*/*.py*
-%dir %python_sitelibdir/ipaclient/csrgen
-%dir %python_sitelibdir/ipaclient/csrgen/profiles
-%python_sitelibdir/ipaclient/csrgen/profiles/*.json
-%dir %python_sitelibdir/ipaclient/csrgen/rules
-%python_sitelibdir/ipaclient/csrgen/rules/*.json
-%dir %python_sitelibdir/ipaclient/csrgen/templates
-%python_sitelibdir/ipaclient/csrgen/templates/*.tmpl
-%python_sitelibdir/ipaclient-*.egg-info
+%files -n python-module-ipaclient
+%doc COPYING README.md Contributors.txt
+%dir %python_sitelibdir_noarch/ipaclient
+%python_sitelibdir_noarch/ipaclient/*.py*
+%dir %python_sitelibdir_noarch/ipaclient/install
+%python_sitelibdir_noarch/ipaclient/install/*.py*
+%dir %python_sitelibdir_noarch/ipaclient/plugins
+%python_sitelibdir_noarch/ipaclient/plugins/*.py*
+%dir %python_sitelibdir_noarch/ipaclient/remote_plugins
+%python_sitelibdir_noarch/ipaclient/remote_plugins/*.py*
+%dir %python_sitelibdir_noarch/ipaclient/remote_plugins/2_*
+%python_sitelibdir_noarch/ipaclient/remote_plugins/2_*/*.py*
+%dir %python_sitelibdir_noarch/ipaclient/csrgen
+%dir %python_sitelibdir_noarch/ipaclient/csrgen/profiles
+%python_sitelibdir_noarch/ipaclient/csrgen/profiles/*.json
+%dir %python_sitelibdir_noarch/ipaclient/csrgen/rules
+%python_sitelibdir_noarch/ipaclient/csrgen/rules/*.json
+%dir %python_sitelibdir_noarch/ipaclient/csrgen/templates
+%python_sitelibdir_noarch/ipaclient/csrgen/templates/*.tmpl
+%python_sitelibdir_noarch/ipaclient-*.egg-info
 
 %if 0%{?with_python3}
 
-%files -n python3-ipaclient
-%doc README.md Contributors.txt
-%license COPYING
-%dir %python3_sitelibdir/ipaclient
-%python3_sitelibdir/ipaclient/*.py
-%python3_sitelibdir/ipaclient/__pycache__/*.py*
-%dir %python3_sitelibdir/ipaclient/install
-%python3_sitelibdir/ipaclient/install/*.py
-%python3_sitelibdir/ipaclient/install/__pycache__/*.py*
-%dir %python3_sitelibdir/ipaclient/plugins
-%python3_sitelibdir/ipaclient/plugins/*.py
-%python3_sitelibdir/ipaclient/plugins/__pycache__/*.py*
-%dir %python3_sitelibdir/ipaclient/remote_plugins
-%python3_sitelibdir/ipaclient/remote_plugins/*.py
-%python3_sitelibdir/ipaclient/remote_plugins/__pycache__/*.py*
-%dir %python3_sitelibdir/ipaclient/remote_plugins/2_*
-%python3_sitelibdir/ipaclient/remote_plugins/2_*/*.py
-%python3_sitelibdir/ipaclient/remote_plugins/2_*/__pycache__/*.py*
-%dir %python3_sitelibdir/ipaclient/csrgen
-%dir %python3_sitelibdir/ipaclient/csrgen/profiles
-%python3_sitelibdir/ipaclient/csrgen/profiles/*.json
-%dir %python3_sitelibdir/ipaclient/csrgen/rules
-%python3_sitelibdir/ipaclient/csrgen/rules/*.json
-%dir %python3_sitelibdir/ipaclient/csrgen/templates
-%python3_sitelibdir/ipaclient/csrgen/templates/*.tmpl
-%python3_sitelibdir/ipaclient-*.egg-info
+%files -n python3-module-ipaclient
+%doc COPYING README.md Contributors.txt
+%dir %python3_sitelibdir_noarch/ipaclient
+%python3_sitelibdir_noarch/ipaclient/*.py
+%python3_sitelibdir_noarch/ipaclient/__pycache__/*.py*
+%dir %python3_sitelibdir_noarch/ipaclient/install
+%python3_sitelibdir_noarch/ipaclient/install/*.py
+%python3_sitelibdir_noarch/ipaclient/install/__pycache__/*.py*
+%dir %python3_sitelibdir_noarch/ipaclient/plugins
+%python3_sitelibdir_noarch/ipaclient/plugins/*.py
+%python3_sitelibdir_noarch/ipaclient/plugins/__pycache__/*.py*
+%dir %python3_sitelibdir_noarch/ipaclient/remote_plugins
+%python3_sitelibdir_noarch/ipaclient/remote_plugins/*.py
+%python3_sitelibdir_noarch/ipaclient/remote_plugins/__pycache__/*.py*
+%dir %python3_sitelibdir_noarch/ipaclient/remote_plugins/2_*
+%python3_sitelibdir_noarch/ipaclient/remote_plugins/2_*/*.py
+%python3_sitelibdir_noarch/ipaclient/remote_plugins/2_*/__pycache__/*.py*
+%dir %python3_sitelibdir_noarch/ipaclient/csrgen
+%dir %python3_sitelibdir_noarch/ipaclient/csrgen/profiles
+%python3_sitelibdir_noarch/ipaclient/csrgen/profiles/*.json
+%dir %python3_sitelibdir_noarch/ipaclient/csrgen/rules
+%python3_sitelibdir_noarch/ipaclient/csrgen/rules/*.json
+%dir %python3_sitelibdir_noarch/ipaclient/csrgen/templates
+%python3_sitelibdir_noarch/ipaclient/csrgen/templates/*.tmpl
+%python3_sitelibdir_noarch/ipaclient-*.egg-info
 
 %endif # with_python3
 
 %files client-common
-%doc README.md Contributors.txt
-%license COPYING
+%doc COPYING README.md Contributors.txt
 %dir %attr(0755,root,root) %_sysconfdir/ipa/
-%ghost %attr(0644,root,apache) %config(noreplace) %_sysconfdir/ipa/default.conf
-%ghost %attr(0644,root,apache) %config(noreplace) %_sysconfdir/ipa/ca.crt
+%ghost %attr(0644,root,apache2) %config(noreplace) %_sysconfdir/ipa/default.conf
+%ghost %attr(0644,root,apache2) %config(noreplace) %_sysconfdir/ipa/ca.crt
 %dir %attr(0755,root,root) %_sysconfdir/ipa/nssdb
 %ghost %config(noreplace) %_sysconfdir/ipa/nssdb/cert8.db
 %ghost %config(noreplace) %_sysconfdir/ipa/nssdb/key3.db
 %ghost %config(noreplace) %_sysconfdir/ipa/nssdb/secmod.db
 %ghost %config(noreplace) %_sysconfdir/ipa/nssdb/pwdfile.txt
 %ghost %config(noreplace) %_sysconfdir/pki/ca-trust/source/ipa.p11-kit
-%dir %_localstatedir/lib/ipa-client
-%dir %_localstatedir/lib/ipa-client/pki
-%dir %_localstatedir/lib/ipa-client/sysrestore
+%dir %_sharedstatedir/ipa-client
+%dir %_sharedstatedir/ipa-client/pki
+%dir %_sharedstatedir/ipa-client/sysrestore
 %_mandir/man5/default.conf.5*
 
-%files python-compat
-%doc README.md Contributors.txt
-%license COPYING
 
-%files -n python2-ipalib
-%doc README.md Contributors.txt
-%license COPYING
-%dir %python_sitelibdir/ipapython
-%python_sitelibdir/ipapython/*.py*
-%dir %python_sitelibdir/ipapython/install
-%python_sitelibdir/ipapython/install/*.py*
-%dir %python_sitelibdir/ipalib
-%python_sitelibdir/ipalib/*.py*
-%dir %python_sitelibdir/ipalib/install
-%python_sitelibdir/ipalib/install/*.py*
-%dir %python_sitelibdir/ipaplatform
-%python_sitelibdir/ipaplatform/*
-%python_sitelibdir/ipapython-*.egg-info
-%python_sitelibdir/ipalib-*.egg-info
-%python_sitelibdir/ipaplatform-*.egg-info
+%files -n python-module-freeipa
+%doc COPYING README.md Contributors.txt
+%dir %python_sitelibdir_noarch/ipapython
+%python_sitelibdir_noarch/ipapython/*.py*
+%dir %python_sitelibdir_noarch/ipapython/install
+%python_sitelibdir_noarch/ipapython/install/*.py*
+%dir %python_sitelibdir_noarch/ipalib
+%python_sitelibdir_noarch/ipalib/*.py*
+%dir %python_sitelibdir_noarch/ipalib/install
+%python_sitelibdir_noarch/ipalib/install/*.py*
+%dir %python_sitelibdir_noarch/ipaplatform
+%python_sitelibdir_noarch/ipaplatform/*
+%python_sitelibdir_noarch/ipapython-*.egg-info
+%python_sitelibdir_noarch/ipalib-*.egg-info
+%python_sitelibdir_noarch/ipaplatform-*.egg-info
 
-%files common -f %gettext_domain.lang
-%doc README.md Contributors.txt
-%license COPYING
+%files common -f ipa.lang
+%doc COPYING README.md Contributors.txt
 
 %if 0%{?with_python3}
 
-%files -n python3-ipalib
-%doc README.md Contributors.txt
-%license COPYING
+%files -n python3-module-freeipa
+%doc COPYING README.md Contributors.txt
 
-%python3_sitelibdir/ipapython/
-%python3_sitelibdir/ipalib/
-%python3_sitelibdir/ipaplatform/
-%python3_sitelibdir/ipapython-*.egg-info
-%python3_sitelibdir/ipalib-*.egg-info
-%python3_sitelibdir/ipaplatform-*.egg-info
+%python3_sitelibdir_noarch/ipapython/
+%python3_sitelibdir_noarch/ipalib/
+%python3_sitelibdir_noarch/ipaplatform/
+%python3_sitelibdir_noarch/ipapython-*.egg-info
+%python3_sitelibdir_noarch/ipalib-*.egg-info
+%python3_sitelibdir_noarch/ipaplatform-*.egg-info
 
 %endif # with_python3
 
 %if 0%{?with_ipatests}
 
-%files -n python2-ipatests
-%doc README.md Contributors.txt
-%license COPYING
-%python_sitelibdir/ipatests
-%python_sitelibdir/ipatests-*.egg-info
+%files -n python-module-ipatests
+%doc COPYING README.md Contributors.txt
+%python_sitelibdir_noarch/ipatests
+%python_sitelibdir_noarch/ipatests-*.egg-info
 %_bindir/ipa-run-tests
 %_bindir/ipa-test-config
 %_bindir/ipa-test-task
@@ -1543,11 +1427,10 @@ fi
 
 %if 0%{?with_python3}
 
-%files -n python3-ipatests
-%doc README.md Contributors.txt
-%license COPYING
-%python3_sitelibdir/ipatests
-%python3_sitelibdir/ipatests-*.egg-info
+%files -n python3-module-ipatests
+%doc COPYING README.md Contributors.txt
+%python3_sitelibdir_noarch/ipatests
+%python3_sitelibdir_noarch/ipatests-*.egg-info
 %_bindir/ipa-run-tests-3
 %_bindir/ipa-test-config-3
 %_bindir/ipa-test-task-3
@@ -1561,8 +1444,873 @@ fi
 
 %changelog
 * Sat Oct 07 2017 Stanislav Levin <slev@altlinux.org> 4.6.1-alt1%ubt
-- Initial build
+- 4.4.4 -> 4.6.1
 
-* Tue Nov 26 2013 Petr Viktorin <pviktori@redhat.com> - @VERSION@-@VENDOR_SUFFIX@
-- Remove changelog. The history is kept in Git, downstreams have own logs.
-# note, this entry is here to placate tools that expect a non-empty changelog
+* Thu Oct 06 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt4%ubt
+- Fix ipa client schema cache: Handle malformed server info data gracefully
+- Fix ipa client requirements
+- Import patches from 4.3.3-alt9
+
+* Thu Oct 05 2017 Mikhail Efremov <sem@altlinux.org> 4.3.3-alt9
+- selinux: Allow digits in SELinux user names (closes: #33838).
+- Require zip.
+
+* Thu Oct 4 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt3%ubt
+- Fix ipa server upgrade
+
+* Thu Oct 2 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt2%ubt
+- Import patches from 4.3.3-alt8
+
+* Wed Sep 27 2017 Mikhail Efremov <sem@altlinux.org> 4.3.3-alt8
+- Fix replica creation (closes: #33513):
+    + Don't try to use bundled urllib3 in the python-module-request.
+    + Use ipa CA certificate for https checks.
+
+* Thu Sep 25 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt1%ubt
+- Update to upstream's 4.4.4 version
+
+* Thu Aug 24 2017 Mikhail Efremov <sem@altlinux.org> 4.3.3-alt7
+- httpd2: Update existing ipa.conf for fontawesome path.
+
+* Wed Aug 23 2017 Mikhail Efremov <sem@altlinux.org> 4.3.3-alt6
+- Requires: fonts-ttf-fontawesome-web -> fonts-font-awesome.
+- Change paths to fontawesome.
+
+* Mon Aug 21 2017 Aleksei Nikiforov <darktemplar@altlinux.org> 4.3.3-alt5
+- Enabled tests.
+
+* Thu Aug 10 2017 Mikhail Efremov <sem@altlinux.org> 4.3.3-alt4
+- Add %%apache_conf_dir macro.
+- Move ipa_configured script to server-common subpackage.
+- Init argument for slapi_pblock_get() (closes: #33538).
+- Fix httpd2 configuration (closes: #33513, #33466).
+
+* Tue May 16 2017 Mikhail Efremov <sem@altlinux.org> 4.3.3-alt3
+- server: Require pki-kra.
+- Run ipa-server-upgrade at package update.
+- Add ipa_configured script.
+- Fix ipa-server-upgrade (closes: #33463).
+- Set JAVA_STACK_SIZE to 8m.
+
+* Wed Apr 26 2017 Mikhail Efremov <sem@altlinux.org> 4.3.3-alt2
+- Fix build with 389-ds-1.3.6.4.
+
+* Fri Apr 21 2017 Mikhail Efremov <sem@altlinux.org> 4.3.3-alt1
+- client: Require bind-utils.
+- client: Require krb5-kinit.
+- Updated to 4.3.3.
+
+* Tue Feb 28 2017 Mikhail Efremov <sem@altlinux.org> 4.3.2-alt9
+- Fix chown krb5.keytab.
+
+* Tue Feb 28 2017 Mikhail Efremov <sem@altlinux.org> 4.3.2-alt8
+- Use ALT-specific SELinux users.
+- Grant read access to krb5.keytab file for _keytab group.
+- ipaclient: Reduce ntpdate timeout.
+- client: Require ntpdate.
+
+* Wed Feb 15 2017 Mikhail Efremov <sem@altlinux.org> 4.3.2-alt7
+- Explicitly require python-module-samba.
+- Fixed %%_runtimedir/ipa_memcached permissions.
+- server-trust-ad: Require samba and samba-winbind (closes: #33084).
+- openntpd support.
+- Change dogtag default insecure port to 8090.
+- client: Require libsss_sudo.
+
+* Mon Jan 23 2017 Mikhail Efremov <sem@altlinux.org> 4.3.2-alt6
+- client: Require nss-utils (closes: #33031).
+- Patches from upstream:
+  + Fixed CVE-2016-7030.
+  + Fixed CVE-2016-9575.
+
+* Mon Jan 16 2017 Mikhail Efremov <sem@altlinux.org> 4.3.2-alt5
+- bindinstance: Drop 'generating rndc key' step.
+- bindinstance: Use resolvconf if needed.
+- tasks: Implement {set/restore}_control_state() functions.
+- Disable bind chroot and fix paths in configs.
+- altlinux/tasks.py: Implement check_selinux_status().
+- ipa-client-automount: Configure nsswitch.conf for sssd.
+- Configure nsswitch.conf for use sssd.
+- Require ntpd in the client subpackage.
+
+* Wed Dec 28 2016 Mikhail Efremov <sem@altlinux.org> 4.3.2-alt4
+- Move some requires to client subpackage (closes: #32952).
+- Require slapi-nis.
+- Require fonts for web ui.
+- web ui: Fix fonts.
+- Use bash as default login shell.
+- Update server-dns description.
+- Disable DNSSEC support for now.
+- Require openssl.
+- Fix opendnssec paths.
+- Update named.conf and paths.
+- Increase httpd.service start timeout.
+- Enable/disable apache2 modules/configs.
+- Enable dyndb-ldap.
+
+* Fri Nov 25 2016 Mikhail Efremov <sem@altlinux.org> 4.3.2-alt3
+- Require java-1.8.0-openjdk.
+- Require pki.
+- Drop hack for old certmonger.
+
+* Thu Nov 10 2016 Mikhail Efremov <sem@altlinux.org> 4.3.2-alt2
+- Merge spec with Fedora.
+
+* Tue Nov 08 2016 Mikhail Efremov <sem@altlinux.org> 4.3.2-alt1
+- Patch from upstream:
+    + ipa-kdb: Allow to build with samba 4.5
+- Update spec.
+- ipa-client-install: Hack for old certmonger.
+- Fix opendnssec user/group.
+- Disable dyndb-ldap stuff for now.
+- Fix httpd2 confs paths.
+- Fix user for ipa_memcached.
+- Fix NSSCertificateDatabase path.
+- ipa.conf: Fix paths.
+- Add nss.conf.
+- constants: Fix apache user name.
+- Fix apache user name for oddjobd.
+- Fix path to custodia socket.
+- Hack bind configuration for now.
+- Fix ipa.conf.
+- Fix httpd.service.
+- Add initial ALT Linux platform support.
+- Updated to 4.3.2.
+
+* Wed May 04 2016 Mikhail Efremov <sem@altlinux.org> 4.3.1-alt1
+- Updated to 4.3.1.
+
+* Fri Nov 20 2015 Mikhail Efremov <sem@altlinux.org> 4.2.3-alt1
+- Updated to 4.2.3.
+
+* Mon Apr 28 2014 Timur Aitov <timonbl4@altlinux.org> 3.3.5-alt1
+- new version
+
+* Wed Mar 26 2014 Timur Aitov <timonbl4@altlinux.org> 3.3.4-alt1
+- first build for alt
+
+* Fri Oct 25 2013 Martin Kosek <mkosek@redhat.com> - 3.3.2-1
+- Remove mod_ssl conflict, it can now live with mod_nss installed
+
+* Wed Sep 4 2013 Ana Krivokapic <akrivoka@redhat.com> - 3.3.0-3
+- Conform to tmpfiles.d packaging guidelines
+
+* Wed Aug 28 2013 Petr Viktorin <pviktori@redhat.com> - 3.3.0-2
+- Add man pages to the tests subpackage
+
+* Mon Aug 12 2013 Petr Viktorin <pviktori@redhat.com> - 3.3.0-1
+- Downgrade required version of python-paramiko for the tests subpackage
+
+* Thu Aug 8 2013 Martin Kosek <mkosek@redhat.com> - 3.2.99-13
+- Require slapi-nis 0.47.7 and sssd 1.11.0-0.1.beta2 required for core
+  features of 3.3.0 release
+
+* Fri Jul 26 2013 Martin Kosek <mkosek@redhat.com> - 3.2.99-12
+- Require pki-ca 10.0.4 which fixes external CA installation (#986901)
+
+* Wed Jul 24 2013 Petr Viktorin <pviktori@redhat.com> - 3.2.99-11
+- Add tar and xz dependencies to freeipa-tests
+
+* Wed Jul 24 2013 Tomas Babej <tbabej@redhat.com> - 3.2.99-10
+- Move requirement for keyutils from freeipa-server to freeipa-python
+
+* Wed Jul 24 2013 Martin Kosek <mkosek@redhat.com> - 3.2.99-9
+- Bump minimum version of sssd to 1.10.92 to pick up latest SSSD 1.11 Beta
+  development
+
+* Thu Jul 18 2013 Ana Krivokapic <akrivoka@redhat.com> - 3.2.99-8
+- Bump minimum version of sssd to 1.10.90 for the 'ipa_server_mode' option.
+
+* Wed Jul 17 2013 Martin Kosek <mkosek@redhat.com> - 3.2.99-7
+- Require selinux-policy 3.12.1-65 containing missing policy after removal of
+  freeipa-server-selinux subpackage
+
+* Tue Jul 16 2013 Tomas Babej <tbabej@redhat.com> - 3.2.99-6
+- Do not create /var/lib/ipa/pki-ca/publish, retain reference as ghost
+
+* Thu Jul 11 2013 Martin Kosek <mkosek@redhat.com> - 3.2.99-5
+- Run ipa-upgradeconfig and server restart in posttrans to avoid inconsistency
+  issues when there are still old parts of software (like entitlements plugin)
+
+* Wed Jul 10 2013 Ana Krivokapic <akrivoka@redhat.com> - 3.2.99-4
+- Bump minimum version of 389-ds-base to 1.3.1.3 for user password change fix.
+
+* Wed Jun 26 2013 Jan Cholasta <jcholast@redhat.com> - 3.2.99-3
+- Bump minimum version of 389-ds-base to 1.3.1.1 for SASL mapping priority
+  support.
+
+* Mon Jun 17 2013 Petr Viktorin <pviktori@redhat.com> - 3.2.99-2
+- Add the freeipa-tests subpackage
+
+* Thu Jun 13 2013 Martin Kosek <mkosek@redhat.com> - 3.2.99-1
+- Drop freeipa-server-selinux subpackage
+- Drop redundant directory /var/cache/ipa/sessions
+
+* Fri May 10 2013 Martin Kosek <mkosek@redhat.com> - 3.1.99-13
+- Add requires for openldap-2.4.35-4 to pickup fixed SASL_NOCANON behavior for
+  socket based connections (#960222)
+
+* Tue May  7 2013 Petr Viktorin <pviktori@redhat.com> - 3.1.99-12
+- Require libsss_nss_idmap-python in Fedora 19+
+
+* Mon May  6 2013 Petr Vobornik <pvoborni@redhat.com> - 3.1.99-11
+- Web UI plugins
+
+* Fri May  3 2013 Rob Crittenden <rcritten@redhat.com> - 3.1.99-10
+- Require pki-ca 10.0.2 for 501 response code on find for d9 -> d10 upgrades
+
+* Tue Apr 30 2013 Rob Crittenden <rcritten@redhat.com> - 3.1.99-9
+- Add Conflicts on nss-pam-ldapd < 0.8.4. The mapping from uniqueMember to
+  member is now done automatically and having it in the config file raises
+  an error.
+
+* Tue Apr 30 2013 Jan Cholasta <jcholast@redhat.com> - 3.1.99-8
+- Add triggerin scriptlet to update sshd_config on openssh-server update
+
+* Thu Apr 25 2013 Rob Crittenden <rcritten@redhat.com> - 3.1.99-7
+- Update nss and nss-tools dependency to fix certutil problem (#872761)
+
+* Mon Apr 15 2013 Martin Kosek <mkosek@redhat.com> - 3.1.99-6
+- Require samba 4.0.5, includes new passdb API
+- Require krb5 1.11.2-1, fixes missing PAC issue
+- Change permissions on backup dir to 700
+
+* Fri Apr  5 2013 Rob Crittenden <rcritten@redhat.com> - 3.1.99-5
+- Add backup and restore
+- Own /var/lib/ipa/backup
+
+* Thu Apr  4 2013 Alexander Bokovoy <abokovoy@redhat.com> - 3.1.99-4
+- Make sure build against Krb5 1.11 in Fedora 18 environment creates proper dependencies
+
+* Tue Apr  2 2013 Martin Kosek <mkosek@redhat.com> - 3.1.99-3
+- Require 389-base-base >= 1.3.0.5 to pull the following fixes:
+- upgrade deadlock caused by DNA plugin reconfiguration
+- CVE-2013-1897: unintended information exposure when
+  nsslapd-allow-anonymous-access is set to rootdse
+
+* Wed Mar 27 2013 Martin Kosek <mkosek@redhat.com> - 3.1.99-2
+- Remove conflict with krb5-server > 1.11 as ipa-kdb is compatible
+- ipa-ldap-updater show produce errors only
+- update policycoreutils version to 2.1.12-5 to match Requires in Fedora
+- require at least systemd 38 which provides the journal (we no longer
+  need to require syslog.target)
+
+* Thu Mar 21 2013 Martin Kosek <mkosek@redhat.com> - 3.1.99-1
+- Require selinux-policy 3.11.1-86 to fix Fedora 17 to 18 upgrade issue
+
+* Tue Jan 29 2013 Petr Viktorin <pviktori@redhat.com> - 3.0.99-14
+- Use ipa-ldap-updater --quiet instead of redirecting to /dev/null
+
+* Tue Jan 29 2013 Rob Crittenden <rcritten@redhat.com> - 3.0.99-13
+- Set certmonger minimum version to 0.65 for NSS locking during
+  renewal
+- Set selinux-policy to 3.11.1-73 so certmonger can run in post
+  scriptlet
+
+* Thu Jan 24 2013 Rob Crittenden <rcritten@redhat.com> - 3.0.99-12
+- Add certmonger condrestart to server post scriptlet
+- Make certmonger a (pre) Requires on the server subpackage
+
+* Tue Jan 22 2013 Petr Vobornik <pvoborni@redhat.com> - 3.0.99-11
+- dependency fix
+- Add BuildRequires: java-1.7.0-openjdk.
+- Removed BuildRequires: rhino
+
+* Fri Jan 18 2013 Petr Vobornik <pvoborni@redhat.com> - 3.0.99-10
+- Add Web UI layer JS files in ui/js/{dojo,freeipa,libs} directories
+- Add BuildRequires: rhino
+
+* Fri Dec 7 2012 Endi S. Dewata <edewata@redhat.com> - 3.0.99-9
+- Bump minimum version of pki-ca to 10.0.0-0.54.b3
+
+* Fri Dec 7 2012 Martin Kosek <mkosek@redhat.com> - 3.0.99-8
+- Bump minimum version of 389-ds-base to 1.3.0 to get transaction support
+
+* Thu Dec  6 2012 Rob Crittenden <rcritten@redhat.com> - 3.0.99-7
+- Set min for selinux-policy to 3.11.1-60 to fix errors including sssd
+  domain mapping in krb5.conf (#873429)
+
+* Wed Nov 21 2012 Alexander Bokovoy <abokovoy@redhat.com> - 3.0.99-6
+- Replace python-crypto by m2crypto dependency
+
+* Fri Nov 16 2012 Rob Crittenden <rcritten@redhat.com> - 3.0.99-5
+- Bump minimum version of slapi-nis to 0.44
+
+* Wed Nov 14 2012 Martin Kosek <mkosek@redhat.com> - 3.0.99-4
+- Remove compatibility definitions for unsupported Fedora versions (Fedora 16 and lower)
+  - Do not require specific package version when the package was available in Fedora 17
+  - Remove old SysV initscript compatibility code - we run on systemd now
+- Add Requires for the new Dogtag 10 and dogtag-pki-server-theme
+- Remove Requires on tomcat6 for Fedora 18 and later, Dogtag 10 pulls tomcat7 itself
+- Add Requires for tar (used by ipa-replica-prepare)
+
+* Fri Nov 09 2012 Martin Kosek <mkosek@redhat.com> - 3.0.99-3
+- Set min for bind-dyndb-ldap to 2.3-2 to pick up disabling global
+  forwarder per-zone
+
+* Fri Oct 26 2012 Sumit Bose <sbose@redhat.com> - 3.0.99-2
+- Restart httpd in post install of server-trust-ad
+
+* Wed Oct 24 2012 Martin Kosek <mkosek@redhat.com> - 3.0.99-1
+- Add strict Requires for 389-ds-base and policycoreutils to avoid user
+  removing them during package lifetime
+
+* Wed Oct 17 2012 Martin Kosek <mkosek@redhat.com> - 2.99.0-51
+- Print ipa-upgradeconfig errors during RPM update
+
+* Wed Oct 10 2012 Alexander Bokovoy <abokovoy@redhat.com> - 2.99.0-50
+- Make sure server-trust-ad subpackage alternates winbind_krb5_locator.so
+  plugin to /dev/null since they cannot be used when trusts are configured
+
+* Wed Oct 10 2012 Petr Viktorin <pviktori@redhat.com> - 2.99.0-49
+- Add zip dependency, needed for creating unsigned Firefox extensions
+
+* Mon Oct  8 2012 Martin Kosek <mkosek@redhat.com> - 2.99.0-48
+- Add directory /var/lib/ipa/pki-ca/publish for CRL published by pki-ca
+
+* Mon Oct  1 2012 Martin Kosek <mkosek@redhat.com> - 2.99.0-47
+- Require samba packages instead of samba4 packages obsoleted in Fedora 18 and later
+- Add libwbclient-devel BuildRequires to pick up libwbclient.h on Fedora 18 and later
+
+* Tue Sep 18 2012 Petr Viktorin <pviktori@redhat.com> - 2.99.0-46
+- Set certmonger minimum version to 0.60 for Dogtag 10 support.
+
+* Mon Sep 17 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-45
+- Set min for 389-ds-base to 1.2.11.14-1 on F17+ to pull in updated
+  RUV code and nsslapd-readonly schema.
+
+* Fri Sep 14 2012 Sumit Bose <sbose@redhat.com> - 2.99.0-44
+- Updated samba4-devel dependency due to API change
+
+* Mon Aug 20 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-43
+- Set min for 389-ds-base to 1.2.11.9-1 on F17+ to pull in warning about
+  low nsslapd-cachememsize.
+
+* Mon Aug 20 2012 Tomas Babej <tbabej@redhat.com> - 2.99.0-42
+- Add samba4-winbind to build dependencies for AD server-side code
+
+* Fri Aug 17 2012 Martin Kosek <mkosek@redhat.com> - 2.99.0-41
+- Set min for bind-dyndb-ldap to 1.1.0-0.16.rc1 to pick up complete zone transfer
+  support
+
+* Thu Aug 2 2012 Martin Kosek <mkosek@redhat.com> - 2.99.0-40
+- Set min for bind-dyndb-ldap to 1.1.0-0.15.rc1 to pick up SOA serial autoincrement
+  feature
+
+* Tue Jul 24 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-39
+- Set minimum certmonger to 0.58 for dogtag cert renewal
+
+* Wed Jul 18 2012 Alexander Bokovoy <abokovoy@redhat.com> - 2.99.0-38
+- Require samba4-devel >= 4.0.0-128 due to passdb API change in beta4
+
+* Fri Jun 29 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-37
+- Add Requires on openssl
+- Set minimum tomcat6 to 6.0.35-4 in F-18
+- Set minimum mod_auth_kerb to 5.4-16 in F-18
+
+* Thu Jun 21 2012 Sumit Bose <sbose@redhat.com> - 2.99.0-36
+- Add extdom extop plugin
+
+* Thu Jun 21 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-35
+- Add client requires on libsss-autofs, autofs, libnfsidmap and nfs-utils
+  for configuring automount and NFS.
+
+* Thu Jun 21 2012 Petr Vobornik <pvoborni@redhat.com> - 2.99.0-34
+- Add Web UI reset password pages
+
+* Wed Jun 20 2012 Ondrej Hamada <ohamada@redhat.com> - 2.99.0-33
+- Set min for 389-ds-base to 1.2.11.5-1 on F17 to fix installation issue
+- Set min for 389-ds-base to 1.2.10.10-1 on F16 (and lower) to fix CN case persistence
+
+* Fri Jun 8 2012 Martin Kosek <mkosek@redhat.com> - 2.99.0-32
+- Add directory /var/lib/ipa/sysupgrade for package upgrade metadata
+- Set min for bind-dyndb-ldap to 1.1.0-0.12.rc1 to pick up persistent search
+  related bug fixes
+
+* Mon Jun  4 2012 Alexander Bokovoy <abokovoy@redhat.com> - 2.99.0-31
+- Add python-crypto to build dependencies for AD server-side code
+
+* Tue May 29 2012 Alexander Bokovoy <abokovoy@redhat.com> - 2.99.0-30
+- Add freeipa-server-trust-ad virtual package to capture all required dependencies
+  for Active Directory trust management
+
+* Fri May 11 2012 Martin Kosek <mkosek@redhat.com> - 2.99.0-29
+- Replace used DNS client library (acutil) with python-dns
+
+* Tue Apr 10 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-28
+- Set min for selinux-policy to 3.10.0-110 on F-17 to pick up certmonger
+  policy for restarting services.
+- Set min for certmonger to 0.53 so we have the -C option to set restart
+  commands.
+
+* Thu Apr  5 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-27
+- Bump minimum version of slapi-nis to 0.40
+
+* Tue Mar 27 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-26
+- Add python-krbV Requires on client package
+
+* Mon Mar 26 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-25
+- Set min for 389-ds-base to 1.2.10.4-2 to fix upgrade issue
+
+* Fri Mar 23 2012 Petr Viktorin <pviktori@redhat.com> - 2.99.0-24
+- Add python-lxml and python-pyasn1 to BuildRequires
+
+* Mon Mar 19 2012 Martin Kosek <mkosek@redhat.com> - 2.99.0-23
+- Set min for bind-dyndb-ldap and bind to pick up new features and bug fixes
+
+* Thu Mar 1 2012 Jan Cholasta <jcholast@redhat.com> - 2.99.0-22
+- Set min nvr of sssd to 1.8.0 for SSH support
+- Add BuildRequires on sssd >= 1.8.0
+
+* Wed Feb 29 2012 Petr Vobornik <pvoborni@redhat.com> - 2.99.0-21
+- Add Web UI form based login page
+- Removed ipa_migration.css
+
+* Wed Feb 29 2012 Petr Vobornik <pvoborni@redhat.com> - 2.99.0-20
+- Add Web UI logout page
+
+* Mon Feb 27 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-19
+- Add Requires to ipa-client on oddjob-mkhomedir
+
+* Fri Feb 24 2012 Martin Kosek <mkosek@redhat.com> - 2.99.0-18
+- Set min for bind-dyndb-ldap to 1.1.0-0.8.a2 to pick up new features
+
+* Thu Feb 23 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-17
+- Add Conflicts on mod_ssl
+
+* Thu Feb 16 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-16
+- Set min for 389-ds-base to 1.2.10.1-1 to fix install segfault,
+  schema replication.
+
+* Tue Jan 31 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-15
+- Set min for krb5-server to 1.9.2-6 to pick up needed s4u2proxy patches
+
+* Wed Jan 11 2012 Rob Crittenden <rcritten@redhat.com> - 2.99.0-14
+- Set min for mod_auth_kerb to 5.4-8 to pick up s4u2proxy support
+
+* Fri Dec 9 2011 Alexander Bokovoy <abokovoy@redhat.com> - 2.99.0-13
+- Fix dependency for samba4-devel package
+
+* Thu Nov 17 2011 Simo Sorce <simo@redhat.com> - 2.99.0-12
+- Add CLDAP plugin
+- Set min nvr of 389-ds-base to 1.2.10-0.5.a5 for SLAPI_PLUGIN_CONFIG_ENTRY
+  support
+
+* Mon Nov 14 2011 Endi S. Dewata <edewata@redhat.com> - 2.99.0-11
+- Make sure changes to extension.js are not removed.
+
+* Wed Oct 26 2011 Endi S. Dewata <edewata@redhat.com> - 2.99.0-10
+- Moved UI images into install/ui/images
+
+* Mon Oct 24 2011 Endi S. Dewata <edewata@redhat.com> - 2.99.0-9
+- Removed hbac-deny-remove.html
+
+* Fri Oct 21 2011 Alexander Bokovoy <abokovoy@redhat.com> - 2.99.0-8
+- Default to systemd for Fedora 16 and onwards
+
+* Fri Oct 14 2011 Rob Crittenden <rcritten@redhat.com> - 2.99.0-7
+- Set min nvr of 389-ds-base to 1.2.10-0.4.a4 for limits fixes (740942, 742324)
+
+* Fri Oct  7 2011 Adam Young <ayoung@redhat.com> - 2.99.0-6
+- Add explicit dependency on pki-setup.
+
+* Tue Sep 13 2011 Alexander Bokovoy <abokovoy@redhat.com> - 2.99.0-5
+- Make sure platform adaptation is packaged in -python sub-package
+
+* Fri Sep 9 2011 Martin Kosek <mkosek@redhat.com> - 2.99.0-4
+- Add soft dependency for bind and bind-dyndb-ldap required versions
+
+* Wed Aug 31 2011 Rob Crittenden <rcritten@redhat.com> - 2.99.0-3
+- Set min nvr of 389-ds-base to 1.2.9.7-1 for BZ 728605
+
+* Mon Aug 29 2011 Rob Crittenden <rcritten@redhat.com> - 2.99.0-2
+- Set min nvr of pki-ca to 9.0.12 for fix in BZ 700505
+
+* Thu Aug 25 2011 Simo Sorce <ssorce#redhat.com> - 2.99.0-1
+- Remove ipa_kpasswd.
+
+* Tue Aug 23 2011 Jan Cholasta <jcholast@redhat.com> - 2.1.0-1
+- Add subscription-manager dependency for RHEL.
+
+* Thu Aug 11 2011 Martin Kosek <mkosek@redhat.com> - 2.0.90-12
+- Set min nvr of 389-ds-base to 1.2.9.6 for fix in BZ 725743,
+  723937, and 725542
+- Set min nvr of pki-ca to 9.0.11 for fix in BZ 728332
+
+* Thu Aug 11 2011 Martin Kosek <mkosek@redhat.com> - 2.0.90-11
+- Set min nvr of xmlrpc-c and libcurl to make sure GSSAPI delegation
+  support is in
+
+* Tue Aug 2 2011 Endi S. Dewata <edewata@redhat.com> - 2.0.90-10
+- Add *.ico files
+
+* Fri Jul 29 2011 Alexander Bokovoy <abokovoy@redhat.com> - 2.0.90-9
+- Add libipa_hbac-python dependency for hbactest plugin
+
+* Thu Jul 28 2011 Rob Crittenden <rcritten@redhat.com> - 2.0.90-8
+- Set min nvr of pki-ca to 9.0.10 on F-15+ to pick up updated
+  caIPAserviceCert.cfg profile
+
+* Wed Jul 20 2011 Rob Crittenden <rcritten@redhat.com> - 2.0.90-7
+- Make cyrus-sasl-gssapi requires arch-specific
+
+* Thu Jul 14 2011 Rob Crittenden <rcritten@redhat.com> - 2.0.90-6
+- Add ipa-csreplica-manage tool.
+
+* Wed Jul  6 2011 Adam Young <ayoung@redhat.com> - 2.0.90-5
+- Add HTML file describing issues with HBAC deny rules
+
+* Fri Jun 17 2011 Rob Crittenden <rcritten@redhat.com> - 2.0.90-4
+- Ship ipa-ca-install utility
+
+* Thu May 12 2011 Rob Crittenden <rcritten@redhat.com> - 2.0.90-3
+- Set min nvr of selinux-policy to 3.9.16-18 on F-15+
+- Set min nvr of pki-ca to 9.0.7 on F-15+
+
+* Thu May  5 2011 Martin Kosek <mkosek@redhat.com> - 2.0.90-2
+- Add BuildRequires on pylint, python-rhsm to enable a build with enforced
+  pylint check
+
+* Tue May  3 2011 Rob Crittenden <rcritten@redhat.com> - 2.0.90-1
+- Bump version to 2.0.90
+
+* Tue Apr  5 2011 Rob Crittenden <rcritten@redhat.com> - 1.99-47
+- Set min version of 389-ds-base to 1.2.8.0-1 for fix in BZ 693466.
+
+* Thu Mar 17 2011 Rob Crittenden <rcritten@redhat.com> - 1.99-46
+- Automatically apply updates when the package is upgraded.
+
+* Thu Feb 17 2011 Jakub Hrozek <jhrozek@redhat.com> - 1.99-45
+- Set minimum version of python-nss to 0.11 to make sure IPv6 support is in
+
+* Wed Feb  9 2011 Rob Crittenden <rcritten@redhat.com> - 1.99-44
+- Set minimum version of sssd to 1.5.1
+
+* Wed Feb  2 2011 Rob Crittenden <rcritten@redhat.com> - 1.99-43
+- Set min version of 389-ds-base to 1.2.8
+- Set min version of mod_nss 1.0.8-10
+- Set min version of selinux-policy to 3.9.7-27
+
+* Thu Jan 27 2011 Rob Crittenden <rcritten@redhat.com> - 1.99-42
+- Apply changes discovered in Fedora package review process (#672986)
+
+* Tue Jan 25 2011 Rob Crittenden <rcritten@redhat.com> - 1.99-41
+- Re-arrange doc and defattr to clean up rpmlint warnings
+- Remove conditionals on older releases
+- Move some man pages into admintools subpackage
+- Remove some explicit Requires in client that aren't needed
+- Consistent use of buildroot vs RPM_BUILD_ROOT
+
+* Wed Jan 19 2011 Adam Young <ayoung@redhat.com> - 1.99-40
+- Moved directory install/static to install/ui
+
+* Thu Jan 13 2011 Simo Sorce <ssorce@redhat.com> - 1.99-39
+- Remove dependency on nss_ldap/nss-pam-ldapd
+- The official client is sssd and that's what we use by default.
+
+* Thu Jan 13 2011 Simo Sorce <ssorce@redhat.com> - 1.99-38
+- Remove radius subpackages
+
+* Thu Jan 13 2011 Rob Crittenden <rcritten@redhat.com> - 1.99-37
+- Set minimum pki-ca and pki-silent versions to 9.0.0
+
+* Wed Jan 12 2011 Rob Crittenden <rcritten@redhat.com> - 1.99-36
+- Drop BuildRequires on mozldap-devel
+
+* Mon Dec 13 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-35
+- Add Requires on krb5-pkinit-openssl
+
+* Fri Dec 10 2010 Jr Aquino <jr.aquino@citrix.com> - 1.99-34
+- Add ipa-host-net-manage script
+
+* Tue Dec  7 2010 Simo Sorce <ssorce@redhat.com> - 1.99-33
+- Add ipa init script
+
+* Fri Nov 19 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-32
+- Set minimum level of 389-ds-base to 1.2.7 for enhanced memberof plugin
+
+* Wed Nov  3 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-31
+- remove ipa-fix-CVE-2008-3274
+
+* Wed Oct  6 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-30
+- Remove duplicate %%files entries on share/ipa/static
+- Add python default encoding shared library
+
+* Mon Sep 20 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-29
+- Drop requires on python-configobj (not used any more)
+- Drop ipa-ldap-updater message, upgrades are done differently now
+
+* Wed Sep  8 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-28
+- Drop conflicts on mod_nss
+- Require nss-pam-ldapd on F-14 or higher instead of nss_ldap (#606847)
+- Drop a slew of conditionals on older Fedora releases (< 12)
+- Add a few conditionals against RHEL 6
+- Add Requires of nss-tools on ipa-client
+
+* Fri Aug 13 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-27
+- Set minimum version of certmonger to 0.26 (to pck up #621670)
+- Set minimum version of pki-silent to 1.3.4 (adds -key_algorithm)
+- Set minimum version of pki-ca to 1.3.6
+- Set minimum version of sssd to 1.2.1
+
+* Tue Aug 10 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-26
+- Add BuildRequires for authconfig
+
+* Mon Jul 19 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-25
+- Bump up minimum version of python-nss to pick up nss_is_initialize() API
+
+* Thu Jun 24 2010 Adam Young <ayoung@redhat.com> - 1.99-24
+- Removed python-asset based webui
+
+* Thu Jun 24 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-23
+- Change Requires from fedora-ds-base to 389-ds-base
+- Set minimum level of 389-ds-base to 1.2.6 for the replication
+  version plugin.
+
+* Tue Jun  1 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-22
+- Drop Requires of python-krbV on ipa-client
+
+* Mon May 17 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-21
+- Load ipa_dogtag.pp in post install
+
+* Mon Apr 26 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-20
+- Set minimum level of sssd to 1.1.1 to pull in required hbac fixes.
+
+* Thu Mar  4 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-19
+- No need to create /var/log/ipa_error.log since we aren't using
+  TurboGears any more.
+
+* Mon Mar 1 2010 Jason Gerard DeRose <jderose@redhat.com> - 1.99-18
+- Fixed share/ipa/wsgi.py so .pyc, .pyo files are included
+
+* Wed Feb 24 2010 Jason Gerard DeRose <jderose@redhat.com> - 1.99-17
+- Added Require mod_wsgi, added share/ipa/wsgi.py
+
+* Thu Feb 11 2010 Jason Gerard DeRose <jderose@redhat.com> - 1.99-16
+- Require python-wehjit >= 0.2.2
+
+* Wed Feb  3 2010 Rob Crittenden <rcritten@redhat.com> - 1.99-15
+- Add sssd and certmonger as a Requires on ipa-client
+
+* Wed Jan 27 2010 Jason Gerard DeRose <jderose@redhat.com> - 1.99-14
+- Require python-wehjit >= 0.2.0
+
+* Fri Dec  4 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-13
+- Add ipa-rmkeytab tool
+
+* Tue Dec  1 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-12
+- Set minimum of python-pyasn1 to 0.0.9a so we have support for the ASN.1
+  Any type
+
+* Wed Nov 25 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-11
+- Remove v1-style /etc/ipa/ipa.conf, replacing with /etc/ipa/default.conf
+
+* Fri Nov 13 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-10
+- Add bash completion script and own /etc/bash_completion.d in case it
+  doesn't already exist
+
+* Tue Nov  3 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-9
+- Remove ipa_webgui, its functions rolled into ipa_httpd
+
+* Mon Oct 12 2009 Jason Gerard DeRose <jderose@redhat.com> - 1.99-8
+- Removed python-cherrypy from BuildRequires and Requires
+- Added Requires python-assets, python-wehjit
+
+* Mon Aug 24 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-7
+- Added httpd SELinux policy so CRLs can be read
+
+* Thu May 21 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-6
+- Move ipalib to ipa-python subpackage
+- Bump minimum version of slapi-nis to 0.15
+
+* Wed May  6 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-5
+- Set 0.14 as minimum version for slapi-nis
+
+* Wed Apr 22 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-4
+- Add Requires: python-nss to ipa-python sub-package
+
+* Thu Mar  5 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-3
+- Remove the IPA DNA plugin, use the DS one
+
+* Wed Mar  4 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-2
+- Build radius separately
+- Fix a few minor issues
+
+* Tue Feb  3 2009 Rob Crittenden <rcritten@redhat.com> - 1.99-1
+- Replace TurboGears requirement with python-cherrypy
+
+* Sat Jan 17 2009 Tomas Mraz <tmraz@redhat.com> - 1.2.1-3
+- rebuild with new openssl
+
+* Fri Dec 19 2008 Dan Walsh <dwalsh@redhat.com> - 1.2.1-2
+- Fix SELinux code
+
+* Mon Dec 15 2008 Simo Sorce <ssorce@redhat.com> - 1.2.1-1
+- Fix breakage caused by python-kerberos update to 1.1
+
+* Fri Dec 5 2008 Simo Sorce <ssorce@redhat.com> - 1.2.1-0
+- New upstream release 1.2.1
+
+* Sat Nov 29 2008 Ignacio Vazquez-Abrams <ivazqueznet+rpm@gmail.com> - 1.2.0-4
+- Rebuild for Python 2.6
+
+* Fri Nov 14 2008 Simo Sorce <ssorce@redhat.com> - 1.2.0-3
+- Respin after the tarball has been re-released upstream
+  New hash is 506c9c92dcaf9f227cba5030e999f177
+
+* Thu Nov 13 2008 Simo Sorce <ssorce@redhat.com> - 1.2.0-2
+- Conditionally restart also dirsrv and httpd when upgrading
+
+* Wed Oct 29 2008 Rob Crittenden <rcritten@redhat.com> - 1.2.0-1
+- Update to upstream version 1.2.0
+- Set fedora-ds-base minimum version to 1.1.3 for winsync header
+- Set the minimum version for SELinux policy
+- Remove references to Fedora 7
+
+* Wed Jul 23 2008 Simo Sorce <ssorce@redhat.com> - 1.1.0-3
+- Fix for CVE-2008-3274
+- Fix segfault in ipa-kpasswd in case getifaddrs returns a NULL interface
+- Add fix for bug #453185
+- Rebuild against openldap libraries, mozldap ones do not work properly
+- TurboGears is currently broken in rawhide. Added patch to not build
+  the UI locales and removed them from the ipa-server files section.
+
+* Wed Jun 18 2008 Rob Crittenden <rcritten@redhat.com> - 1.1.0-2
+- Add call to /usr/sbin/upgradeconfig to post install
+
+* Wed Jun 11 2008 Rob Crittenden <rcritten@redhat.com> - 1.1.0-1
+- Update to upstream version 1.1.0
+- Patch for indexing memberof attribute
+- Patch for indexing uidnumber and gidnumber
+- Patch to change DNA default values for replicas
+- Patch to fix uninitialized variable in ipa-getkeytab
+
+* Fri May 16 2008 Rob Crittenden <rcritten@redhat.com> - 1.0.0-5
+- Set fedora-ds-base minimum version to 1.1.0.1-4 and mod_nss minimum
+  version to 1.0.7-4 so we pick up the NSS fixes.
+- Add selinux-policy-base(post) to Requires (446496)
+
+* Tue Apr 29 2008 Rob Crittenden <rcritten@redhat.com> - 1.0.0-4
+- Add missing entry for /var/cache/ipa/kpasswd (444624)
+- Added patch to fix permissions problems with the Apache NSS database.
+- Added patch to fix problem with DNS querying where the query could be
+  returned as the answer.
+- Fix spec error where patch1 was in the wrong section
+
+* Fri Apr 25 2008 Rob Crittenden <rcritten@redhat.com> - 1.0.0-3
+- Added patch to fix problem reported by ldapmodify
+
+* Fri Apr 25 2008 Rob Crittenden <rcritten@redhat.com> - 1.0.0-2
+- Fix Requires for krb5-server that was missing for Fedora versions > 9
+- Remove quotes around test for fedora version to package egg-info
+
+* Fri Apr 18 2008 Rob Crittenden <rcritten@redhat.com> - 1.0.0-1
+- Update to upstream version 1.0.0
+
+* Tue Mar 18 2008 Rob Crittenden <rcritten@redhat.com> 0.99-12
+- Pull upstream changelog 722
+- Add Conflicts mod_ssl (435360)
+
+* Fri Feb 29 2008 Rob Crittenden <rcritten@redhat.com> 0.99-11
+- Pull upstream changelog 698
+- Fix ownership of /var/log/ipa_error.log during install (435119)
+- Add pwpolicy command and man page
+
+* Thu Feb 21 2008 Rob Crittenden <rcritten@redhat.com> 0.99-10
+- Pull upstream changelog 678
+- Add new subpackage, ipa-server-selinux
+- Add Requires: authconfig to ipa-python (bz #433747)
+- Package i18n files
+
+* Mon Feb 18 2008 Rob Crittenden <rcritten@redhat.com> 0.99-9
+- Pull upstream changelog 641
+- Require minimum version of krb5-server on F-7 and F-8
+- Package some new files
+
+* Thu Jan 31 2008 Rob Crittenden <rcritten@redhat.com> 0.99-8
+- Marked with wrong license. IPA is GPLv2.
+
+* Tue Jan 29 2008 Rob Crittenden <rcritten@redhat.com> 0.99-7
+- Ensure that /etc/ipa exists before moving user-modifiable html files there
+- Put html files into /etc/ipa/html instead of /etc/ipa
+
+* Tue Jan 29 2008 Rob Crittenden <rcritten@redhat.com> 0.99-6
+- Pull upstream changelog 608 which renamed several files
+
+* Thu Jan 24 2008 Rob Crittenden <rcritten@redhat.com> 0.99-5
+- package the sessions dir /var/cache/ipa/sessions
+- Pull upstream changelog 597
+
+* Thu Jan 24 2008 Rob Crittenden <rcritten@redhat.com> 0.99-4
+- Updated upstream pull (596) to fix bug in ipa_webgui that was causing the
+  UI to not start.
+
+* Thu Jan 24 2008 Rob Crittenden <rcritten@redhat.com> 0.99-3
+- Included LICENSE and README in all packages for documentation
+- Move user-modifiable content to /etc/ipa and linked back to
+  /usr/share/ipa/html
+- Changed some references to /usr to the {_usr} macro and /etc
+  to {_sysconfdir}
+- Added popt-devel to BuildRequires for Fedora 8 and higher and
+  popt for Fedora 7
+- Package the egg-info for Fedora 9 and higher for ipa-python
+
+* Tue Jan 22 2008 Rob Crittenden <rcritten@redhat.com> 0.99-2
+- Added auto* BuildRequires
+
+* Mon Jan 21 2008 Rob Crittenden <rcritten@redhat.com> 0.99-1
+- Unified spec file
+
+* Thu Jan 17 2008 Rob Crittenden <rcritten@redhat.com> - 0.6.0-2
+- Fixed License in specfile
+- Include files from /usr/lib/python*/site-packages/ipaserver
+
+* Fri Dec 21 2007 Karl MacMillan <kmacmill@redhat.com> - 0.6.0-1
+- Version bump for release
+
+* Wed Nov 21 2007 Karl MacMillan <kmacmill@mentalrootkit.com> - 0.5.0-1
+- Preverse mode on ipa-keytab-util
+- Version bump for relase and rpm name change
+
+* Thu Nov 15 2007 Rob Crittenden <rcritten@redhat.com> - 0.4.1-2
+- Broke invididual Requires and BuildRequires onto separate lines and
+  reordered them
+- Added python-tgexpandingformwidget as a dependency
+- Require at least fedora-ds-base 1.1
+
+* Thu Nov  1 2007 Karl MacMillan <kmacmill@redhat.com> - 0.4.1-1
+- Version bump for release
+
+* Wed Oct 31 2007 Karl MacMillan <kmacmill@redhat.com> - 0.4.0-6
+- Add dep for freeipa-admintools and acl
+
+* Wed Oct 24 2007 Rob Crittenden <rcritten@redhat.com> - 0.4.0-5
+- Add dependency for python-krbV
+
+* Fri Oct 19 2007 Rob Crittenden <rcritten@redhat.com> - 0.4.0-4
+- Require mod_nss-1.0.7-2 for mod_proxy fixes
+
+* Thu Oct 18 2007 Karl MacMillan <kmacmill@redhat.com> - 0.4.0-3
+- Convert to autotools-based build
+
+* Tue Sep 25 2007 Karl MacMillan <kmacmill@redhat.com> - 0.4.0-2
+
+* Fri Sep 7 2007 Karl MacMillan <kmacmill@redhat.com> - 0.3.0-1
+- Added support for libipa-dna-plugin
+
+* Fri Aug 10 2007 Karl MacMillan <kmacmill@redhat.com> - 0.2.0-1
+- Added support for ipa_kpasswd and ipa_pwd_extop
+
+* Sun Aug  5 2007 Rob Crittenden <rcritten@redhat.com> - 0.1.0-3
+- Abstracted client class to work directly or over RPC
+
+* Wed Aug  1 2007 Rob Crittenden <rcritten@redhat.com> - 0.1.0-2
+- Add mod_auth_kerb and cyrus-sasl-gssapi to Requires
+- Remove references to admin server in ipa-server-setupssl
+- Generate a client certificate for the XML-RPC server to connect to LDAP with
+- Create a keytab for Apache
+- Create an ldif with a test user
+- Provide a certmap.conf for doing SSL client authentication
+
+* Fri Jul 27 2007 Karl MacMillan <kmacmill@redhat.com> - 0.1.0-1
+- Initial rpm version
