@@ -28,6 +28,8 @@ from ipaplatform.base.constants import BaseConstantsNamespace
 class ALTLinuxConstantsNamespace(BaseConstantsNamespace):
     HTTPD_USER = "apache2"
     HTTPD_GROUP = "apache2"
-
+    ODS_USER = "_opendnssec"
+    ODS_GROUP ="_opendnssec"
+    SSSD_USER = "_sssd"
 
 constants = ALTLinuxConstantsNamespace()
