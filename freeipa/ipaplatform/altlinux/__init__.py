@@ -20,3 +20,4 @@
 '''
 This module contains ALT Linux specific platform files.
 '''
+NAME = 'altlinux'
