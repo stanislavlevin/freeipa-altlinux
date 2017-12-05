@@ -22,82 +22,55 @@
 Contains ALT Linux specific service class implementations.
 """
 
-import time
-
-from ipaplatform.tasks import tasks
-from ipaplatform.base import services as base_services
 from ipaplatform.redhat import services as redhat_services
-from ipapython import ipautil
-from ipapython.ipa_log_manager import root_logger
-from ipalib import api
-from ipaplatform.paths import paths
 
 # Mappings from service names as FreeIPA code references to these services
 # to their actual systemd service names
-altlinux_system_units = redhat_services.redhat_system_units
+altlinux_system_units = redhat_services.redhat_system_units.copy()
 
 altlinux_system_units['named'] = 'bind.service'
 altlinux_system_units['httpd'] = 'httpd2.service'
+altlinux_system_units['rpcgssd'] = 'rpc-gssd.service'
+altlinux_system_units['rpcidmapd'] = 'nfs-idmapd.service'
 
 # Service classes that implement ALT Linux specific behaviour
 
 class ALTLinuxService(redhat_services.RedHatService):
     system_units = altlinux_system_units
 
-# For services which have no ALT Linux counterpart
-class ALTLinuxNoService(base_services.PlatformService):
-    def restart(self):
+class ALTLinuxNoService(redhat_services.RedHatService):
+    @staticmethod
+    def start():
         return True
 
-    def disable(self):
+    @staticmethod
+    def stop():
         return True
 
-class ALTLinuxSSHService(ALTLinuxService):
-    def get_config_dir(self, instance_name=""):
-        return '/etc/openssh'
+    @staticmethod
+    def restart():
+        return True
 
-# Function that constructs proper ALT Linux specific server classes for services
-# of specified name
-wellknownservices = ['certmonger', 'dirsrv', 'httpd', 'ipa', 'krb5kdc',
-		'messagebus', 'nslcd', 'nscd', 'ntpd', 'portmap',
-		'rpcbind', 'kadmin', 'sshd', 'autofs', 'rpcgssd',
-		'rpcidmapd', 'pki_tomcatd', 'chronyd', 'domainname',
-		'named', 'ods_enforcerd', 'ods_signerd']
+    @staticmethod
+    def disable():
+        return True
 
-def altlinux_service_class_factory(name):
-    if name == 'dirsrv':
-        return redhat_services.RedHatDirectoryService(name)
-    if name == 'ipa':
-        return redhat_services.RedHatIPAService(name)
-    if name == 'sshd':
-        return ALTLinuxSSHService(name)
-    if name in ('pki-tomcatd', 'pki_tomcatd'):
-        return redhat_services.RedHatCAService(name)
-    if name == 'domainname':
-        return ALTLinuxNoService(name)
-    if name == 'portmap':
-        return ALTLinuxNoService(name)
-    if name == 'rpcgssd':
-        return ALTLinuxNoService(name)
-    if name == 'ods_enforcerd':
-        return ALTLinuxNoService(name)
-    if name == 'ods_signerd':
-        return ALTLinuxNoService(name)
-    return ALTLinuxService(name)
+def altlinux_service_class_factory(name, api=None):
+    if name in ('named', 'httpd', 'rpcgssd', 'rpcidmapd'):
+        return ALTLinuxService(name, api) 
+    if name in ('domainname', 'named-pkcs11', 'named-regular'):
+        return ALTLinuxNoService(name, api)
+    return redhat_services.redhat_service_class_factory(name, api)
 
 # Magicdict containing ALTLinuxNoService instances.
 
-class ALTLinuxServices(base_services.KnownServices):
-    def __init__(self):
-        services = dict()
-        for s in base_services.wellknownservices:
-            services[s] = altlinux_service_class_factory(s)
-        # Call base class constructor. This will lock services to read-only
-        super(ALTLinuxServices, self).__init__(services)
+class ALTLinuxServices(redhat_services.RedHatServices):
+    def service_class_factory(self, name, api=None):
+        return altlinux_service_class_factory(name, api)
 
+# System may support more time&date services. FreeIPA supports ntpd only, other
+# services will be disabled during IPA installation
+timedate_services = ['ntpd', 'chronyd', 'openntpd']
 
-# Objects below are expected to be exported by platform module
-
-from ipaplatform.base.services import timedate_services
 service = altlinux_service_class_factory
 knownservices = ALTLinuxServices()
