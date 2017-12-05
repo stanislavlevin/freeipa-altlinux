@@ -336,6 +336,11 @@ if test "x${IPAPLATFORM}" == "xdebian"; then
     ODS_USER="opendnssec"
     # see https://www.debian.org/doc/packaging-manuals/python-policy/ap-packaging_tools.html
     PYTHON_INSTALL_EXTRA_OPTIONS="--install-layout=deb"
+elif test "x${IPAPLATFORM}" == "xaltlinux"; then
+    KRB5KDC_SERVICE="krb5kdc.service"
+    NAMED_GROUP="named"
+    ODS_USER="_opendnssec"
+    PYTHON_INSTALL_EXTRA_OPTIONS=""
 else
     KRB5KDC_SERVICE="krb5kdc.service"
     NAMED_GROUP="named"
