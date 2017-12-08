@@ -1,6 +1,5 @@
 %define _unpackaged_files_terminate_build 1
 
-%define java_bin /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.144-1.b01.x86_64/jre/bin
 %define _libexecdir /usr/libexec
 %define plugin_dir %_libdir/dirsrv/plugins
 %define _localstatedir %_var
@@ -707,7 +706,6 @@ cp -r %_builddir/freeipa-%version %_builddir/freeipa-%version-python3
 # UI compilation segfaulted on some arches when the stack was lower (#1040576)
 export JAVA_STACK_SIZE="8m"
 # PATH is workaround for https://bugzilla.redhat.com/show_bug.cgi?id=1005235
-export PATH=%java_bin:/usr/bin:/usr/sbin:$PATH
 export PYTHON=%__python
 # Workaround: make sure all shebangs are pointing to Python 2
 # This should be solved properly using setuptools
