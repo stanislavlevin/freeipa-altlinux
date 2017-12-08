@@ -233,11 +233,18 @@ class HTTPInstance(service.Service):
         http_fd.close()
         os.chmod(target_fname, 0o644)
 
+        # Get list of enabled apache modules for backup state
+        mod_list = ['']
+        result = ipautil.run([paths.HTTPD,'-M'], raiseonerr=False, capture_output=True)
+        if result.returncode == 0:
+            include_regex = re.compile('.*(?=_module[ ]*\((shared|static)\))')
+            exclude_regex = re.compile('(_module \((shared|static)\).*)')
+            mod_list = [exclude_regex.sub("", item.strip()) for item in \
+                    filter(include_regex.match, result.output.split('\n'))]
+
         # Enable apache2 modules and ipa configs
-        for a2m in ["nss", "auth_gssapi", "rewrite", "wsgi", "proxy", "filter",
-                    "deflate", "headers", "authn_core", "authz_user", "expires",
-                    "lookup_identity","session","session_cookie","proxy_ajp",
-                    "proxy_http"]:
+        for a2m in services.httpd_modules:
+            self.sstore.backup_state('httpd', 'mod_%s' % a2m, a2m in mod_list)
             ipautil.run(["a2enmod", a2m])
         ipautil.run(["a2ensite", "ipa"])
 
@@ -565,6 +572,13 @@ class HTTPInstance(service.Service):
                 self.fstore.restore_file(f)
             except ValueError as error:
                 logger.debug("%s", error)
+
+        # Restore mods states
+        for a2m in services.httpd_modules:
+            if not self.sstore.restore_state('httpd', 'mod_%s' % a2m):
+                ipautil.run(["a2dismod", a2m], raiseonerr=False)
+            else:
+                ipautil.run(["a2enmod", a2m], raiseonerr=False)
 
         installutils.remove_keytab(self.keytab)
         installutils.remove_file(paths.HTTP_CCACHE)
