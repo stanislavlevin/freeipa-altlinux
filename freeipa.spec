@@ -31,7 +31,7 @@
 
 Name: freeipa
 Version: 4.6.1
-Release: alt1%ubt
+Release: alt2%ubt
 Summary: The Identity, Policy and Audit system
 
 Group: System/Base
@@ -1433,6 +1433,10 @@ fi
 %endif # with_ipatests
 
 %changelog
+* Tue Dec 12 2017 Stanislav Levin <slev@altlinux.org> 4.6.1-alt2%ubt
+- Add openntpd support (based on patches from Mikhail Efremov) (closes: #34307)
+- Save and restore state of apache modules during installation/uninstallation
+
 * Sat Oct 07 2017 Stanislav Levin <slev@altlinux.org> 4.6.1-alt1%ubt
 - 4.4.4 -> 4.6.1
 
