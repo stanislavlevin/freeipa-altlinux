@@ -729,7 +729,7 @@ def install(installer):
             ipaclient.install.ntpconf.force_ntpd(sstore)
             ntp = ntpinstance.NTPInstance(fstore)
             if not ntp.is_configured():
-                ntp.create_instance()
+                ntp.create_instance(server=True)
 
         if options.dirsrv_cert_files:
             ds = dsinstance.DsInstance(fstore=fstore,

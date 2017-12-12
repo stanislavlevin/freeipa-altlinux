@@ -67,13 +67,14 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     OPENDNSSEC_KASP_DB = "/var/lib/opendnssec/kasp.db"
     IPA_ODS_EXPORTER_CCACHE = "/var/lib/opendnssec/tmp/ipa-ods-exporter.ccache"
     DNSSEC_KEYFROMLABEL = "/usr/sbin/dnssec-keyfromlabel"
-    #NTP_CONF = "/etc/ntpd.conf"
+    NTP_CONF = "/etc/ntpd.conf"
     SSH_CONFIG_DIR = "/etc/openssh"
     SSH_CONFIG = "/etc/openssh/ssh_config"
     SSHD_CONFIG = "/etc/openssh/sshd_config"
     CHROMIUM_BROWSER = "/usr/bin/chromium"
     LIB_SYSTEMD_SYSTEMD_DIR = "/lib/systemd/system/"
     NTPD = "/usr/sbin/ntpd"
+    NTPDATE = "/usr/sbin/ntpdate"
     IPA_CUSTODIA_SOCKET = '/run/httpd2/ipa-custodia.sock'
     OLD_KRA_AGENT_PEM = "/etc/httpd2/conf/nss/kra-agent.pem"
     RESOLVCONF_CONF = '/etc/resolvconf.conf'

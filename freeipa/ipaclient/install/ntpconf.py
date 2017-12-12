@@ -28,63 +28,26 @@ from ipaplatform.paths import paths
 
 logger = logging.getLogger(__name__)
 
-ntp_conf = """# Permit time synchronization with our time source, but do not
-# permit the source to query or modify the service on this system.
-restrict default kod nomodify notrap nopeer noquery
-restrict -6 default kod nomodify notrap nopeer noquery
+ntp_conf = """# sample ntpd configuration file, see ntpd.conf(5)
 
-# Permit all access over the loopback interface.  This could
-# be tightened as well, but to do so would effect some of
-# the administrative functions.
-restrict 127.0.0.1
-restrict -6 ::1
+# Addresses to listen on (ntpd does not listen by default)
+#listen on *
+#listen on 127.0.0.1
+#listen on ::1
 
-# Hosts on local network are less restricted.
-#restrict 192.168.1.0 mask 255.255.255.0 nomodify notrap
+# sync to a single server
+#servers ntp.example.org
 
-# Use public servers from the pool.ntp.org project.
-# Please consider joining the pool (http://www.pool.ntp.org/join.html).
+# use a random selection of 8 public stratum 2 servers
+# see http://twiki.ntp.org/bin/view/Servers/NTPPoolServers
 $SERVERS_BLOCK
-
-#broadcast 192.168.1.255 key 42		# broadcast server
-#broadcastclient			# broadcast client
-#broadcast 224.0.1.1 key 42		# multicast server
-#multicastclient 224.0.1.1		# multicast client
-#manycastserver 239.255.254.254		# manycast server
-#manycastclient 239.255.254.254 key 42	# manycast client
-
-# Undisciplined Local Clock. This is a fake driver intended for backup
-# and when no outside source of synchronized time is available.
-server	127.127.1.0	# local clock
-#fudge	127.127.1.0 stratum 10
-
-# Drift file.  Put this in a directory which the daemon can write to.
-# No symbolic links allowed, either, since the daemon updates the file
-# by creating a temporary in the same directory and then rename()'ing
-# it to the file.
-driftfile /var/lib/ntp/drift
-
-# Key file containing the keys and key identifiers used when operating
-# with symmetric key cryptography.
-keys /etc/ntp/keys
-
-# Specify the key identifiers which are trusted.
-#trustedkey 4 8 42
-
-# Specify the key identifier to use with the ntpdc utility.
-#requestkey 8
-
-# Specify the key identifier to use with the ntpq utility.
-#controlkey 8
 """
 
-ntp_sysconfig = """OPTIONS="-x -p /var/run/ntpd.pid"
+ntp_sysconfig = """# Parameters for NTP daemon.
+# See ntpd(8) for more details.
 
-# Set to 'yes' to sync hw clock after successful ntpdate
-SYNC_HWCLOCK=yes
-
-# Additional options for ntpdate
-NTPDATE_OPTIONS=""
+# Specifies additional parameters for ntpd.
+NTPD_ARGS=-s
 """
 ntp_step_tickers = """# Use IPA-provided NTP server for initial time
 $TICKER_SERVERS_BLOCK
@@ -105,7 +68,7 @@ def config_ntp(ntp_servers, fstore = None, sysstore = None):
     path_ntp_conf = paths.NTP_CONF
     path_ntp_sysconfig = paths.SYSCONFIG_NTPD
     sub_dict = {}
-    sub_dict["SERVERS_BLOCK"] = "\n".join("server %s" % s for s in ntp_servers)
+    sub_dict["SERVERS_BLOCK"] = "\n".join("servers %s" % s for s in ntp_servers)
     sub_dict["TICKER_SERVERS_BLOCK"] = "\n".join(ntp_servers)
 
     nc = ipautil.template_str(ntp_conf, sub_dict)
@@ -142,26 +105,21 @@ def config_ntp(ntp_servers, fstore = None, sysstore = None):
 
 def synconce_ntp(server_fqdn, debug=False):
     """
-    Syncs time with specified server using ntpd.
+    Syncs time with specified server using ntpdate.
     Primarily designed to be used before Kerberos setup
     to get time following the KDC time
 
     Returns True if sync was successful
     """
-    ntpd = paths.NTPD
-    if not os.path.exists(ntpd):
+    ntpdate = paths.NTPDATE
+    if not os.path.exists(ntpdate):
         return False
 
-    # The ntpd command will never exit if it is unable to reach the
-    # server, so timeout after 15 seconds.
     timeout = 15
 
-    tmp_ntp_conf = ipautil.write_tmp_file('server %s' % server_fqdn)
-    args = [paths.BIN_TIMEOUT, str(timeout), ntpd, '-qgc', tmp_ntp_conf.name]
-    if debug:
-        args.append('-d')
+    args = [paths.BIN_TIMEOUT, str(timeout), ntpdate, server_fqdn]
     try:
-        logger.info('Attempting to sync time using ntpd.  '
+        logger.info('Attempting to sync time using ntpdate.  '
                     'Will timeout after %d seconds', timeout)
         ipautil.run(args)
         return True

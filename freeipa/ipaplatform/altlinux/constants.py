@@ -31,5 +31,9 @@ class ALTLinuxConstantsNamespace(BaseConstantsNamespace):
     ODS_USER = "_opendnssec"
     ODS_GROUP ="_opendnssec"
     SSSD_USER = "_sssd"
+    # ntpd init variable used for daemon options
+    NTPD_OPTS_VAR = "NTPD_ARGS"
+    # quote used for daemon options
+    NTPD_OPTS_QUOTE = "\""
 
 constants = ALTLinuxConstantsNamespace()

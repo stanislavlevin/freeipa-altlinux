@@ -233,7 +233,7 @@ Requires: nss-utils >= 3.14.3
 Requires: krb5-kdc >= %krb5_version
 Requires: krb5-kinit >= %krb5_version
 Requires: libsasl2-plugin-gssapi
-Requires: ntp
+Requires: openntpd
 Requires: apache2-base >= 2.4.6
 %if 0%with_python3
 Requires: python3-mod_wsgi
@@ -430,7 +430,8 @@ Requires: python-module-ipaclient = %version-%release
 %endif
 Requires: python-module-pyldap
 Requires: libsasl2-plugin-gssapi
-Requires: ntp
+Requires: openntpd
+Requires: ntpdate
 Requires: curl
 # NIS domain name config: /usr/lib/systemd/system/*-domainname.service
 #Requires: initscripts
@@ -1020,15 +1021,6 @@ if [ $1 -gt 1 ] ; then
             mv -Z /etc/krb5.conf.ipanew /etc/krb5.conf
             cp /etc/ipa/ca.crt /var/lib/ipa-client/pki/kdc-ca-bundle.pem
             cp /etc/ipa/ca.crt /var/lib/ipa-client/pki/ca-bundle.pem
-        fi
-    fi
-
-    if [ -f '/etc/sysconfig/ntpd' -a $restore -ge 2 ]; then
-        if grep -E -q 'OPTIONS=.*-u ntp:ntp' /etc/sysconfig/ntpd 2>/dev/null; then
-            sed -r '/OPTIONS=/ { s/\s+-u ntp:ntp\s+/ /; s/\s*-u ntp:ntp\s*// }' /etc/sysconfig/ntpd >/etc/sysconfig/ntpd.ipanew
-            mv -Z /etc/sysconfig/ntpd.ipanew /etc/sysconfig/ntpd
-
-            /bin/systemctl condrestart ntpd.service 2>&1 ||:
         fi
     fi
 

@@ -24,6 +24,7 @@ from ipaserver.install import service
 from ipaserver.install import sysupgrade
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
+from ipapython import ipautil
 
 logger = logging.getLogger(__name__)
 
@@ -84,13 +85,14 @@ class NTPInstance(service.Service):
         with open(paths.NTP_CONF, "w") as fd:
             for line in ntpconf:
                 fd.write(line)
+            # openntpd doesn't support iburst and fudge options
             fd.write("\n### Added by IPA Installer ###\n")
-            fd.write("server {} iburst\n".format(local_srv))
-            fd.write("{}\n".format(' '.join(fudge)))
+            fd.write("# server {} iburst\n".format(local_srv))
+            fd.write("# {}\n".format(' '.join(fudge)))
 
         #read in memory, find OPTIONS, check/change it, then overwrite file
-        needopts = [ {'val':'-x', 'need':True},
-                     {'val':'-g', 'need':True} ]
+        needopts = [ {'val':'-x', 'need':False},
+                     {'val':'-g', 'need':False} ]
         fd = open(paths.SYSCONFIG_NTPD, "r")
         lines = fd.readlines()
         fd.close()
@@ -136,7 +138,12 @@ class NTPInstance(service.Service):
         self.backup_state("enabled", self.is_enabled())
         self.enable()
 
-    def create_instance(self):
+    def __server_mode(self):
+        result = ipautil.run(['control', 'ntpd'], capture_output=True)
+        self.sstore.backup_state('control', 'ntpd-mode', result.output)
+        ipautil.run(['control', 'ntpd', 'server'])
+
+    def create_instance(self, server=False):
 
         # we might consider setting the date manually using ntpd -qg in case
         # the current time is very far off.
@@ -144,6 +151,8 @@ class NTPInstance(service.Service):
         self.step("stopping ntpd", self.__stop)
         self.step("writing configuration", self.__write_config)
         self.step("configuring ntpd to start on boot", self.__enable)
+        if server:
+            self.step("set ntpd server mode", self.__server_mode)
         self.step("starting ntpd", self.__start)
 
         self.start_creation()
@@ -159,6 +168,9 @@ class NTPInstance(service.Service):
         # before restoring configuration
         self.stop()
         self.disable()
+        value = self.sstore.restore_state('control', 'ntpd-mode')
+        if value is not None:
+            ipautil.run(['control', 'ntpd', value])
 
         try:
             self.fstore.restore_file(paths.NTP_CONF)
