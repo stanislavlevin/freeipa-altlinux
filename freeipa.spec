@@ -306,7 +306,7 @@ Requires: python-module-pyasn1 >= 0.3.2
 Requires: python-module-dbus
 Requires: python-module-dns >= 1.15
 Requires: python-module-kdcproxy >= 0.3
-#Requires: rpm-libs
+Requires: librpm
 Requires: pki-base
 Requires: python-module-augeas
 
@@ -337,7 +337,7 @@ Requires: python3-module-dbus
 Requires: python3-module-dns >= 1.15
 #Requires: python3-module-kdcproxy >= 0.3
 Requires: python3-module-augeas
-#Requires: rpm-libs
+Requires: librpm
 #Requires: pki-base-python3
 
 %description -n python3-module-ipaserver
