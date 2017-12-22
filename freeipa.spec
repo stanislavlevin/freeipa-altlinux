@@ -259,8 +259,7 @@ Requires: python-module-systemd
 Requires: policycoreutils >= 2.1.5
 Requires: tar
 # certmonger-0.79.4-2 fixes newlines in PEM files
-#Requires(pre): certmonger >= 0.79.4
-Requires(pre): certmonger
+Requires(pre): certmonger >= 0.79.5
 Requires: 389-ds-base >= 1.3.5.14
 Requires: fonts-font-awesome
 Requires: fonts-ttf-open-sans
@@ -443,8 +442,7 @@ Requires: sssd-ipa
 Requires: libsss_sudo
 Requires: python-module-sssdconfig
 # certmonger-0.79.4-2 fixes newlines in PEM files
-#Requires: certmonger >= 0.79.4
-Requires: certmonger
+Requires: certmonger >= 0.79.5
 Requires: nss-utils
 Requires: bind-utils
 Requires: oddjob-mkhomedir

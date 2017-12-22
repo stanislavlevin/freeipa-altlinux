@@ -81,7 +81,6 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/kerberos/krb5kdc/"
     VAR_KRB5KDC_K5_REALM = "/var/lib/kerberos/krb5kdc/.k5."
     CACERT_PEM = "/var/lib/kerberos/krb5kdc/cacert.pem"
-    CERTMONGER_DOGTAG_SUBMIT = "/usr/lib/certmonger/dogtag-submit"
     KRB5KDC_KADM5_ACL = "/var/lib/kerberos/krb5kdc/kadm5.acl"
     KRB5KDC_KADM5_KEYTAB = "/var/lib/kerberos/krb5kdc/kadm5.keytab"
     KRB5KDC_KDC_CONF = "/var/lib/kerberos/krb5kdc/kdc.conf"
