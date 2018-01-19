@@ -1,14 +1,9 @@
 #!/bin/sh -e
 ipa_service="/lib/systemd/system/ipa.service"
-echo 'FreeIPA upgrade is started'
 if egrep -qs "^${ipa_service}$"; then
     if [ -f ${ipa_service} ]; then
-        if /usr/bin/python -c "import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);" > /dev/null 2>&1; then
-            /usr/sbin/ipa-server-upgrade --quiet >/dev/null ||:
-            if /bin/systemctl is-enabled ipa.service >/dev/null 2>&1; then
-                /bin/systemctl restart ipa.service >/dev/null 2>&1 ||:
-            fi
+        if /bin/systemctl is-enabled ipa.service >/dev/null 2>&1; then
+            /bin/systemctl restart ipa.service ||:
         fi
     fi
 fi
-echo 'FreeIPA upgrade was completed'
