@@ -27,7 +27,7 @@
 
 Name: freeipa
 Version: 4.6.2
-Release: alt1%ubt
+Release: alt2%ubt
 Summary: The Identity, Policy and Audit system
 
 Group: System/Base
@@ -56,7 +56,7 @@ BuildRequires: automake
 BuildRequires: libtool
 BuildRequires: gettext
 BuildRequires: python-dev
-BuildRequires: python-module-setuptools >= 36.5.0
+BuildRequires: python-module-setuptools >= 38.4.0
 BuildRequires: python-module-pyparsing
 BuildRequires: python-module-execnet
 BuildRequires: python-module-mock
@@ -67,7 +67,7 @@ BuildRequires: python3-module-mock
 BuildRequires: python3-module-appdirs
 %if 0%{?with_python3}
 BuildRequires: python3-dev
-BuildRequires: python3-module-setuptools >= 36.5.0
+BuildRequires: python3-module-setuptools >= 38.4.0
 %endif # with_python3
 BuildRequires: systemd
 BuildRequires: apache2-base
@@ -524,6 +524,7 @@ installed on every client machine.
 Summary: Common files used by IPA client
 Group: System/Base
 BuildArch: noarch
+Requires: ca-trust
 
 %description client-common
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -565,6 +566,7 @@ Requires: python-module-dns >= 1.15
 Requires: python-module-enum34
 Requires: python-module-netifaces >= 0.10.4
 Requires: python-module-pyusb
+%py_provides ipaplatform
 
 %description -n python-module-freeipa
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -935,7 +937,8 @@ mkdir -p %buildroot%_sharedstatedir/ipa-client/pki
 mkdir -p %buildroot%_sharedstatedir/ipa-client/sysrestore
 
 mkdir -p %buildroot%_runtimedir
-install -d -m 0700 %buildroot%_runtimedir/ipa/
+install -d -m 0700 %buildroot%_runtimedir/ipa
+install -d -m 0700 %buildroot%_runtimedir/ipa/ccaches
 
 # install filetrigger
 mkdir -p %buildroot%_rpmlibdir
@@ -1165,6 +1168,7 @@ fi
 %files server-common
 %doc COPYING README.md Contributors.txt
 %dir %attr(0700,root,root) %_runtimedir/ipa
+%dir %attr(0700,root,root) %_runtimedir/ipa/ccaches
 %ghost %verify(not user group) %dir %_sharedstatedir/kdcproxy
 %dir %attr(0755,root,root) %_sysconfdir/ipa/kdcproxy
 %config(noreplace) %_sysconfdir/sysconfig/ipa-dnskeysyncd
@@ -1422,6 +1426,9 @@ fi
 %endif # with_python3
 
 %changelog
+* Wed Jan 31 2018 Stanislav Levin <slev@altlinux.org> 4.6.2-alt2%ubt
+- Fix build against krb5-1.16 (new KDB DAL version 7.0)
+
 * Fri Jan 19 2018 Stanislav Levin <slev@altlinux.org> 4.6.2-alt1%ubt
 - 4.6.1 -> 4.6.2
 
