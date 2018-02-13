@@ -26,8 +26,8 @@
 %define etc_systemd_dir %_sysconfdir/systemd/system
 
 Name: freeipa
-Version: 4.6.2
-Release: alt2%ubt
+Version: 4.6.3
+Release: alt1%ubt
 Summary: The Identity, Policy and Audit system
 
 Group: System/Base
@@ -40,6 +40,7 @@ Patch: %name-%version-alt.patch
 BuildRequires(pre): rpm-build-ubt
 BuildRequires(pre): rpm-macros-fedora-compat
 BuildRequires(pre): rpm-macros-apache2
+BuildRequires: /proc
 BuildRequires: rpm-macros-webserver-common
 BuildRequires: rpm-build-python
 BuildRequires: rpm-build-python3
@@ -543,7 +544,6 @@ Requires: %name-common = %version-%release
 Requires: python-module-gssapi >= 1.2.2
 Requires: gnupg
 Requires: libkeyutils
-Requires: python-module-OpenSSL
 Requires: python >= 2.7.9
 Requires: python-module-cryptography >= 1.6
 Requires: python-module-netaddr >= %python_netaddr_version
@@ -586,7 +586,6 @@ Requires: %name-common = %version-%release
 Requires: python3-module-gssapi >= 1.2.2
 Requires: gnupg
 Requires: keyutils
-Requires: python3-python-module-OpenSSL
 Requires: python3-module-cryptography >= 1.6
 Requires: python3-module-netaddr >= %python_netaddr_version
 #Requires: python3-module-ipa_hbac
@@ -924,10 +923,15 @@ touch %buildroot%_sharedstatedir/ipa/pki-ca/publish
 touch %buildroot%_sysconfdir/ipa/kdcproxy/ipa-kdc-proxy.conf
 
 # NSS
+# old dbm format
 touch %buildroot%_sysconfdir/ipa/nssdb/cert8.db
 touch %buildroot%_sysconfdir/ipa/nssdb/key3.db
 touch %buildroot%_sysconfdir/ipa/nssdb/secmod.db
 touch %buildroot%_sysconfdir/ipa/nssdb/pwdfile.txt
+# new sql format
+touch %buildroot%_sysconfdir/ipa/nssdb/cert9.db
+touch %buildroot%_sysconfdir/ipa/nssdb/key4.db
+touch %buildroot%_sysconfdir/ipa/nssdb/pkcs11.txt
 
 mkdir -p %buildroot%_sysconfdir/pki/ca-trust/source
 touch %buildroot%_sysconfdir/pki/ca-trust/source/ipa.p11-kit
@@ -1348,9 +1352,14 @@ fi
 %ghost %attr(0644,root,apache2) %config(noreplace) %_sysconfdir/ipa/default.conf
 %ghost %attr(0644,root,apache2) %config(noreplace) %_sysconfdir/ipa/ca.crt
 %dir %attr(0755,root,root) %_sysconfdir/ipa/nssdb
+# old dbm format
 %ghost %config(noreplace) %_sysconfdir/ipa/nssdb/cert8.db
 %ghost %config(noreplace) %_sysconfdir/ipa/nssdb/key3.db
 %ghost %config(noreplace) %_sysconfdir/ipa/nssdb/secmod.db
+# new sql format
+%ghost %config(noreplace) %_sysconfdir/ipa/nssdb/cert9.db
+%ghost %config(noreplace) %_sysconfdir/ipa/nssdb/key4.db
+%ghost %config(noreplace) %_sysconfdir/ipa/nssdb/pkcs11.txt
 %ghost %config(noreplace) %_sysconfdir/ipa/nssdb/pwdfile.txt
 %ghost %config(noreplace) %_sysconfdir/pki/ca-trust/source/ipa.p11-kit
 %dir %_sharedstatedir/ipa-client
@@ -1426,6 +1435,9 @@ fi
 %endif # with_python3
 
 %changelog
+* Tue Feb 13 2018 Stanislav Levin <slev@altlinux.org> 4.6.3-alt1%ubt
+- v4.6.2 -> v4.6.3
+
 * Wed Jan 31 2018 Stanislav Levin <slev@altlinux.org> 4.6.2-alt2%ubt
 - Fix build against krb5-1.16 (new KDB DAL version 7.0)
 
