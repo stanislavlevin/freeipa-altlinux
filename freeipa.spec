@@ -27,7 +27,7 @@
 
 Name: freeipa
 Version: 4.6.3
-Release: alt1%ubt
+Release: alt2%ubt
 Summary: The Identity, Policy and Audit system
 
 Group: System/Base
@@ -892,7 +892,7 @@ mkdir -p %buildroot%apache2_confdir/{sites-available,extra-available,extra-enabl
 /bin/touch %buildroot%apache2_sites_available/ipa.conf
 /bin/touch %buildroot%apache2_extra_enabled/ipa-kdc-proxy.conf
 /bin/touch %buildroot%apache2_extra_enabled/ipa-pki-proxy.conf
-/bin/touch %buildroot%apache2_confdir/ipa-rewrite.conf
+/bin/touch %buildroot%apache2_extra_enabled/ipa-rewrite.conf
 /bin/touch %buildroot%_datadir/ipa/html/ca.crt
 /bin/touch %buildroot%_datadir/ipa/html/krb.con
 /bin/touch %buildroot%_datadir/ipa/html/krb5.ini
@@ -1230,8 +1230,8 @@ fi
 %dir %_sysconfdir/ipa/html
 %config(noreplace) %_sysconfdir/ipa/html/ssbrowser.html
 %config(noreplace) %_sysconfdir/ipa/html/unauthorized.html
-%ghost %attr(0644,root,apache2) %config(noreplace) %apache2_confdir/ipa-rewrite.conf
 %ghost %attr(0644,root,apache2) %config(noreplace) %apache2_sites_available/ipa.conf
+%ghost %attr(0644,root,apache2) %config(noreplace) %apache2_extra_enabled/ipa-rewrite.conf
 %ghost %attr(0644,root,apache2) %config(noreplace) %apache2_extra_enabled/ipa-kdc-proxy.conf
 %ghost %attr(0644,root,apache2) %config(noreplace) %apache2_extra_enabled/ipa-pki-proxy.conf
 %ghost %attr(0644,root,apache2) %config(noreplace) %_sysconfdir/ipa/kdcproxy/ipa-kdc-proxy.conf
@@ -1435,6 +1435,9 @@ fi
 %endif # with_python3
 
 %changelog
+* Mon Feb 19 2018 Stanislav Levin <slev@altlinux.org> 4.6.3-alt2%ubt
+- Fix applying of ipa rewrite rules
+
 * Tue Feb 13 2018 Stanislav Levin <slev@altlinux.org> 4.6.3-alt1%ubt
 - v4.6.2 -> v4.6.3
 

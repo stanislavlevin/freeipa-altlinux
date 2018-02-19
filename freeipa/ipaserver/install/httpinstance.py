@@ -246,6 +246,22 @@ class HTTPInstance(service.Service):
         for a2m in services.httpd_modules:
             self.sstore.backup_state('httpd', 'mod_%s' % a2m, a2m in mod_list)
             ipautil.run(["a2enmod", a2m])
+
+        # Disable default ALTLinux site at sites-start.d
+        if os.path.exists(paths.HTTPD_STARTED_SITES_CONF):
+            # First backup conf
+            self.fstore.backup_file(paths.HTTPD_STARTED_SITES_CONF)
+
+            with open(paths.HTTPD_STARTED_SITES_CONF) as input_file, \
+                    open(paths.HTTPD_STARTED_SITES_CONF, 'r+') as output_file:
+                output_file.writelines(line.replace("default=yes","default=no") \
+                        for line in input_file)
+                output_file.truncate()
+        else:
+            service.print_msg("WARNING: ALTLinux default started sites conf -"
+            "%s doesn't exist" % paths.HTTPD_STARTED_SITES_CONF)
+
+        ipautil.run(["a2chkconfig"])
         ipautil.run(["a2ensite", "ipa"])
 
     def configure_gssproxy(self):
@@ -567,7 +583,8 @@ class HTTPInstance(service.Service):
         # Disable apache2 ipa configs
         ipautil.run(["a2dissite", "ipa"], raiseonerr=False)
 
-        for f in [paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF, paths.HTTPD_NSS_CONF]:
+        for f in [paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF, paths.HTTPD_NSS_CONF,
+                paths.HTTPD_STARTED_SITES_CONF]:
             try:
                 self.fstore.restore_file(f)
             except ValueError as error:
@@ -580,6 +597,7 @@ class HTTPInstance(service.Service):
             else:
                 ipautil.run(["a2enmod", a2m], raiseonerr=False)
 
+        ipautil.run(["a2chkconfig"])
         installutils.remove_keytab(self.keytab)
         installutils.remove_file(paths.HTTP_CCACHE)
 
