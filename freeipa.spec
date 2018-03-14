@@ -27,7 +27,7 @@
 
 Name: freeipa
 Version: 4.6.3
-Release: alt2%ubt
+Release: alt3%ubt
 Summary: The Identity, Policy and Audit system
 
 Group: System/Base
@@ -1435,6 +1435,10 @@ fi
 %endif # with_python3
 
 %changelog
+* Wed Mar 14 2018 Stanislav Levin <slev@altlinux.org> 4.6.3-alt3%ubt
+- Fix WebUI translations
+- Fix upgrade process
+
 * Mon Feb 19 2018 Stanislav Levin <slev@altlinux.org> 4.6.3-alt2%ubt
 - Fix applying of ipa rewrite rules
 
