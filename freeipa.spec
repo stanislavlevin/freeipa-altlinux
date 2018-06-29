@@ -27,7 +27,7 @@
 
 Name: freeipa
 Version: 4.6.3
-Release: alt5%ubt
+Release: alt6%ubt
 Summary: The Identity, Policy and Audit system
 
 Group: System/Base
@@ -1433,6 +1433,13 @@ fi
 %endif # with_python3
 
 %changelog
+* Fri Jun 29 2018 Ivan Zakharyaschev <imz@altlinux.org> 4.6.3-alt6%ubt
+- Improved formal deps (in python*-module-freeipa, dropped the
+  unnecessary explicit dep on setuptools in favor of autoreqs) so that
+  there is more flexibility in the base system where freeipa can be
+  installed (i.e., gcc won't be required since the split of
+  python*-module-setuptools-1:39.2.0-alt3).
+
 * Tue Apr 03 2018 Aleksei Nikiforov <darktemplar@altlinux.org> 4.6.3-alt5%ubt
 - Rebuilt due to selinux update.
 
