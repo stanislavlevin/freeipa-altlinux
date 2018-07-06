@@ -371,6 +371,7 @@ class i18n_messages(Command):
             "password_and_otp": _("Password or Password+One-Time-Password"),
             "redirect_msg": _("You will be redirected in ${count}s"),
             "sync_otp_token": _("Sync OTP Token"),
+            "synchronizing": _("Synchronizing"),
             "username": _("Username"),
             "user_locked": _("The user account you entered is locked"),
         },
