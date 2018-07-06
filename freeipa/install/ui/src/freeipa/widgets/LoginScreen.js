@@ -62,7 +62,7 @@ define(['dojo/_base/declare',
         cert_msg: "<i class=\"fa fa-info-circle\"></i> To log in with <strong>certificate</strong>," +
               " please make sure you have valid personal certificate. ",
 
-        form_auth_failed: "Login failed due to an unknown reason. ",
+        form_auth_failed: "Login failed due to an unknown reason",
 
         krb_auth_failed: "Authentication with Kerberos failed",
 
@@ -72,13 +72,11 @@ define(['dojo/_base/declare',
 
         password_change_complete: "Password change complete",
 
-        denied: "Sorry you are not allowed to access this service.",
+        krbprincipal_expired: "Kerberos Principal you entered is expired",
 
-        krbprincipal_expired: "Kerberos Principal you entered is expired.",
+        invalid_password: "The password or username you entered is incorrect",
 
-        invalid_password: "The password you entered is incorrect. ",
-
-        user_locked: "The user account you entered is locked. ",
+        user_locked: "The user account you entered is locked",
 
         //nodes:
         login_btn_node: null,
@@ -136,7 +134,8 @@ define(['dojo/_base/declare',
 
             this.reset_btn_node = IPA.button({
                 name: 'reset',
-                label: text.get('@i18n:buttons.reset_password', "Reset Password"),
+                label: text.get('@i18n:buttons.reset_password',
+                                "Reset Password"),
                 'class': 'btn-primary btn-lg',
                 click: this.on_confirm.bind(this)
             })[0];
@@ -145,7 +144,8 @@ define(['dojo/_base/declare',
 
             this.reset_and_login_btn_node = IPA.button({
                 name: 'reset_and_login',
-                label: text.get('@i18n:buttons.reset_password_and_login', "Reset Password and Login"),
+                label: text.get('@i18n:buttons.reset_password_and_login',
+                                "Reset Password and Log in"),
                 'class': 'btn-primary btn-lg',
                 click: this.on_confirm.bind(this)
             })[0];
@@ -489,12 +489,34 @@ define(['dojo/_base/declare',
             this.kerberos_msg = text.get(spec.kerberos_msg || '@i18n:login.krb_auth_msg',
                 this.kerberos_msg);
 
+            this.redirect_msg = text.get(spec.redirect_msg || '@i18n:login.redirect_msg',
+                this.redirect_msg);
+
+            this.continue_msg = text.get(spec.continue_msg || '@i18n:login.continue_msg',
+                this.continue_msg);
+
             this.kerberos_msg = this.kerberos_msg.replace('${host}', window.location.hostname);
 
             this.password_change_complete = text.get(spec.password_change_complete ||
                 '@i18n:password.password_change_complete', this.password_change_complete);
 
-            this.krb_auth_failed = text.get(spec.krb_auth_failed, this.krb_auth_failed);
+            this.form_auth_failed = text.get(spec.form_auth_failed ||
+                '@i18n:login.form_auth_failed', this.form_auth_failed);
+
+            this.krb_auth_failed = text.get(spec.krb_auth_failed ||
+                '@i18n:login.krb_auth_failed', this.krb_auth_failed);
+
+            this.cert_auth_failed = text.get(spec.cert_auth_failed ||
+                '@i18n:login.cert_auth_failed', this.cert_auth_failed);
+
+            this.password_expired = text.get(spec.password_expired ||
+                '@i18n:password.password_expired', this.password_expired);
+
+            this.krbprincipal_expired = text.get(spec.krbprincipal_expired ||
+                '@i18n:login.krbprincipal_expired', this.krbprincipal_expired);
+
+            this.invalid_password = text.get(spec.invalid_password ||
+                '@i18n:password.invalid_password', this.invalid_password);
 
             this.field_specs = LoginScreen.field_specs;
         }
@@ -527,8 +549,8 @@ define(['dojo/_base/declare',
         {
             name: 'current_password',
             $type: 'password',
-            label: text.get('@i18n:login.current_password', "Current Password"),
-            placeholder: text.get('@i18n:login.current_password', "Current Password"),
+            label: text.get('@i18n:password.current_password', "Current Password"),
+            placeholder: text.get('@i18n:password.current_password', "Current Password"),
             show_errors: false,
             undo: false
         },
@@ -544,8 +566,8 @@ define(['dojo/_base/declare',
             name: 'new_password',
             $type: 'password',
             required: true,
-            label: text.get('@i18n:password.new_password)', "New Password"),
-            placeholder: text.get('@i18n:password.new_password)', "New Password"),
+            label: text.get('@i18n:password.new_password', "New Password"),
+            placeholder: text.get('@i18n:password.new_password', "New Password"),
             show_errors: false,
             undo: false
         },
@@ -554,7 +576,7 @@ define(['dojo/_base/declare',
             $type: 'password',
             required: true,
             label: text.get('@i18n:password.verify_password', "Verify Password"),
-            placeholder: text.get('@i18n:password.new_password)', "New Password"),
+            placeholder: text.get('@i18n:password.new_password', "New Password"),
             validators: [{
                 $type: 'same_password',
                 other_field: 'new_password'
