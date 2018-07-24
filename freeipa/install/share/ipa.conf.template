@@ -185,8 +185,7 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
 
 
 #  List explicitly only the fonts we want to serve
-Alias /ipa/ui/fonts/open-sans "${FONTS_DIR}/open-sans"
-Alias /ipa/ui/fonts/fontawesome "${FONTS_DIR}/fontawesome"
+Alias /ipa/ui/fonts/open-sans "${FONTS_DIR}/ttf/open-sans"
 <Directory "${FONTS_DIR}">
   SetHandler None
   AllowOverride None
@@ -196,6 +195,15 @@ Alias /ipa/ui/fonts/fontawesome "${FONTS_DIR}/fontawesome"
   ExpiresDefault "access plus 1 year"
 </Directory>
 
+Alias /ipa/ui/fonts/fontawesome "${FONTS_AWESOME_DIR}/fonts"
+<Directory "${FONTS_AWESOME_DIR}">
+  SetHandler None
+  AllowOverride None
+  Satisfy Any
+  Allow from all
+  ExpiresActive On
+  ExpiresDefault "access plus 1 year"
+</Directory>
 
 #  webUI  is now completely static, and served out of that directory
 Alias /ipa/ui "/usr/share/ipa/ui"

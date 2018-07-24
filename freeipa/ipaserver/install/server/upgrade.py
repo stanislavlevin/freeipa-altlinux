@@ -1773,6 +1773,7 @@ def upgrade_configuration():
         WSGI_PROCESSES=constants.WSGI_PROCESSES,
         GSSAPI_SESSION_KEY=paths.GSSAPI_SESSION_KEY,
         FONTS_DIR=paths.FONTS_DIR,
+        FONTS_AWESOME_DIR=paths.FONTS_AWESOME_DIR,
         IPA_CCACHES=paths.IPA_CCACHES,
         IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET
     )
