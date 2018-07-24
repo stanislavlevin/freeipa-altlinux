@@ -17,14 +17,17 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import absolute_import
+
 import logging
 import sys
 import os
 import pwd
 import socket
-import datetime
+import time
 import traceback
 import tempfile
+import warnings
 
 import six
 
@@ -32,7 +35,7 @@ from ipalib.install import certstore, sysrestore
 from ipapython import ipautil
 from ipapython.dn import DN
 from ipapython import kerberos
-from ipalib import api, errors
+from ipalib import api, errors, x509
 from ipaplatform import services
 from ipaplatform.paths import paths
 
@@ -49,7 +52,6 @@ SERVICE_LIST = {
     'DNS': ('named', 30),
     'HTTP': ('httpd', 40),
     'KEYS': ('ipa-custodia', 41),
-    'NTP': ('ntpd', 45),
     'CA': ('pki-tomcatd', 50),
     'KRA': ('pki-tomcatd', 51),
     'ADTRUST': ('smb', 60),
@@ -59,6 +61,10 @@ SERVICE_LIST = {
     'DNSSEC': ('ods-enforcerd', 100),
     'DNSKeySync': ('ipa-dnskeysyncd', 110),
 }
+
+CONFIGURED_SERVICE = u'configuredService'
+ENABLED_SERVICE = u'enabledService'
+
 
 def print_msg(message, output_fd=sys.stdout):
     logger.debug("%s", message)
@@ -110,31 +116,43 @@ def add_principals_to_group(admin_conn, group, member_attr, principals):
         pass
 
 
+def find_providing_servers(svcname, conn, api):
+    """
+    Find servers that provide the given service.
+
+    :param svcname: The service to find
+    :param conn: a connection to the LDAP server
+    :return: list of host names (possibly empty)
+
+    """
+    dn = DN(('cn', 'masters'), ('cn', 'ipa'), ('cn', 'etc'), api.env.basedn)
+    query_filter = conn.make_filter({'objectClass': 'ipaConfigObject',
+                                     'ipaConfigString': ENABLED_SERVICE,
+                                     'cn': svcname}, rules='&')
+    try:
+        entries, _trunc = conn.find_entries(filter=query_filter, base_dn=dn)
+    except errors.NotFound:
+        return []
+    else:
+        return [entry.dn[1].value for entry in entries]
+
+
 def find_providing_server(svcname, conn, host_name=None, api=api):
     """
+    Find a server that provides the given service.
+
     :param svcname: The service to find
     :param conn: a connection to the LDAP server
     :param host_name: the preferred server
     :return: the selected host name
 
-    Find a server that is a CA.
     """
-    dn = DN(('cn', 'masters'), ('cn', 'ipa'), ('cn', 'etc'), api.env.basedn)
-    query_filter = conn.make_filter({'objectClass': 'ipaConfigObject',
-                                     'ipaConfigString': 'enabledService',
-                                     'cn': svcname}, rules='&')
-    try:
-        entries, _trunc = conn.find_entries(filter=query_filter, base_dn=dn)
-    except errors.NotFound:
+    servers = find_providing_servers(svcname, conn, api)
+    if len(servers) == 0:
         return None
-    if len(entries):
-        if host_name is not None:
-            for entry in entries:
-                if entry.dn[1].value == host_name:
-                    return host_name
-        # if the preferred is not found, return the first in the list
-        return entries[0].dn[1].value
-    return None
+    if host_name in servers:
+        return host_name
+    return servers[0]
 
 
 def case_insensitive_attr_has_value(attr, value):
@@ -218,6 +236,51 @@ def set_service_entry_config(name, fqdn, config_values,
         raise e
 
 
+def enable_services(fqdn):
+    """Change all configured services to enabled
+
+    Server.ldap_configure() only marks a service as configured. Services
+    are enabled at the very end of installation.
+
+    Note: DNS records must be updated with dns_update_system_records, too.
+
+    :param fqdn: hostname of server
+    """
+    ldap2 = api.Backend.ldap2
+    search_base = DN(('cn', fqdn), api.env.container_masters, api.env.basedn)
+    search_filter = ldap2.make_filter(
+        {
+            'objectClass': 'ipaConfigObject',
+            'ipaConfigString': CONFIGURED_SERVICE
+        },
+        rules='&'
+    )
+    entries = ldap2.get_entries(
+        search_base,
+        filter=search_filter,
+        scope=api.Backend.ldap2.SCOPE_ONELEVEL,
+        attrs_list=['cn', 'ipaConfigString']
+    )
+    for entry in entries:
+        name = entry['cn']
+        cfgstrings = entry.setdefault('ipaConfigString', [])
+        for value in list(cfgstrings):
+            if value.lower() == CONFIGURED_SERVICE.lower():
+                cfgstrings.remove(value)
+        if not case_insensitive_attr_has_value(cfgstrings, ENABLED_SERVICE):
+            cfgstrings.append(ENABLED_SERVICE)
+
+        try:
+            ldap2.update_entry(entry)
+        except errors.EmptyModlist:
+            logger.debug("Nothing to do for service %s", name)
+        except Exception:
+            logger.exception("failed to set service %s config values", name)
+            raise
+        else:
+            logger.debug("Enabled service %s for %s", name, fqdn)
+
+
 class Service(object):
     def __init__(self, service_name, service_desc=None, sstore=None,
                  fstore=None, api=api, realm_name=None,
@@ -256,7 +319,7 @@ class Service(object):
     def principal(self):
         if any(attr is None for attr in (self.realm, self.fqdn,
                                          self.service_prefix)):
-            return
+            return None
 
         return unicode(
             kerberos.Principal(
@@ -367,6 +430,8 @@ class Service(object):
 
         This server cert should be in DER format.
         """
+        if self.cert is None:
+            raise ValueError("{} has no cert".format(self.service_name))
         dn = DN(('krbprincipalname', self.principal), ('cn', 'services'),
                 ('cn', 'accounts'), self.suffix)
         entry = api.Backend.ldap2.get_entry(dn)
@@ -377,7 +442,36 @@ class Service(object):
             logger.critical("Could not add certificate to service %s entry: "
                             "%s", self.principal, str(e))
 
-    def import_ca_certs(self, db, ca_is_configured, conn=None):
+    def export_ca_certs_file(self, cafile, ca_is_configured, conn=None):
+        """
+        Export the CA certificates stored in LDAP into a file
+
+        :param cafile: the file to write the CA certificates to
+        :param ca_is_configured: whether IPA is CA-less or not
+        :param conn: an optional LDAP connection to use
+        """
+        if conn is None:
+            conn = api.Backend.ldap2
+
+        ca_certs = None
+        try:
+            ca_certs = certstore.get_ca_certs(
+                conn, self.suffix, self.realm, ca_is_configured)
+        except errors.NotFound:
+            pass
+        else:
+            with open(cafile, 'wb') as fd:
+                for cert, _unused, _unused, _unused in ca_certs:
+                    fd.write(cert.public_bytes(x509.Encoding.PEM))
+
+    def export_ca_certs_nssdb(self, db, ca_is_configured, conn=None):
+        """
+        Export the CA certificates stored in LDAP into an NSS database
+
+        :param db: the target NSS database
+        :param ca_is_configured: whether IPA is CA-less or not
+        :param conn: an optional LDAP connection to use
+        """
         if conn is None:
             conn = api.Backend.ldap2
 
@@ -459,6 +553,7 @@ class Service(object):
 
         Use show_service_name to include service name in generated descriptions.
         """
+        creation_start = time.time()
 
         if start_message is None:
             # no other info than mandatory service_name provided, use that
@@ -492,11 +587,15 @@ class Service(object):
 
         def run_step(message, method):
             self.print_msg(message)
-            s = datetime.datetime.now()
+            start = time.time()
             method()
-            e = datetime.datetime.now()
-            d = e - s
-            logger.debug("  duration: %d seconds", d.seconds)
+            dur = time.time() - start
+            name = method.__name__
+            logger.debug(
+                "step duration: %s %s %.02f sec",
+                self.service_name, name, dur,
+                extra={'timing': ('step', self.service_name, name, dur)},
+            )
 
         step = 0
         steps_iter = iter(self.steps)
@@ -520,11 +619,44 @@ class Service(object):
             raise
 
         self.print_msg(end_message)
-
+        dur = time.time() - creation_start
+        logger.debug(
+            "service duration: %s %.02f sec",
+            self.service_name, dur,
+            extra={'timing': ('service', self.service_name, None, dur)},
+        )
         self.steps = []
 
     def ldap_enable(self, name, fqdn, dm_password=None, ldap_suffix='',
-                    config=[]):
+                    config=()):
+        """Legacy function, all services should use ldap_configure()
+        """
+        warnings.warn(
+            "ldap_enable is deprecated, use ldap_configure instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        self._ldap_enable(ENABLED_SERVICE, name, fqdn, ldap_suffix, config)
+
+    def ldap_configure(self, name, fqdn, dm_password=None, ldap_suffix='',
+                       config=()):
+        """Create or modify service entry in cn=masters,cn=ipa,cn=etc
+
+        Contrary to ldap_enable(), the method only sets
+        ipaConfigString=configuredService. ipaConfigString=enabledService
+        is set at the very end of the installation process, to ensure that
+        other machines see this master/replica after it is fully installed.
+
+        To switch all configured services to enabled, use::
+
+            ipaserver.install.service.enable_services(api.env.host)
+            api.Command.dns_update_system_records()
+        """
+        self._ldap_enable(
+            CONFIGURED_SERVICE, name, fqdn, ldap_suffix, config
+        )
+
+    def _ldap_enable(self, value, name, fqdn, ldap_suffix, config):
         extra_config_opts = [
             ' '.join([u'startOrder', unicode(SERVICE_LIST[name][1])])
         ]
@@ -535,7 +667,7 @@ class Service(object):
         set_service_entry_config(
             name,
             fqdn,
-            [u'enabledService'],
+            [value],
             ldap_suffix=ldap_suffix,
             post_add_config=extra_config_opts)
 
@@ -544,7 +676,7 @@ class Service(object):
 
         entry_dn = DN(('cn', name), ('cn', fqdn), ('cn', 'masters'),
                         ('cn', 'ipa'), ('cn', 'etc'), ldap_suffix)
-        search_kw = {'ipaConfigString': u'enabledService'}
+        search_kw = {'ipaConfigString': ENABLED_SERVICE}
         filter = api.Backend.ldap2.make_filter(search_kw)
         try:
             entries, _truncated = api.Backend.ldap2.find_entries(
@@ -561,7 +693,7 @@ class Service(object):
 
         # case insensitive
         for value in entry.get('ipaConfigString', []):
-            if value.lower() == u'enabledservice':
+            if value.lower() == ENABLED_SERVICE:
                 entry['ipaConfigString'].remove(value)
                 break
 
@@ -674,7 +806,7 @@ class SimpleServiceInstance(Service):
         if self.gensvc_name == None:
             self.enable()
         else:
-            self.ldap_enable(self.gensvc_name, self.fqdn, None, self.suffix)
+            self.ldap_configure(self.gensvc_name, self.fqdn, None, self.suffix)
 
     def is_installed(self):
         return self.service.is_installed()

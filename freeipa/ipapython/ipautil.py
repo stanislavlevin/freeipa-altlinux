@@ -41,7 +41,6 @@ import grp
 from contextlib import contextmanager
 import locale
 import collections
-from subprocess import CalledProcessError
 
 from dns import resolver, reversename
 from dns.exception import DNSException
@@ -353,21 +352,32 @@ def shell_quote(string):
         return b"'" + string.replace(b"'", b"'\\''") + b"'"
 
 
-if six.PY3:
-    def _log_arg(s):
-        """Convert string or bytes to a string suitable for logging"""
-        if isinstance(s, bytes):
-            return s.decode(locale.getpreferredencoding(),
-                            errors='replace')
-        else:
-            return s
-else:
-    _log_arg = str
-
-
 class _RunResult(collections.namedtuple('_RunResult',
                                         'output error_output returncode')):
     """Result of ipautil.run"""
+
+
+class CalledProcessError(subprocess.CalledProcessError):
+    """CalledProcessError with stderr
+
+    Hold stderr of failed call and print it in repr() to simplify debugging.
+    """
+    def __init__(self, returncode, cmd, output=None, stderr=None):
+        super(CalledProcessError, self).__init__(returncode, cmd, output)
+        self.stderr = stderr
+
+    def __str__(self):
+        args = [
+            self.__class__.__name__, '('
+            'Command {!s} '.format(self.cmd),
+            'returned non-zero exit status {!r}'.format(self.returncode)
+        ]
+        if self.stderr is not None:
+            args.append(': {!r}'.format(self.stderr))
+        args.append(')')
+        return ''.join(args)
+
+    __repr__ = __str__
 
 
 def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
@@ -477,7 +487,7 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
     if six.PY3 and isinstance(stdin, str):
         stdin = stdin.encode(encoding)
 
-    arg_string = nolog_replace(' '.join(_log_arg(a) for a in args), nolog)
+    arg_string = nolog_replace(repr(args), nolog)
     logger.debug('Starting external process')
     logger.debug('args=%s', arg_string)
 
@@ -486,7 +496,7 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
             pent = pwd.getpwnam(runas)
 
             suplementary_gids = [
-                grp.getgrnam(group).gr_gid for group in suplementary_groups
+                grp.getgrnam(sgroup).gr_gid for sgroup in suplementary_groups
             ]
 
             logger.debug('runas=%s (UID %d, GID %s)', runas,
@@ -503,6 +513,7 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
             os.umask(umask)
 
     try:
+        # pylint: disable=subprocess-popen-preexec-fn
         p = subprocess.Popen(args, stdin=p_in, stdout=p_out, stderr=p_err,
                              close_fds=True, env=env, cwd=cwd,
                              preexec_fn=preexec_fn)
@@ -558,7 +569,9 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
         error_output = None
 
     if p.returncode != 0 and raiseonerr:
-        raise CalledProcessError(p.returncode, arg_string, str(output))
+        raise CalledProcessError(
+            p.returncode, arg_string, output_log, error_log
+        )
 
     result = _RunResult(output, error_output, p.returncode)
     result.raw_output = stdout
@@ -1023,6 +1036,55 @@ def host_port_open(host, port, socket_type=socket.SOCK_STREAM,
                 s.close()
 
     return port_open
+
+
+def check_port_bindable(port, socket_type=socket.SOCK_STREAM):
+    """Check if a port is free and not bound by any other application
+
+    :param port: port number
+    :param socket_type: type (SOCK_STREAM for TCP, SOCK_DGRAM for UDP)
+
+    Returns True if the port is free, False otherwise
+    """
+    if socket_type == socket.SOCK_STREAM:
+        proto = 'TCP'
+    elif socket_type == socket.SOCK_DGRAM:
+        proto = 'UDP'
+    else:
+        raise ValueError(socket_type)
+
+    # Detect dual stack or IPv4 single stack
+    try:
+        s = socket.socket(socket.AF_INET6, socket_type)
+        anyaddr = '::'
+        logger.debug(
+            "check_port_bindable: Checking IPv4/IPv6 dual stack and %s",
+            proto
+        )
+    except socket.error:
+        s = socket.socket(socket.AF_INET, socket_type)
+        anyaddr = ''
+        logger.debug("check_port_bindable: Checking IPv4 only and %s", proto)
+
+    # Attempt to bind
+    try:
+        if socket_type == socket.SOCK_STREAM:
+            # reuse TCP sockets in TIME_WAIT state
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+        s.bind((anyaddr, port))
+    except socket.error as e:
+        logger.debug(
+            "check_port_bindable: failed to bind to port %i/%s: %s",
+            port, proto, e
+        )
+        return False
+    else:
+        logger.debug(
+            "check_port_bindable: bind success: %i/%s", port, proto
+        )
+        return True
+    finally:
+        s.close()
 
 
 def reverse_record_exists(ip_address):

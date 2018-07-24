@@ -239,6 +239,8 @@ digits and nothing else follows.
 
 '''
 
+from __future__ import absolute_import
+
 import datetime
 import json
 import logging
@@ -337,9 +339,9 @@ def parse_and_set_boolean_xml(node, response, response_name):
     - off
     '''
     value = node.text.strip().lower()
-    if value == 'true' or value == 'yes':
+    if value in ('true', 'yes'):
         value = True
-    elif value == 'false' or value == 'no':
+    elif value in ('false', 'no'):
         value = False
     else:
         raise ValueError('expected true|false|yes|no|on|off for "%s", but got "%s"' % \
@@ -1282,7 +1284,7 @@ class RestClient(Backend):
     def __enter__(self):
         """Log into the REST API"""
         if self.cookie is not None:
-            return
+            return None
 
         # Refresh the ca_host property
         object.__setattr__(self, '_ca_host', None)

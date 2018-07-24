@@ -20,8 +20,8 @@
 #  ->  "1.0.0"                                         #
 ########################################################
 define(IPA_VERSION_MAJOR, 4)
-define(IPA_VERSION_MINOR, 6)
-define(IPA_VERSION_RELEASE, 3)
+define(IPA_VERSION_MINOR, 7)
+define(IPA_VERSION_RELEASE, 0)
 
 ########################################################
 # For 'pre' releases the version will be               #
@@ -55,7 +55,8 @@ define(IPA_VERSION_IS_GIT_SNAPSHOT, no)
 # - ipa-X-X: define(IPA_GIT_BRANCH,                    #
 #       ipa-IPA_VERSION_MAJOR-IPA_VERSION_MINOR)       #
 ########################################################
-define(IPA_GIT_BRANCH, ipa-IPA_VERSION_MAJOR-IPA_VERSION_MINOR)
+define(IPA_GIT_BRANCH, master)
+dnl define(IPA_GIT_BRANCH, ipa-IPA_VERSION_MAJOR-IPA_VERSION_MINOR)
 
 ########################################################
 # The version of IPA data. This is used to identify    #
@@ -137,7 +138,7 @@ NEWLINE)) dnl IPA_VERSION end
 dnl DEBUG: uncomment following lines and run command m4 VERSION.m4
 dnl `IPA_VERSION: ''IPA_VERSION'
 dnl `IPA_GIT_VERSION: ''IPA_GIT_VERSION'
-dnf `IPA_GIT_BRANCH: ''IPA_GIT_BRANCH'
+dnl `IPA_GIT_BRANCH: ''IPA_GIT_BRANCH'
 dnl `IPA_API_VERSION: ''IPA_API_VERSION'
 dnl `IPA_DATA_VERSION: ''IPA_DATA_VERSION'
 dnl `IPA_NUM_VERSION: ''IPA_NUM_VERSION'

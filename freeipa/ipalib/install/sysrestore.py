@@ -23,11 +23,15 @@
 # parts of the system configuration to the way it was
 # before ipa-server-install was first run
 
+from __future__ import absolute_import
+
 import logging
 import os
 import os.path
 import shutil
 import random
+
+from hashlib import sha256
 
 import six
 # pylint: disable=import-error
@@ -111,7 +115,7 @@ class FileStore(object):
             p.write(f)
 
     def backup_file(self, path):
-        """Create a copy of the file at @path - so long as a copy
+        """Create a copy of the file at @path - as long as an exact copy
         does not already exist - which will be restored to its
         original location by restore_files().
         """
@@ -126,11 +130,11 @@ class FileStore(object):
 
         _reldir, backupfile = os.path.split(path)
 
-        filename = ""
-        for _i in range(8):
-            h = "%02x" % self.random.randint(0,255)
-            filename += h
-        filename += "-"+backupfile
+        with open(path, 'rb') as f:
+            cont_hash = sha256(f.read()).hexdigest()
+
+        filename = "{hexhash}-{bcppath}".format(
+                hexhash=cont_hash, bcppath=backupfile)
 
         backup_path = os.path.join(self._path, filename)
         if os.path.exists(backup_path):

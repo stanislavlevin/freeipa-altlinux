@@ -1,6 +1,8 @@
 #
 # Copyright (C) 2017  FreeIPA Contributors see COPYING for license
 #
+from __future__ import absolute_import
+
 import os
 import sys
 
@@ -50,5 +52,5 @@ def test_importhook(mod, name):
     (os.path.join(DATA, 'os-release-ubuntu'), ['ubuntu', 'debian']),
 ])
 def test_parse_os_release(filename, expected_platforms):
-    parsed = metaimporter._parse_osrelease(filename)
+    parsed = metaimporter._parse_platform(filename)
     assert parsed == expected_platforms

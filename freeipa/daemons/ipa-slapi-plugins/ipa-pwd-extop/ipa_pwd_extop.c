@@ -595,7 +595,8 @@ parse_req_done:
     } else {
         principal = slapi_ch_smprintf("root/admin@%s", krbcfg->realm);
     }
-    ipapwd_set_extradata(pwdata.dn, principal, pwdata.timeNow);
+    if (principal)
+        ipapwd_set_extradata(pwdata.dn, principal, pwdata.timeNow);
 
 	/* Free anything that we allocated above */
 free_and_return:
@@ -693,7 +694,7 @@ static Slapi_Entry *get_entry_by_principal(const char *principal)
                          "krbCanonicalName",
                          "enrolledBy", NULL };
     Slapi_Entry **es = NULL;
-    int res = 0, ret, i;
+    int res, ret, i;
     Slapi_Entry *entry = NULL;
 
     /* Find ancestor base DN */
@@ -1820,7 +1821,7 @@ static int ipapwd_start( Slapi_PBlock *pb )
     krb5_context krbctx = NULL;
     krb5_error_code krberr;
     char *realm = NULL;
-    char *config_dn = NULL;
+    char *config_dn;
     Slapi_Entry *config_entry = NULL;
     int ret;
 

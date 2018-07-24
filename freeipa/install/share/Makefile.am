@@ -85,10 +85,15 @@ dist_app_DATA =				\
 	kdcproxy-enable.uldif		\
 	kdcproxy-disable.uldif		\
 	ipa-httpd.conf.template		\
+	ipa-httpd-wsgi.conf.template	\
 	gssapi.login			\
 	gssproxy.conf.template		\
 	kdcproxy.wsgi			\
 	ipakrb5.aug			\
+	ipa.conf.template		\
+	ipa-kdc-proxy.conf.template	\
+	ipa-pki-proxy.conf.template	\
+	ipa-rewrite.conf.template	\
 	$(NULL)
 
 kdcproxyconfdir = $(IPA_SYSCONF_DIR)/kdcproxy

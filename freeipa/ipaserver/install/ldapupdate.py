@@ -21,12 +21,12 @@
 
 # TODO
 # save undo files?
+from __future__ import absolute_import
 
 import base64
 import logging
 import sys
 import uuid
-import platform
 import time
 import os
 import pwd
@@ -110,7 +110,7 @@ def safe_output(attr, values):
             return 'XXXXXXXX'
 
     if values is None:
-        return
+        return None
 
     is_list = type(values) in (tuple, list)
 
@@ -275,7 +275,6 @@ class LDAPUpdate(object):
         self.ldapuri = installutils.realm_to_ldapi_uri(self.realm)
         if suffix is not None:
             assert isinstance(suffix, DN)
-        libarch = self._identify_arch()
 
         fqdn = installutils.get_fqdn()
         if fqdn is None:
@@ -292,7 +291,7 @@ class LDAPUpdate(object):
         if not self.sub_dict.get("ESCAPED_SUFFIX"):
             self.sub_dict["ESCAPED_SUFFIX"] = str(suffix)
         if not self.sub_dict.get("LIBARCH"):
-            self.sub_dict["LIBARCH"] = libarch
+            self.sub_dict["LIBARCH"] = paths.LIBARCH
         if not self.sub_dict.get("TIME"):
             self.sub_dict["TIME"] = int(time.time())
         if not self.sub_dict.get("MIN_DOMAIN_LEVEL"):
@@ -321,18 +320,6 @@ class LDAPUpdate(object):
             self.close_connection()
         else:
             raise RuntimeError("Offline updates are not supported.")
-
-    def _identify_arch(self):
-        """On multi-arch systems some libraries may be in /lib64, /usr/lib64,
-           etc.  Determine if a suffix is needed based on the current
-           architecture.
-        """
-        bits = platform.architecture()[0]
-
-        if bits == "64bit":
-            return "64"
-        else:
-            return ""
 
     def _template_str(self, s):
         try:
@@ -849,6 +836,9 @@ class LDAPUpdate(object):
             except errors.DatabaseError as e:
                 logger.error("Update failed: %s", e)
                 updated = False
+            except errors.DuplicateEntry as e:
+                logger.debug("Update already exists, skip it: %s", e)
+                updated = False
             except errors.ACIError as e:
                 logger.error("Update failed: %s", e)
                 updated = False
@@ -928,7 +918,6 @@ class LDAPUpdate(object):
         returns True if anything was changed, otherwise False
         """
         self.modified = False
-        all_updates = []
         try:
             self.create_connection()
 
@@ -937,6 +926,7 @@ class LDAPUpdate(object):
                 upgrade_files = sorted(files)
 
             for f in upgrade_files:
+                start = time.time()
                 try:
                     logger.debug("Parsing update file '%s'", f)
                     data = self.read_file(f)
@@ -944,9 +934,14 @@ class LDAPUpdate(object):
                     logger.error("error reading update file '%s'", f)
                     raise RuntimeError(e)
 
+                all_updates = []
                 self.parse_update_file(f, data, all_updates)
                 self._run_updates(all_updates)
-                all_updates = []
+                dur = time.time() - start
+                logger.debug(
+                    "LDAP update duration: %s %.03f sec", f, dur,
+                    extra={'timing': ('ldapupdate', f, None, dur)}
+                )
         finally:
             self.close_connection()
 

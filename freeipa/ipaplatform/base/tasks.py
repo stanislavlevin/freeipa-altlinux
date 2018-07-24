@@ -22,6 +22,8 @@
 This module contains default platform-specific implementations of system tasks.
 '''
 
+from __future__ import absolute_import
+
 import logging
 
 from pkg_resources import parse_version
@@ -34,13 +36,11 @@ logger = logging.getLogger(__name__)
 
 class BaseTaskNamespace(object):
 
-    def restore_context(self, filepath):
-        """
-        Restore SELinux security context on the given filepath.
+    def restore_context(self, filepath, force=False):
+        """Restore SELinux security context on the given filepath.
 
         No return value expected.
         """
-
         raise NotImplementedError()
 
     def backup_hostname(self, fstore, statestore):
@@ -133,9 +133,10 @@ class BaseTaskNamespace(object):
 
         raise NotImplementedError()
 
-    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore):
+    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore,
+                                  sudo=True):
         """
-        If sssd flag is true, configure pam and nsswtich so that SSSD is used
+        If sssd flag is true, configure pam and nsswitch so that SSSD is used
         for retrieving user information and authentication.
 
         Otherwise, configure pam and nsswitch to leverage pure LDAP.
@@ -149,6 +150,13 @@ class BaseTaskNamespace(object):
         """
 
         raise NotImplementedError()
+
+    def is_nosssd_supported(self):
+        """
+        Check if the flag --no-sssd is supported for client install.
+        """
+
+        return True
 
     def backup_auth_configuration(self, path):
         """
@@ -164,6 +172,12 @@ class BaseTaskNamespace(object):
         :param path: restore the backup from here.
         """
         raise NotImplementedError()
+
+    def migrate_auth_configuration(self, statestore):
+        """
+        Migrate pam stack configuration to authselect.
+        """
+        pass
 
     def set_selinux_booleans(self, required_settings, backup_func=None):
         """Set the specified SELinux booleans
@@ -211,6 +225,10 @@ class BaseTaskNamespace(object):
         """Remove configuration of httpd service of IPA"""
         raise NotImplementedError()
 
+    def configure_httpd_wsgi_conf(self):
+        """Configure WSGI for correct Python version"""
+        raise NotImplementedError()
+
     def is_fips_enabled(self):
         return False
 
@@ -222,6 +240,9 @@ class BaseTaskNamespace(object):
             logger.debug('Done adding user to group')
         except ipautil.CalledProcessError as e:
             logger.debug('Failed to add user to group: %s', e)
+
+    def setup_httpd_logging(self):
+        raise NotImplementedError()
 
 
 tasks = BaseTaskNamespace()

@@ -48,7 +48,7 @@
 int get_dom_sid(Slapi_ComponentId *plugin_id, const char *base_dn, char **_sid)
 {
     Slapi_PBlock *search_pb = NULL;
-    int search_result = 0;
+    int search_result;
     Slapi_Entry **search_entries = NULL;
     int ret;
     const char *sid;
@@ -218,7 +218,7 @@ int get_ranges(Slapi_ComponentId *plugin_id, const char *base_dn,
 {
     Slapi_PBlock *search_pb = NULL;
     Slapi_Entry **search_entries = NULL;
-    int search_result = 0;
+    int search_result;
     size_t c;
     int ret;
     struct range_info **ranges = NULL;
@@ -296,7 +296,7 @@ static int find_sid(const char *sid, Slapi_ComponentId *plugin_id,
 {
     Slapi_PBlock *search_pb = NULL;
     Slapi_Entry **search_entries = NULL;
-    int search_result = 0;
+    int search_result;
     int ret;
     char *filter = NULL;
 
@@ -456,7 +456,7 @@ int find_sid_for_ldap_entry(struct slapi_entry *entry,
     char **objectclasses = NULL;
     Slapi_PBlock *mod_pb = NULL;
     Slapi_Mods *smods = NULL;
-    int result = 0;
+    int result;
     bool has_posix_account = false;
     bool has_posix_group = false;
     bool has_ipa_id_object = false;

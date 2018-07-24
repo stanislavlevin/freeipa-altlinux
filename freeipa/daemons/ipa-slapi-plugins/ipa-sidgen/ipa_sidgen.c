@@ -60,7 +60,7 @@ static int ipa_sidgen_start(Slapi_PBlock *pb)
 static int ipa_sidgen_close(Slapi_PBlock *pb)
 {
     int ret;
-    struct ipa_sidgen_ctx *ctx = NULL;
+    struct ipa_sidgen_ctx *ctx;
 
     ret = slapi_pblock_get(pb, SLAPI_PLUGIN_PRIVATE, &ctx);
     if (ret == 0) {
@@ -76,11 +76,11 @@ static int ipa_sidgen_close(Slapi_PBlock *pb)
 static int ipa_sidgen_add_post_op(Slapi_PBlock *pb)
 {
     int ret;
-    int is_repl_op = 0;
+    int is_repl_op;
     struct slapi_entry *entry = NULL;
-    const char *dn_str = NULL;
+    const char *dn_str;
     Slapi_DN *dn = NULL;
-    struct ipa_sidgen_ctx *ctx = NULL;
+    struct ipa_sidgen_ctx *ctx;
     Slapi_PBlock *search_pb = NULL;
     char *errmsg = NULL;
 
@@ -169,7 +169,7 @@ done:
 static int ipa_sidgen_init_ctx(Slapi_PBlock *pb, struct ipa_sidgen_ctx **_ctx)
 {
     struct ipa_sidgen_ctx *ctx;
-    Slapi_Entry *entry = NULL;
+    Slapi_Entry *entry;
     int ret;
 
     ctx = calloc(1, sizeof(struct ipa_sidgen_ctx));

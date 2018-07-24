@@ -17,6 +17,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import absolute_import
+
 import logging
 import re
 from ldap import MOD_ADD
@@ -632,24 +634,24 @@ class migrate_ds(Command):
             doc=_('Load CA certificate of LDAP server from FILE'),
             default=None,
             noextrawhitespace=False,
-        ),
+            ),
         Bool('use_def_group?',
-            cli_name='use_default_group',
-            label=_('Add to default group'),
-            doc=_('Add migrated users without a group to a default group '
-                  '(default: true)'),
-            default=True,
-            autofill=True,
-        ),
+             cli_name='use_default_group',
+             label=_('Add to default group'),
+             doc=_('Add migrated users without a group to a default group '
+                   '(default: true)'),
+             default=True,
+             autofill=True,
+             ),
         StrEnum('scope',
-            cli_name='scope',
-            label=_('Search scope'),
-            doc=_('LDAP search scope for users and groups: base, onelevel, or '
-                  'subtree. Defaults to onelevel'),
-            values=tuple(_supported_scopes.keys()),
-            default=_default_scope,
-            autofill=True,
-        ),
+                cli_name='scope',
+                label=_('Search scope'),
+                doc=_('LDAP search scope for users and groups: base, '
+                      'onelevel, or subtree. Defaults to onelevel'),
+                values=sorted(_supported_scopes),
+                default=_default_scope,
+                autofill=True,
+                ),
     )
 
     has_output = (

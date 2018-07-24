@@ -140,9 +140,9 @@ ipadns_add( Slapi_PBlock *pb )
 	Slapi_Entry	*e = NULL;
 	Slapi_Attr	*a = NULL;
 	char 		*dn = NULL;
-	int		cnt = 0;
+	int		cnt;
 	int 		ret;
-	int		is_repl_op = 0;
+	int		is_repl_op;
 
 	if ( slapi_pblock_get( pb, SLAPI_IS_REPLICATED_OPERATION,
 			      &is_repl_op ) != 0 ) {

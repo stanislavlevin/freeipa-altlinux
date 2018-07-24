@@ -1043,7 +1043,15 @@ class Command(HasParam):
 
         self.log_messages(output)
 
-        order = [p.name for p in self.output_params()]
+        order = []
+        labels = {}
+        flags = {}
+
+        for p in self.output_params():
+            order.append(p.name)
+            labels[p.name] = unicode(p.label)
+            flags[p.name] = p.flags
+
         if options.get('all', False):
             order.insert(0, 'dn')
             print_all = True
@@ -1052,9 +1060,6 @@ class Command(HasParam):
 
         if options.get('raw', False):
             labels = None
-        else:
-            labels = dict((p.name, unicode(p.label)) for p in self.output_params())
-        flags = dict((p.name, p.flags) for p in self.output_params())
 
         for o in self.output:
             outp = self.output[o]
@@ -1155,7 +1160,7 @@ class Command(HasParam):
         cls.register_callback('interactive_prompt', callback, first)
 
     def interactive_prompt_callback(self, kw):
-        return
+        pass
 
 
 class LocalOrRemote(Command):

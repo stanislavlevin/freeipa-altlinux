@@ -19,6 +19,7 @@
 #
 
 import fcntl
+import logging
 import os
 import shutil
 
@@ -26,6 +27,8 @@ import six
 
 if six.PY3:
     unicode = str
+
+logger = logging.getLogger(__name__)
 
 def openLocked(filename, perms):
     fd = -1
@@ -346,11 +349,17 @@ class IPAChangeConf(object):
                     opts.append(no)
                     continue
                 if no['action'] == 'addifnotset':
+                    opts.append({
+                        'name': 'comment',
+                        'type': 'comment',
+                        'value': self._dump_line(
+                            ' ', no['name'], ' modified by IPA'
+                        ),
+                    })
                     opts.append({'name': 'comment', 'type': 'comment',
                                 'value': self._dump_line(no['name'],
                                                          self.dassign,
                                                          no['value'],
-                                                         u' # modified by IPA'
                                                          )})
                     opts.append(o)
                     continue
@@ -506,6 +515,8 @@ class IPAChangeConf(object):
                     f.close()
             except IOError:
                 pass
+        logger.debug("Updating configuration file %s", file)
+        logger.debug(output)
         return True
 
     def newConf(self, file, options, file_perms=0o644):
@@ -541,6 +552,8 @@ class IPAChangeConf(object):
                     f.close()
             except IOError:
                 pass
+        logger.debug("Writing configuration file %s", file)
+        logger.debug(output)
         return True
 
     @staticmethod

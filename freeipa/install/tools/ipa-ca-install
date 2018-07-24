@@ -1,4 +1,4 @@
-#! /usr/bin/python2 -E
+#!/usr/bin/python3 -E
 # Authors: Rob Crittenden <rcritten@redhat.com>
 #
 # Copyright (C) 2011  Red Hat
@@ -18,6 +18,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import print_function
+
 import logging
 import sys
 import os
@@ -33,6 +35,7 @@ from ipaserver.install.installutils import create_replica_config
 from ipaserver.install.installutils import check_creds, ReplicaConfig
 from ipaserver.install import dsinstance, ca
 from ipaserver.install import cainstance, service
+from ipaserver.install import custodiainstance
 from ipapython import version
 from ipalib import api
 from ipalib.constants import DOMAIN_LEVEL_0
@@ -217,13 +220,17 @@ def install_replica(safe_options, options, filename):
     options.domain_name = config.domain_name
     options.dm_password = config.dirman_password
     options.host_name = config.host_name
+    options.ca_host_name = config.ca_host_name
     if os.path.exists(cafile):
         options.ca_cert_file = cafile
     else:
         options.ca_cert_file = None
 
     ca.install_check(True, config, options)
-    ca.install(True, config, options)
+
+    custodia = custodiainstance.get_custodia_instance(
+        options, custodiainstance.CustodiaModes.CA_PEER)
+    ca.install(True, config, options, custodia=custodia)
 
 
 def install_master(safe_options, options):
@@ -252,12 +259,25 @@ def install_master(safe_options, options):
         sys.exit("CA subject: {}".format(e))
 
     ca.install_check(True, None, options)
-    ca.install(True, None, options)
+
+    ca.print_ca_configuration(options)
+    print()
+
+    if not options.unattended:
+        if not ipautil.user_input(
+                "Continue to configure the CA with these values?", False):
+            sys.exit("Installation aborted")
+
+    # No CA peer available yet.
+    custodia = custodiainstance.get_custodia_instance(
+        options, custodiainstance.CustodiaModes.STANDALONE)
+    ca.install(True, None, options, custodia=custodia)
 
     # Run ipa-certupdate to add the new CA certificate to
     # certificate databases on this server.
     logger.info("Updating certificate databases.")
     ipa_certupdate.run_with_args(api)
+
 
 def install(safe_options, options, filename):
     options.promote = False
@@ -322,18 +342,26 @@ def main():
     )
     api.finalize()
     api.Backend.ldap2.connect()
-
     domain_level = dsinstance.get_domain_level(api)
+
     if domain_level > DOMAIN_LEVEL_0:
         promote(safe_options, options, filename)
     else:
         install(safe_options, options, filename)
 
+    # pki-spawn restarts 389-DS, reconnect
+    api.Backend.ldap2.close()
+    api.Backend.ldap2.connect()
+
+    # Enable configured services and update DNS SRV records
+    service.enable_services(api.env.host)
+    api.Command.dns_update_system_records()
+    api.Backend.ldap2.disconnect()
+
     # execute ipactl to refresh services status
-    ipautil.run(['ipactl', 'start', '--ignore-service-failures'],
+    ipautil.run([paths.IPACTL, 'start', '--ignore-service-failures'],
                 raiseonerr=False)
 
-    api.Backend.ldap2.disconnect()
 
 fail_message = '''
 Your system may be partly configured.

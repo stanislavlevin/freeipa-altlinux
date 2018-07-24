@@ -17,6 +17,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import absolute_import
+
 import logging
 import os
 import pwd
@@ -32,6 +34,7 @@ from six.moves.configparser import RawConfigParser
 from ipalib import api
 from ipalib import x509
 from ipaplatform.paths import paths
+from ipapython import directivesetter
 from ipapython import ipautil
 from ipapython.dn import DN
 from ipaserver.install import cainstance
@@ -113,6 +116,7 @@ class KRAInstance(DogtagInstance):
                 "A Dogtag CA must be installed first")
 
         if promote:
+            self.step("creating ACIs for admin", self.add_ipaca_aci)
             self.step("creating installation admin user", self.setup_admin)
         self.step("configuring KRA instance", self.__spawn_instance)
         if not self.clone:
@@ -208,7 +212,7 @@ class KRAInstance(DogtagInstance):
         # Certificate subject DNs
         config.set("KRA", "pki_subsystem_subject_dn",
                    str(DN(('cn', 'CA Subsystem'), self.subject_base)))
-        config.set("KRA", "pki_ssl_server_subject_dn",
+        config.set("KRA", "pki_sslserver_subject_dn",
                    str(DN(('cn', self.fqdn), self.subject_base)))
         config.set("KRA", "pki_audit_signing_subject_dn",
                    str(DN(('cn', 'KRA Audit'), self.subject_base)))
@@ -224,7 +228,7 @@ class KRAInstance(DogtagInstance):
         # the ca certs.
         config.set("KRA", "pki_subsystem_nickname",
                    "subsystemCert cert-pki-ca")
-        config.set("KRA", "pki_ssl_server_nickname",
+        config.set("KRA", "pki_sslserver_nickname",
                    "Server-Cert cert-pki-ca")
         config.set("KRA", "pki_audit_signing_nickname",
                    "auditSigningCert cert-pki-kra")
@@ -360,7 +364,7 @@ class KRAInstance(DogtagInstance):
         write operations.
         """
         with installutils.stopped_service('pki-tomcatd', 'pki-tomcat'):
-            installutils.set_directive(
+            directivesetter.set_directive(
                 self.config,
                 'kra.ephemeralRequests',
                 'true', quotes=False, separator='=')
@@ -389,4 +393,4 @@ class KRAInstance(DogtagInstance):
                 directives[nickname], cert)
 
     def __enable_instance(self):
-        self.ldap_enable('KRA', self.fqdn, None, self.suffix)
+        self.ldap_configure('KRA', self.fqdn, None, self.suffix)

@@ -1,4 +1,3 @@
-#!/usr/bin/python2
 # Copyright (C) 2014  Red Hat
 # see file 'COPYING' for use and warranty information
 #
@@ -35,7 +34,6 @@ if __name__ == '__main__':
         namespace_packages=['ipaplatform'],
         packages=[
             "ipaplatform",
-            "ipaplatform.altlinux",
             "ipaplatform.base",
             "ipaplatform.debian",
             "ipaplatform.fedora",

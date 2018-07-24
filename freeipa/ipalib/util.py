@@ -56,15 +56,21 @@ except ImportError:
 from ipalib import errors, messages
 from ipalib.constants import (
     DOMAIN_LEVEL_0,
-    TLS_VERSIONS, TLS_VERSION_MINIMAL, TLS_HIGH_CIPHERS
+    TLS_VERSIONS, TLS_VERSION_MINIMAL
 )
 from ipalib.text import _
+from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 from ipapython.ssh import SSHPublicKey
 from ipapython.dn import DN, RDN
 from ipapython.dnsutil import DNSName
 from ipapython.dnsutil import resolve_ip_addresses
 from ipapython.admintool import ScriptError
+
+if sys.version_info >= (3, 2):
+    import reprlib  # pylint: disable=import-error
+else:
+    reprlib = None
 
 if six.PY3:
     unicode = str
@@ -330,9 +336,9 @@ def create_https_connection(
         ssl.OP_SINGLE_ECDH_USE
     )
 
-    # high ciphers without RC4, MD5, TripleDES, pre-shared key
-    # and secure remote password
-    ctx.set_ciphers(TLS_HIGH_CIPHERS)
+    # high ciphers without RC4, MD5, TripleDES, pre-shared key and secure
+    # remote password. Uses system crypto policies on some platforms.
+    ctx.set_ciphers(constants.TLS_HIGH_CIPHERS)
 
     # pylint: enable=no-member
     # set up the correct TLS version flags for the SSL context
@@ -397,11 +403,18 @@ def validate_dns_label(dns_label, allow_underscore=False, allow_slash=False):
                            % dict(chars=chars, chars2=chars2))
 
 
-def validate_domain_name(domain_name, allow_underscore=False, allow_slash=False):
+def validate_domain_name(
+    domain_name, allow_underscore=False,
+    allow_slash=False, entity='domain'
+):
     if domain_name.endswith('.'):
         domain_name = domain_name[:-1]
 
     domain_name = domain_name.split(".")
+
+    if len(domain_name) < 2:
+        raise ValueError(_(
+            'single label {}s are not supported'.format(entity)))
 
     # apply DNS name validator to every name part
     for label in domain_name:
@@ -968,14 +981,13 @@ def detect_dns_zone_realm_type(api, domain):
 
     try:
         # The presence of this record is enough, return foreign in such case
-        result = resolver.query(ad_specific_record_name, rdatatype.SRV)
+        resolver.query(ad_specific_record_name, rdatatype.SRV)
+    except DNSException:
+        # If we could not detect type with certainty, return unknown
+        return 'unknown'
+    else:
         return 'foreign'
 
-    except DNSException:
-        pass
-
-    # If we could not detect type with certainity, return unknown
-    return 'unknown'
 
 def has_managed_topology(api):
     domainlevel = api.Command['domainlevel_get']().get('result', DOMAIN_LEVEL_0)
@@ -1206,3 +1218,36 @@ def open_in_pager(data):
         pager_process.communicate()
     except IOError:
         pass
+
+
+if reprlib is not None:
+    class APIRepr(reprlib.Repr):
+        builtin_types = {
+            bool, int, float,
+            str, bytes,
+            dict, tuple, list, set, frozenset,
+            type(None),
+        }
+
+        def __init__(self):
+            super(APIRepr, self).__init__()
+            # no limitation
+            for k, v in self.__dict__.items():
+                if isinstance(v, int):
+                    setattr(self, k, sys.maxsize)
+
+        def repr_str(self, x, level):
+            """Output with u'' prefix"""
+            return 'u' + repr(x)
+
+        def repr_type(self, x, level):
+            if x is str:
+                return "<type 'unicode'>"
+            if x in self.builtin_types:
+                return "<type '{}'>".format(x.__name__)
+            else:
+                return repr(x)
+
+    apirepr = APIRepr().repr
+else:
+    apirepr = repr

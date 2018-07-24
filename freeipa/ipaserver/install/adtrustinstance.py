@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import logging
 import os
@@ -547,8 +547,10 @@ class ADTRUSTInstance(service.Service):
     def clean_samba_keytab(self):
         if os.path.exists(self.keytab):
             try:
-                ipautil.run(["ipa-rmkeytab", "--principal", self.principal,
-                             "-k", self.keytab])
+                ipautil.run([
+                    paths.IPA_RMKEYTAB, "--principal", self.principal,
+                    "-k", self.keytab
+                ])
             except ipautil.CalledProcessError as e:
                 if e.returncode != 5:
                     logger.critical("Failed to remove old key for %s",
@@ -581,7 +583,7 @@ class ADTRUSTInstance(service.Service):
             self.print_msg(err_msg)
             self.print_msg("Add the following service records to your DNS " \
                            "server for DNS zone %s: " % zone)
-            system_records = IPASystemRecords(api)
+            system_records = IPASystemRecords(api, all_servers=True)
             adtrust_records = system_records.get_base_records(
                 [self.fqdn], ["AD trust controller"],
                 include_master_role=False, include_kerberos_realm=False)
@@ -736,12 +738,12 @@ class ADTRUSTInstance(service.Service):
         # Note that self.dm_password is None for ADTrustInstance because
         # we ensure to be called as root and using ldapi to use autobind
         try:
-            self.ldap_enable('ADTRUST', self.fqdn, None, self.suffix)
+            self.ldap_configure('ADTRUST', self.fqdn, None, self.suffix)
         except (ldap.ALREADY_EXISTS, errors.DuplicateEntry):
             logger.info("ADTRUST Service startup entry already exists.")
 
         try:
-            self.ldap_enable('EXTID', self.fqdn, None, self.suffix)
+            self.ldap_configure('EXTID', self.fqdn, None, self.suffix)
         except (ldap.ALREADY_EXISTS, errors.DuplicateEntry):
             logger.info("EXTID Service startup entry already exists.")
 

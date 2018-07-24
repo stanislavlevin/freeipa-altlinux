@@ -37,6 +37,7 @@ from ipatests.test_xmlrpc.xmlrpc_test import (
     XMLRPC_test, fuzzy_digits, fuzzy_uuid, fuzzy_password,
     Fuzzy, fuzzy_dergeneralizedtime, add_sid, add_oc, raises_exact)
 from ipapython.dn import DN
+from ipapython.ipaldap import ldap_initialize
 
 from ipatests.test_xmlrpc.tracker.base import Tracker
 from ipatests.test_xmlrpc.tracker.group_plugin import GroupTracker
@@ -643,6 +644,25 @@ class TestCreate(XMLRPC_test):
         with raises_exact(errors.ManagedGroupExistsError(group=group.cn)):
             command()
 
+    def test_create_with_username_starting_with_numeric(self):
+        """Successfully create a user with name starting with numeric chars"""
+        testuser = UserTracker(
+            name=u'1234user', givenname=u'First1234', sn=u'Surname1234',
+        )
+        testuser.create()
+        testuser.delete()
+
+    def test_create_with_numeric_only_username(self):
+        """Try to create a user with name only contains numeric chars"""
+        testuser = UserTracker(
+            name=u'1234', givenname=u'NumFirst1234', sn=u'NumSurname1234',
+        )
+        with raises_exact(errors.ValidationError(
+                name=u'login',
+                error=u'may only include letters, numbers, _, -, . and $',
+        )):
+            testuser.create()
+
 
 @pytest.mark.tier1
 class TestUserWithGroup(XMLRPC_test):
@@ -913,8 +933,9 @@ class TestDeniedBindWithExpiredPrincipal(XMLRPC_test):
     def setup_class(cls):
         super(TestDeniedBindWithExpiredPrincipal, cls).setup_class()
 
-        cls.connection = ldap.initialize('ldap://{host}'
-                                         .format(host=api.env.host))
+        cls.connection = ldap_initialize(
+            'ldap://{host}'.format(host=api.env.host)
+        )
 
     @classmethod
     def teardown_class(cls):

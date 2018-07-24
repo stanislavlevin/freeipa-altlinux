@@ -51,13 +51,13 @@ define(['dojo/_base/declare',
 
         expired_msg: "Your session has expired. Please re-login.",
 
-        form_auth_msg: "<i class=\"fa fa-info-circle\"></i> To login with <strong>username and password</strong>, enter them in the corresponding fields, then click Login.",
+        form_auth_msg: "<i class=\"fa fa-info-circle\"></i> To log in with <strong>username and password</strong>, enter them in the corresponding fields, then click Login.",
 
-        kerberos_msg: "<i class=\"fa fa-info-circle\"></i> To login with <strong>Kerberos</strong>, please make sure you" +
+        kerberos_msg: "<i class=\"fa fa-info-circle\"></i> To log in with <strong>Kerberos</strong>, please make sure you" +
                     " have valid tickets (obtainable via kinit) and " +
                     "<a href='http://${host}/ipa/config/ssbrowser.html'>configured</a>" +
                     " the browser correctly, then click Login. ",
-        cert_msg: "<i class=\"fa fa-info-circle\"></i> To login with <strong>certificate</strong>," +
+        cert_msg: "<i class=\"fa fa-info-circle\"></i> To log in with <strong>certificate</strong>," +
               " please make sure you have valid personal certificate. ",
 
         form_auth_failed: "Login failed due to an unknown reason. ",
@@ -97,8 +97,10 @@ define(['dojo/_base/declare',
 
             this.cert_btn_node = IPA.button({
                 name: 'cert_auth',
-                title:"Login using personal certificate",
-                label: "Login Using Certificate",
+		title: text.get('@i18n:login.login_certificate_desc',
+                    'Log in using personal certificate'),
+                label: text.get('@i18n:login.login_certificate',
+                    'Log In Using Certificate'),
                 button_class: 'btn btn-link',
                 click: this.login_with_cert.bind(this)
             })[0];
@@ -116,7 +118,7 @@ define(['dojo/_base/declare',
 
             this.login_btn_node = IPA.button({
                 name: 'login',
-                label: text.get('@i18n:login.login', "Login"),
+                label: text.get('@i18n:login.login', "Log in"),
                 'class': 'btn-primary btn-lg',
                 click: this.on_confirm.bind(this)
             })[0];

@@ -17,6 +17,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import absolute_import
+
 import logging
 import os
 import tempfile
@@ -150,7 +152,6 @@ def update_server(certs):
     if services.knownservices.dirsrv.is_running():
         services.knownservices.dirsrv.restart(instance)
 
-    update_db(paths.HTTPD_ALIAS_DIR, certs)
     if services.knownservices.httpd.is_running():
         services.knownservices.httpd.restart()
 
@@ -185,10 +186,10 @@ def update_server(certs):
     update_file(paths.CACERT_PEM, certs)
 
 
-def update_file(filename, certs, mode=0o444):
+def update_file(filename, certs, mode=0o644):
     certs = (c[0] for c in certs if c[2] is not False)
     try:
-        x509.write_certificate_list(certs, filename)
+        x509.write_certificate_list(certs, filename, mode=mode)
     except Exception as e:
         logger.error("failed to update %s: %s", filename, e)
 

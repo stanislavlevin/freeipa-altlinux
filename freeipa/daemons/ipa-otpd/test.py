@@ -1,4 +1,3 @@
-#!/usr/bin/python2
 #
 # FreeIPA 2FA companion daemon
 #

@@ -559,7 +559,7 @@ class trust(LDAPObject):
                 continue
             for value in values:
                 if not ipaserver.dcerpc.is_sid_valid(value):
-                    err = unicode(_("invalid SID: {SID}")).format(SID=value)
+                    err = _("invalid SID: {SID}").format(SID=value)
                     raise errors.ValidationError(name=attr, error=err)
 
     def get_dn(self, *keys, **kwargs):
@@ -657,48 +657,52 @@ ipa idrange-del before retrying the command with the desired range type.
         Str('realm_admin?',
             cli_name='admin',
             label=_("Active Directory domain administrator"),
-        ),
+            ),
         Password('realm_passwd?',
-            cli_name='password',
-            label=_("Active Directory domain administrator's password"),
-            confirm=False,
-        ),
+                 cli_name='password',
+                 label=_("Active Directory domain administrator's password"),
+                 confirm=False,
+                 ),
         Str('realm_server?',
             cli_name='server',
-            label=_('Domain controller for the Active Directory domain (optional)'),
-        ),
+            label=_('Domain controller for the Active Directory domain '
+                    '(optional)'),
+            ),
         Password('trust_secret?',
-            cli_name='trust_secret',
-            label=_('Shared secret for the trust'),
-            confirm=False,
-        ),
+                 cli_name='trust_secret',
+                 label=_('Shared secret for the trust'),
+                 confirm=False,
+                 ),
         Int('base_id?',
             cli_name='base_id',
-            label=_('First Posix ID of the range reserved for the trusted domain'),
-        ),
+            label=_('First Posix ID of the range reserved for the '
+                    'trusted domain'),
+            ),
         Int('range_size?',
             cli_name='range_size',
-            label=_('Size of the ID range reserved for the trusted domain'),
-        ),
+            label=_('Size of the ID range reserved for the trusted domain')
+            ),
         StrEnum('range_type?',
-            label=_('Range type'),
-            cli_name='range_type',
-            doc=(_('Type of trusted domain ID range, one of {vals}'
-                 .format(vals=', '.join(range_types.keys())))),
-            values=tuple(range_types.keys()),
-        ),
+                label=_('Range type'),
+                cli_name='range_type',
+                doc=_('Type of trusted domain ID range, one of allowed ' +
+                      'values'),
+                values=sorted(range_types),
+                ),
         Bool('bidirectional?',
              label=_('Two-way trust'),
              cli_name='two_way',
-             doc=(_('Establish bi-directional trust. By default trust is inbound one-way only.')),
+             doc=(_('Establish bi-directional trust. By default trust is '
+                    'inbound one-way only.')),
              default=False,
-        ),
+             ),
         Bool('external?',
              label=_('External trust'),
              cli_name='external',
-             doc=(_('Establish external trust to a domain in another forest. The trust is not transitive beyond the domain.')),
+             doc=_('Establish external trust to a domain in another forest. '
+                   'The trust is not transitive beyond the domain.'),
              default=False,
-        ),
+             ),
     )
 
     msg_summary = _('Added Active Directory trust for realm "%(value)s"')
@@ -988,9 +992,9 @@ ipa idrange-del before retrying the command with the desired range type.
                     trust_type
                 )
             except errors.NotFound:
-                _message = _("Unable to resolve domain controller for "
-                             "{domain} domain. ")
-                error_message = unicode(_message).format(domain=keys[-1])
+                error_message = _("Unable to resolve domain controller for "
+                                  "{domain} domain. "
+                                  ).format(domain=keys[-1])
                 instructions = []
 
                 if dns_container_exists(self.obj.backend):
@@ -1016,7 +1020,7 @@ ipa idrange-del before retrying the command with the desired range type.
                             "found in the documentation. "
                         )
                         instructions.append(
-                            unicode(_instruction).format(domain=keys[-1])
+                            _instruction.format(domain=keys[-1])
                         )
                 else:
                     _instruction = _(
@@ -1025,7 +1029,7 @@ ipa idrange-del before retrying the command with the desired range type.
                         "domain from IPA hosts and back."
                     )
                     instructions.append(
-                        unicode(_instruction).format(domain=keys[-1])
+                        _instruction.format(domain=keys[-1])
                     )
                 raise errors.NotFound(
                     reason=error_message,

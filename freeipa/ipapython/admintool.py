@@ -32,6 +32,10 @@ from ipapython import version
 from ipapython import config
 from ipapython.ipa_log_manager import standard_logging_setup
 
+SUCCESS = 0
+SERVER_INSTALL_ERROR = 1
+SERVER_NOT_CONFIGURED = 2
+
 logger = logging.getLogger(__name__)
 
 
@@ -89,6 +93,7 @@ class AdminTool(object):
     log_file_name = None
     usage = None
     description = None
+    ignore_return_codes = ()
 
     _option_parsers = dict()
 
@@ -173,9 +178,13 @@ class AdminTool(object):
             self.setup_logging()
             return_value = self.run()
         except BaseException as exception:
+            if isinstance(exception, ScriptError):
+                # pylint: disable=no-member
+                if exception.rval and exception.rval > return_value:
+                    return_value = exception.rval  # pylint: disable=no-member
             traceback = sys.exc_info()[2]
             error_message, return_value = self.handle_error(exception)
-            if return_value:
+            if return_value and return_value not in self.ignore_return_codes:
                 self.log_failure(error_message, return_value, exception,
                     traceback)
                 return return_value
@@ -301,7 +310,9 @@ class AdminTool(object):
         if error_message:
             logger.error('%s', error_message)
         message = "The %s command failed." % self.command_name
-        if self.log_file_name:
+        if self.log_file_name and return_value != 2:
+            # magic value because this is common between server and client
+            # but imports are not straigthforward
             message += " See %s for more information" % self.log_file_name
         logger.error('%s', message)
 

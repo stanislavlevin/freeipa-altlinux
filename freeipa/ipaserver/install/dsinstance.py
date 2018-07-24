@@ -18,7 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import logging
 import shutil
@@ -418,6 +418,20 @@ class DsInstance(service.Service):
 
         self.start_creation(runtime=30)
 
+    def _get_replication_manager(self):
+        # Always connect to self over ldapi
+        ldap_uri = ipaldap.get_ldap_uri(protocol='ldapi', realm=self.realm)
+        conn = ipaldap.LDAPClient(ldap_uri)
+        conn.external_bind()
+        repl = replication.ReplicationManager(
+            self.realm, self.fqdn, self.dm_password, conn=conn
+        )
+        if self.dm_password is not None and not self.promote:
+            bind_dn = DN(('cn', 'Directory Manager'))
+            bind_pw = self.dm_password
+        else:
+            bind_dn = bind_pw = None
+        return repl, bind_dn, bind_pw
 
     def __setup_replica(self):
         """
@@ -434,25 +448,23 @@ class DsInstance(service.Service):
             self.realm,
             self.dm_password)
 
-        # Always connect to self over ldapi
-        ldap_uri = ipaldap.get_ldap_uri(protocol='ldapi', realm=self.realm)
-        conn = ipaldap.LDAPClient(ldap_uri)
-        conn.external_bind()
-        repl = replication.ReplicationManager(self.realm,
-                                              self.fqdn,
-                                              self.dm_password, conn=conn)
-
-        if self.dm_password is not None and not self.promote:
-            bind_dn = DN(('cn', 'Directory Manager'))
-            bind_pw = self.dm_password
-        else:
-            bind_dn = bind_pw = None
-
-        repl.setup_promote_replication(self.master_fqdn,
-                                       r_binddn=bind_dn,
-                                       r_bindpw=bind_pw,
-                                       cacert=self.ca_file)
+        repl, bind_dn, bind_pw = self._get_replication_manager()
+        repl.setup_promote_replication(
+            self.master_fqdn,
+            r_binddn=bind_dn,
+            r_bindpw=bind_pw,
+            cacert=self.ca_file
+        )
         self.run_init_memberof = repl.needs_memberof_fixup()
+
+    def finalize_replica_config(self):
+        repl, bind_dn, bind_pw = self._get_replication_manager()
+        repl.finalize_replica_config(
+            self.master_fqdn,
+            r_binddn=bind_dn,
+            r_bindpw=bind_pw,
+            cacert=self.ca_file
+        )
 
     def __configure_sasl_mappings(self):
         # we need to remove any existing SASL mappings in the directory as otherwise they
@@ -832,6 +844,7 @@ class DsInstance(service.Service):
                 cmd = 'restart_dirsrv %s' % self.serverid
                 certmonger.request_and_wait_for_cert(
                     certpath=dirname,
+                    storage='NSSDB',
                     nickname=self.nickname,
                     principal=self.principal,
                     passwd_fname=dsdb.passwd_fname,
@@ -839,7 +852,9 @@ class DsInstance(service.Service):
                     ca='IPA',
                     profile=dogtag.DEFAULT_PROFILE,
                     dns=[self.fqdn],
-                    post_command=cmd)
+                    post_command=cmd,
+                    resubmit_timeout=api.env.replication_wait_timeout
+                )
             finally:
                 if prev_helper is not None:
                     certmonger.modify_ca_helper('IPA', prev_helper)
@@ -878,7 +893,11 @@ class DsInstance(service.Service):
             nsSSLToken=["internal (software)"],
             nsSSLActivation=["on"],
         )
-        conn.add_entry(entry)
+        try:
+            conn.add_entry(entry)
+        except errors.DuplicateEntry:
+            # 389-DS >= 1.4.0 has a default entry, update it.
+            conn.update_entry(entry)
 
         conn.unbind()
 
@@ -934,7 +953,7 @@ class DsInstance(service.Service):
         conn.simple_bind(bind_dn=ipaldap.DIRMAN_DN,
                          bind_password=self.dm_password)
 
-        self.import_ca_certs(dsdb, self.ca_is_configured, conn)
+        self.export_ca_certs_nssdb(dsdb, self.ca_is_configured, conn)
 
         conn.unbind()
 
@@ -1049,11 +1068,17 @@ class DsInstance(service.Service):
             logger.debug("Removing DS instance %s", serverid)
             try:
                 remove_ds_instance(serverid)
-                installutils.remove_keytab(paths.DS_KEYTAB)
-                installutils.remove_ccache(run_as=DS_USER)
             except ipautil.CalledProcessError:
                 logger.error("Failed to remove DS instance. You may "
                              "need to remove instance data manually")
+
+            installutils.remove_keytab(paths.DS_KEYTAB)
+            installutils.remove_ccache(run_as=DS_USER)
+
+            # Remove scripts dir
+            scripts = paths.VAR_LIB_DIRSRV_INSTANCE_SCRIPTS_TEMPLATE % (
+                serverid)
+            installutils.rmtree(scripts)
 
         # Just eat this state
         self.restore_state("user_exists")

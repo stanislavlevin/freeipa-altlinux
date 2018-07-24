@@ -21,6 +21,10 @@ add:aci:(targetattr="ipasshpubkey")(version 3.0; acl "Hosts can manage other hos
 dn: $SUFFIX
 add:aci:(targetfilter="(objectclass=domain)")(targetattr="objectclass || dc || info || nisDomain || associatedDomain")(version 3.0; acl "Anonymous read access to DIT root"; allow(read, search, compare) userdn = "ldap:///anyone";)
 
+# Read access to parentID information to allow filter optimizations in 389-ds
+dn: $SUFFIX
+add:aci:(targetattr="parentid")(version 3.0; acl "Anonymous read access to parentID information"; allow(read, search, compare) userdn = "ldap:///anyone";)
+
 # Read access to containers
 dn: $SUFFIX
 add:aci:(targetfilter="(&(objectclass=nsContainer)(!(objectclass=krbPwdPolicy)))")(target!="ldap:///cn=masters,cn=ipa,cn=etc,$SUFFIX")(targetattr="objectclass || cn")(version 3.0; acl "Anonymous read access to containers"; allow(read, search, compare) userdn = "ldap:///anyone";)
@@ -120,10 +124,11 @@ add:aci: (targetfilter="(|(objectclass=ipaHost)(objectclass=ipaService))")(targe
 dn: $SUFFIX
 add:aci:(targetattr = "usercertificate")(version 3.0;acl "selfservice:Users can manage their own X.509 certificates";allow (write) userdn = "ldap:///self";)
 
-# Hosts can add their own services
+# Hosts can add and delete their own services
 dn: cn=services,cn=accounts,$SUFFIX
 remove:aci: (target = "ldap:///krbprincipalname=*/($$dn)@$REALM,cn=services,cn=accounts,$SUFFIX")(targetfilter = "(objectClass=ipaKrbPrincipal)")(version 3.0;acl "Hosts can add own services"; allow(add) userdn="ldap:///fqdn=($$dn),cn=computers,cn=accounts,$SUFFIX";)
 add:aci: (target = "ldap:///krbprincipalname=*/($$dn)@$REALM,cn=services,cn=accounts,$SUFFIX")(targetfilter = "(objectClass=ipaService)")(version 3.0;acl "Hosts can add own services"; allow(add) userdn="ldap:///fqdn=($$dn),cn=computers,cn=accounts,$SUFFIX";)
+add:aci: (target = "ldap:///krbprincipalname=*/($$dn)@$REALM,cn=services,cn=accounts,$SUFFIX")(targetfilter = "(objectClass=ipaService)")(version 3.0;acl "Hosts can delete own services"; allow(delete) userdn="ldap:///fqdn=($$dn),cn=computers,cn=accounts,$SUFFIX";)
 
 # CIFS service on the master can manage ID ranges
 dn: cn=ranges,cn=etc,$SUFFIX

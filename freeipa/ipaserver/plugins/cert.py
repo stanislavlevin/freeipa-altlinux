@@ -468,6 +468,10 @@ class BaseCertObject(Object):
             attribute when ``True`` in addition to the specialised
             attribute.
 
+        Raise ``ValueError`` if the certificate is malformed.
+        (Note: only the main certificate structure and Subject Alt
+        Name extension are examined.)
+
         """
         if 'certificate' in obj:
             cert = x509.load_der_x509_certificate(
@@ -876,7 +880,15 @@ class cert_request(Create, BaseCertMethod, VirtualCommand):
                 raise e
 
         if not raw:
-            self.obj._parse(result, all)
+            try:
+                self.obj._parse(result, all)
+            except ValueError as e:
+                self.add_message(
+                    messages.CertificateInvalid(
+                        subject=principal,
+                        reason=e,
+                    )
+                )
             result['request_id'] = int(result['request_id'])
             result['cacn'] = ca_obj['cn'][0]
 
@@ -1295,7 +1307,7 @@ class cert_find(Search, CertMethod):
     takes_options = (
         Str('subject?',
             label=_('Subject'),
-            doc=_('Subject'),
+            doc=_('Match cn attribute in subject'),
             autofill=False,
         ),
         Int('min_serial_number?',
@@ -1680,7 +1692,7 @@ class cert_find(Search, CertMethod):
                     self.obj._fill_owners(obj)
 
         result = list(six.itervalues(result))
-        if sizelimit > 0 and len(result) > sizelimit:
+        if (len(result) > sizelimit > 0):
             if not truncated:
                 self.add_message(messages.SearchResultTruncated(
                         reason=errors.SizeLimitExceeded()))
@@ -1697,9 +1709,7 @@ class cert_find(Search, CertMethod):
 
 @register()
 class ca_is_enabled(Command):
-    """
-    Checks if any of the servers has the CA service enabled.
-    """
+    __doc__ = _('Checks if any of the servers has the CA service enabled.')
     NO_CLI = True
     has_output = output.standard_value
 

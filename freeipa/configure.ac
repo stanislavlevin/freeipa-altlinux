@@ -100,27 +100,28 @@ PKG_CHECK_MODULES([CRYPTO], [libcrypto])
 
 dnl ---------------------------------------------------------------------------
 dnl - Check for Python
-dnl ---------------------------------------------------------------------------
-
-AC_MSG_NOTICE([Checking for Python])
-have_python=no
-AM_PATH_PYTHON(2.7)
-
-if test "x$PYTHON" = "x" ; then
-  AC_MSG_ERROR([Python not found])
-fi
-
-dnl ---------------------------------------------------------------------------
 dnl - Check for Python 2/3 for devcheck
 dnl ---------------------------------------------------------------------------
 
+AC_MSG_NOTICE([Checking for Python 3])
+AC_PATH_PROG(PYTHON3, python3)
+AC_SUBST([PYTHON3])
+AM_CONDITIONAL([WITH_PYTHON3], [test "x${PYTHON3}" != "x"])
+
+AC_MSG_NOTICE([Checking for Python 2])
 AC_PATH_PROG(PYTHON2, python2)
 AC_SUBST([PYTHON2])
 AM_CONDITIONAL([WITH_PYTHON2], [test "x${PYTHON2}" != "x"])
 
-AC_PATH_PROG(PYTHON3, python3)
-AC_SUBST([PYTHON3])
-AM_CONDITIONAL([WITH_PYTHON3], [test "x${PYTHON3}" != "x"])
+if test \( "x${PYTHON3}" = "x" -o "x${PYTHON}" != "x" \); then
+    dnl Python 3 is not available *or* user has set PYTHON variable.
+    dnl Accept Python >= 2.7 as default Python. We also accept any Python 3
+    dnl version from PYTHON environment variable.
+    AM_PATH_PYTHON(2.7)
+elif test "x${PYTHON3}" != "x"; then
+    dnl Found Python 3, but no user override. Use Python >= 3.6 as default.
+    AM_PATH_PYTHON(3.6)
+fi
 
 dnl ---------------------------------------------------------------------------
 dnl - Check for cmocka unit test framework http://cmocka.cryptomilk.org/
@@ -313,11 +314,6 @@ if test "x${IPAPLATFORM}" == "xdebian"; then
     ODS_USER="opendnssec"
     # see https://www.debian.org/doc/packaging-manuals/python-policy/ap-packaging_tools.html
     PYTHON_INSTALL_EXTRA_OPTIONS="--install-layout=deb"
-elif test "x${IPAPLATFORM}" == "xaltlinux"; then
-    KRB5KDC_SERVICE="krb5kdc.service"
-    NAMED_GROUP="named"
-    ODS_USER="_opendnssec"
-    PYTHON_INSTALL_EXTRA_OPTIONS=""
 else
     KRB5KDC_SERVICE="krb5kdc.service"
     NAMED_GROUP="named"
@@ -508,6 +504,7 @@ AC_CONFIG_FILES([
     asn1/Makefile
     asn1/asn1c/Makefile
     client/Makefile
+    client/share/Makefile
     client/man/Makefile
     contrib/completion/Makefile
     contrib/Makefile
@@ -538,7 +535,6 @@ AC_CONFIG_FILES([
     init/Makefile
     install/Makefile
     install/certmonger/Makefile
-    install/conf/Makefile
     install/html/Makefile
     install/migration/Makefile
     install/share/Makefile
@@ -596,7 +592,9 @@ echo "
         source code location:     ${srcdir}
         compiler:                 ${CC}
         cflags:                   ${CFLAGS}
-        Python:                   ${PYTHON}
+        Default Python:           ${PYTHON} (${PYTHON_VERSION})
+        Python 2:                 ${PYTHON2}
+        Python 3:                 ${PYTHON3}
         pylint:                   ${PYLINT}
         jslint:                   ${JSLINT}
         LDAP libs:                ${LDAP_LIBS}

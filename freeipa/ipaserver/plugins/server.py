@@ -2,6 +2,8 @@
 # Copyright (C) 2015  FreeIPA Contributors see COPYING for license
 #
 
+from __future__ import absolute_import
+
 import logging
 
 import dbus
@@ -203,7 +205,10 @@ class server(LDAPObject):
             return
 
         enabled_roles = self.api.Command.server_role_find(
-            server_server=entry_attrs['cn'][0], status=ENABLED)['result']
+            server_server=entry_attrs['cn'][0],
+            status=ENABLED,
+            include_master=True,
+        )['result']
 
         enabled_role_names = [r[u'role_servrole'] for r in enabled_roles]
 
@@ -337,7 +342,9 @@ class server_find(LDAPSearch):
             role_status = self.api.Command.server_role_find(
                 server_server=None,
                 role_servrole=role,
-                status=ENABLED)['result']
+                status=ENABLED,
+                include_master=True,
+            )['result']
 
             return set(
                 r[u'server_server'] for r in role_status)
@@ -521,16 +528,13 @@ class server_del(LDAPDelete):
                       "leave your installation without a CA."),
                     ignore_last_of_role)
 
+            # change the renewal master if there is other master with CA
             if ca_renewal_master == hostname:
                 other_cas = [ca for ca in ca_servers if ca != hostname]
 
-                # if this is the last CA there is no other server to become
-                # renewal master
-                if not other_cas:
-                    return
-
-                self.api.Command.config_mod(
-                    ca_renewal_master_server=other_cas[0])
+                if other_cas:
+                    self.api.Command.config_mod(
+                        ca_renewal_master_server=other_cas[0])
 
         if ignore_last_of_role:
             self.add_message(
@@ -616,8 +620,10 @@ class server_del(LDAPDelete):
             srvlist = srvlist.split()
             if master in srvlist:
                 srvlist.remove(master)
-                attr = ' '.join(srvlist)
-                ret['defaultServerList'] = attr
+                if not srvlist:
+                    del ret['defaultServerList']
+                else:
+                    ret['defaultServerList'] = ' '.join(srvlist)
                 conn.update_entry(ret)
         except (errors.NotFound, errors.MidairCollision,
                 errors.EmptyModlist):
@@ -659,10 +665,26 @@ class server_del(LDAPDelete):
         delete server kerberos key and all its svc principals
         """
         try:
+            # do not delete ldap principal if server-del command
+            # has been called on a machine which is being deleted
+            # since this will break replication.
+            # ldap principal to be cleaned later by topology plugin
+            # necessary changes to a topology plugin are tracked
+            # under https://pagure.io/freeipa/issue/7359
+            if master == self.api.env.host:
+                filter = (
+                    '(&(krbprincipalname=*/{}@{})'
+                    '(!(krbprincipalname=ldap/*)))'
+                    .format(master, self.api.env.realm)
+                )
+            else:
+                filter = '(krbprincipalname=*/{}@{})'.format(
+                    master, self.api.env.realm
+                )
+
             entries = ldap.get_entries(
-                self.api.env.basedn, ldap.SCOPE_SUBTREE,
-                filter='(krbprincipalname=*/{}@{})'.format(
-                    master, self.api.env.realm))
+                self.api.env.basedn, ldap.SCOPE_SUBTREE, filter=filter
+            )
 
             if entries:
                 entries.sort(key=lambda x: len(x.dn), reverse=True)

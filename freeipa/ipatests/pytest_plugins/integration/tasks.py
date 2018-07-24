@@ -19,6 +19,8 @@
 
 """Common tasks for FreeIPA integration tests"""
 
+from __future__ import absolute_import
+
 import logging
 import os
 import textwrap
@@ -35,13 +37,13 @@ from six import StringIO
 
 from ipapython import ipautil
 from ipaplatform.paths import paths
-from ipaplatform.constants import constants
 from ipapython.dn import DN
 from ipalib import errors
 from ipalib.util import get_reverse_zone_default, verify_host_resolvable
 from ipalib.constants import (
     DEFAULT_CONFIG, DOMAIN_SUFFIX_NAME, DOMAIN_LEVEL_0)
 
+from ipatests.create_external_ca import ExternalCA
 from .env_config import env_to_script
 from .host import Host
 
@@ -268,6 +270,18 @@ def enable_replication_debugging(host, log_level=0):
                      stdin_text=logging_ldif)
 
 
+def set_default_ttl_for_ipa_dns_zone(host, raiseonerr=True):
+    args = [
+        'ipa', 'dnszone-mod', host.domain.name,
+        '--default-ttl', '1',
+        '--ttl', '1'
+    ]
+    result = host.run_command(args, raiseonerr=raiseonerr, stdin_text=None)
+    if result.returncode != 0:
+        logger.info('Failed to set TTL and default TTL for DNS zone %s to 1',
+                    host.domain.name)
+
+
 def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
                    extra_args=(), domain_level=None, unattended=True,
                    stdin_text=None, raiseonerr=True):
@@ -306,6 +320,10 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
         enable_replication_debugging(host)
         setup_sssd_debugging(host)
         kinit_admin(host)
+        if setup_dns:
+            # fixup DNS zone default TTL for IPA DNS zone
+            # For tests we should not wait too long
+            set_default_ttl_for_ipa_dns_zone(host, raiseonerr=raiseonerr)
     return result
 
 
@@ -338,15 +356,30 @@ def master_authoritative_for_client_domain(master, client):
                                 raiseonerr=False)
     return result.returncode == 0
 
+
+def _config_replica_resolvconf_with_master_data(master, replica):
+    """
+    Configure replica /etc/resolv.conf to use master as DNS server
+    """
+    content = ('search {domain}\nnameserver {master_ip}'
+               .format(domain=master.domain.name, master_ip=master.ip))
+    replica.put_file_contents(paths.RESOLV_CONF, content)
+
+
 def replica_prepare(master, replica, extra_args=(),
                     raiseonerr=True, stdin_text=None):
     fix_apache_semaphores(replica)
     prepare_reverse_zone(master, replica.ip)
+
+    # in domain level 0 there is no autodiscovery, so it's necessary to
+    # change /etc/resolv.conf to find master DNS server
+    _config_replica_resolvconf_with_master_data(master, replica)
+
     args = ['ipa-replica-prepare',
             '-p', replica.config.dirman_password,
             replica.hostname]
     if master_authoritative_for_client_domain(master, replica):
-        args.extend(['--ip-address', replica.ip])
+        args.extend(['--ip-address', replica.ip, '--auto-reverse'])
     args.extend(extra_args)
     result = master.run_command(args, raiseonerr=raiseonerr,
                                 stdin_text=stdin_text)
@@ -414,7 +447,8 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
     return result
 
 
-def install_client(master, client, extra_args=()):
+def install_client(master, client, extra_args=(),
+                   user=None, password=None):
     client.collect_log(paths.IPACLIENT_INSTALL_LOG)
 
     apply_common_fixes(client)
@@ -426,12 +460,16 @@ def install_client(master, client, extra_args=()):
     if not error:
         master.run_command(["ipa", "dnszone-mod", zone,
                             "--dynamic-update=TRUE"])
+    if user is None:
+        user = client.config.admin_name
+    if password is None:
+        password = client.config.admin_password
 
     client.run_command(['ipa-client-install', '-U',
                         '--domain', client.domain.name,
                         '--realm', client.domain.realm,
-                        '-p', client.config.admin_name,
-                        '-w', client.config.admin_password,
+                        '-p', user,
+                        '-w', password,
                         '--server', master.hostname]
                        + list(extra_args))
 
@@ -658,11 +696,13 @@ def clear_sssd_cache(host):
 def sync_time(host, server):
     """
     Syncs the time with the remote server. Please note that this function
-    leaves ntpd stopped.
+    leaves chronyd stopped.
     """
 
-    host.run_command(['systemctl', 'stop', 'ntpd'])
-    host.run_command(['ntpdate', server.hostname])
+    host.run_command(['systemctl', 'stop', 'chronyd'])
+    host.run_command(['chronyd', '-q',
+                      "server {srv} iburst".format(srv=server.hostname),
+                      'pidfile /tmp/chronyd.pid', 'bindcmdaddress /'])
 
 
 def connect_replica(master, replica, domain_level=None):
@@ -710,7 +750,7 @@ def uninstall_master(host, ignore_topology_disconnect=True,
     if ignore_last_of_role and host_domain_level != DOMAIN_LEVEL_0:
         uninstall_cmd.append('--ignore-last-of-role')
 
-    host.run_command(uninstall_cmd, raiseonerr=False)
+    host.run_command(uninstall_cmd)
     host.run_command(['pkidestroy', '-s', 'CA', '-i', 'pki-tomcat'],
                      raiseonerr=False)
     host.run_command(['rm', '-rf',
@@ -1266,12 +1306,25 @@ def run_server_del(host, server_to_delete, force=False,
 
 def run_certutil(host, args, reqdir, dbtype=None,
                  stdin=None, raiseonerr=True):
-    if dbtype is None:
-        dbtype = constants.NSS_DEFAULT_DBTYPE
-    new_args = [paths.CERTUTIL, '-d', '{}:{}'.format(dbtype, reqdir)]
+    dbdir = reqdir if dbtype is None else '{}:{}'.format(dbtype, reqdir)
+    new_args = [paths.CERTUTIL, '-d', dbdir]
     new_args.extend(args)
     return host.run_command(new_args, raiseonerr=raiseonerr,
                             stdin_text=stdin)
+
+
+def upload_temp_contents(host, contents, encoding='utf-8'):
+    """Upload contents to a temporary file
+
+    :param host: Remote host instance
+    :param contents: file content (str, bytes)
+    :param encoding: file encoding
+    :return: Temporary file name
+    """
+    result = host.run_command(['mktemp'])
+    tmpname = result.stdout_text.strip()
+    host.put_file_contents(tmpname, contents, encoding=encoding)
+    return tmpname
 
 
 def assert_error(result, stderr_text, returncode=None):
@@ -1354,7 +1407,19 @@ def ldappasswd_user_change(user, oldpw, newpw, master):
     master_ldap_uri = "ldap://{}".format(master.external_hostname)
 
     args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
-            '-s', newpw, '-x', '-H', master_ldap_uri]
+            '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
+    master.run_command(args)
+
+
+def ldappasswd_sysaccount_change(user, oldpw, newpw, master):
+    container_sysaccounts = dict(DEFAULT_CONFIG)['container_sysaccounts']
+    basedn = master.domain.basedn
+
+    userdn = "uid={},{},{}".format(user, container_sysaccounts, basedn)
+    master_ldap_uri = "ldap://{}".format(master.external_hostname)
+
+    args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
+            '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
     master.run_command(args)
 
 
@@ -1382,3 +1447,30 @@ def add_dns_zone(master, zone, skip_overlap_check=False,
                                     host.hostname + ".", '--a-rec', host.ip])
     else:
         logger.debug('Zone %s already added.', zone)
+
+
+def sign_ca_and_transport(host, csr_name, root_ca_name, ipa_ca_name):
+    """
+    Sign ipa csr and save signed CA together with root CA back to the host.
+    Returns root CA and IPA CA paths on the host.
+    """
+
+    test_dir = host.config.test_dir
+
+    # Get IPA CSR as bytes
+    ipa_csr = host.get_file_contents(csr_name)
+
+    external_ca = ExternalCA()
+    # Create root CA
+    root_ca = external_ca.create_ca()
+    # Sign CSR
+    ipa_ca = external_ca.sign_csr(ipa_csr)
+
+    root_ca_fname = os.path.join(test_dir, root_ca_name)
+    ipa_ca_fname = os.path.join(test_dir, ipa_ca_name)
+
+    # Transport certificates (string > file) to master
+    host.put_file_contents(root_ca_fname, root_ca)
+    host.put_file_contents(ipa_ca_fname, ipa_ca)
+
+    return (root_ca_fname, ipa_ca_fname)

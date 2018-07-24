@@ -402,7 +402,7 @@ static int
 ipauuid_load_plugin_config()
 {
     int status = EOK;
-    int result = 0;
+    int result;
     int i;
     Slapi_PBlock *search_pb;
     Slapi_Entry **entries = NULL;
@@ -767,14 +767,14 @@ static int ipauuid_pre_op(Slapi_PBlock *pb, int modtype)
     Slapi_Mods *smods = NULL;
     Slapi_Mod *smod = NULL;
     Slapi_Mod *next_mod;
-    LDAPMod **mods = NULL;
+    LDAPMod **mods;
     bool free_entry = false;
     char *errstr = NULL;
     bool generate;
     int ret = LDAP_SUCCESS;
     bool locked = false;
     bool set_attr;
-    int is_repl_op = 0;
+    int is_repl_op;
     int is_config_dn;
 
     LOG_TRACE("--in-->\n");

@@ -149,6 +149,8 @@ DEFAULT_CONFIG = (
     ('startup_timeout', 300),
     # How long http connection should wait for reply [seconds].
     ('http_timeout', 30),
+    # How long to wait for an entry to appear on a replica
+    ('replication_wait_timeout', 300),
 
     # Web Application mount points
     ('mount_ipa', '/ipa/'),
@@ -286,7 +288,9 @@ RENEWAL_REUSE_CA_NAME = 'dogtag-ipa-ca-renew-agent-reuse'
 CA_DBUS_TIMEOUT = 120
 
 # regexp definitions
-PATTERN_GROUPUSER_NAME = '^[a-zA-Z0-9_.][a-zA-Z0-9_.-]*[a-zA-Z0-9_.$-]?$'
+PATTERN_GROUPUSER_NAME = (
+    '(?!^[0-9]+$)^[a-zA-Z0-9_.][a-zA-Z0-9_.-]*[a-zA-Z0-9_.$-]?$'
+)
 
 # Kerberos Anonymous principal name
 ANON_USER = 'WELLKNOWN/ANONYMOUS'
@@ -304,9 +308,7 @@ TLS_VERSIONS = [
     "tls1.2"
 ]
 TLS_VERSION_MINIMAL = "tls1.0"
-# high ciphers without RC4, MD5, TripleDES, pre-shared key
-# and secure remote password
-TLS_HIGH_CIPHERS = "HIGH:!aNULL:!eNULL:!MD5:!RC4:!3DES:!PSK:!SRP"
+
 
 # Use cache path
 USER_CACHE_PATH = (
@@ -321,3 +323,6 @@ USER_CACHE_PATH = (
 )
 
 SOFTHSM_DNSSEC_TOKEN_LABEL = u'ipaDNSSEC'
+# Apache's mod_ssl SSLVerifyDepth value (Maximum depth of CA
+# Certificates in Client Certificate verification)
+MOD_SSL_VERIFY_DEPTH = '5'

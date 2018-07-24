@@ -86,18 +86,16 @@ EXAMPLES:
 register = Registry()
 
 
-def check_fips_auth_opts(fips_mode, **options):
-    """
-    OTP and RADIUS are not allowed in FIPS mode since they use MD5
-    checksums (OTP uses our RADIUS responder daemon ipa-otpd).
-    """
-    if 'ipauserauthtype' in options and fips_mode:
-        if ('otp' in options['ipauserauthtype'] or
-                'radius' in options['ipauserauthtype']):
-            raise errors.InvocationError(
-                'OTP and RADIUS authentication in FIPS is '
-                'not yet supported')
+def validate_search_records_limit(ugettext, value):
+    """Check if value is greater than a realistic minimum.
 
+    Values 0 and -1 are valid, as they represent unlimited.
+    """
+    if value in {-1, 0}:
+        return None
+    if value < 10:
+        return _('must be at least 10')
+    return None
 
 @register()
 class config(LDAPObject):
@@ -175,10 +173,10 @@ class config(LDAPObject):
             minvalue=-1,
         ),
         Int('ipasearchrecordslimit',
+            validate_search_records_limit,
             cli_name='searchrecordslimit',
             label=_('Search size limit'),
             doc=_('Maximum number of records to search (-1 or 0 is unlimited)'),
-            minvalue=-1,
         ),
         IA5Str('ipausersearchfields',
             cli_name='usersearch',
@@ -258,12 +256,6 @@ class config(LDAPObject):
             flags={'virtual_attribute', 'no_create', 'no_update'}
         ),
         Str(
-            'ntp_server_server*',
-            label=_('IPA NTP servers'),
-            doc=_('IPA servers with enabled NTP'),
-            flags={'virtual_attribute', 'no_create', 'no_update'}
-        ),
-        Str(
             'ca_renewal_master_server?',
             label=_('IPA CA renewal master'),
             doc=_('Renewal master for IPA certificate authority'),
@@ -290,9 +282,20 @@ class config(LDAPObject):
     def update_entry_with_role_config(self, role_name, entry_attrs):
         backend = self.api.Backend.serverroles
 
-        role_config = backend.config_retrieve(role_name)
+        try:
+            role_config = backend.config_retrieve(role_name)
+        except errors.EmptyResult:
+            # No role config means current user identity
+            # has no rights to see it, return with no action
+            return
+
         for key, value in role_config.items():
-            entry_attrs.update({key: value})
+            try:
+                entry_attrs.update({key: value})
+            except errors.EmptyResult:
+                # An update that doesn't change an entry is fine here
+                # Just ignore and move to the next key pair
+                pass
 
 
     def show_servroles_attributes(self, entry_attrs, *roles, **options):
@@ -412,8 +415,6 @@ class config_mod(LDAPUpdate):
 
     def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys, **options):
         assert isinstance(dn, DN)
-        check_fips_auth_opts(fips_mode=self.api.env.fips_mode, **options)
-
         if 'ipadefaultprimarygroup' in entry_attrs:
             group=entry_attrs['ipadefaultprimarygroup']
             try:
@@ -553,7 +554,7 @@ class config_mod(LDAPUpdate):
 
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
         self.obj.show_servroles_attributes(
-            entry_attrs, "CA server", "IPA master", "NTP server", **options)
+            entry_attrs, "CA server", "IPA master", **options)
         return dn
 
 
@@ -563,5 +564,5 @@ class config_show(LDAPRetrieve):
 
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
         self.obj.show_servroles_attributes(
-            entry_attrs, "CA server", "IPA master", "NTP server", **options)
+            entry_attrs, "CA server", "IPA master", **options)
         return dn

@@ -2,6 +2,8 @@
 # Copyright (C) 2016  FreeIPA Contributors see COPYING for license
 #
 
+from __future__ import absolute_import
+
 from ipaclient.install import client
 from ipaplatform.paths import paths
 from ipapython.install import cli
@@ -60,6 +62,7 @@ ClientInstall = cli.install_tool(
     verbose=True,
     console_format='%(message)s',
     uninstall_log_file_name=paths.IPACLIENT_UNINSTALL_LOG,
+    ignore_return_codes=(client.CLIENT_NOT_CONFIGURED,),
 )
 
 

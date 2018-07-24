@@ -18,8 +18,11 @@
 #
 
 import collections
+import gzip
+import io
 import logging
 import xml.dom.minidom
+import zlib
 
 import six
 # pylint: disable=import-error
@@ -61,6 +64,15 @@ DEFAULT_PROFILE = u'caIPAserviceCert'
 KDC_PROFILE = u'KDCs_PKINIT_Certs'
 
 
+if six.PY3:
+    gzip_decompress = gzip.decompress  # pylint: disable=no-member
+else:
+    # note: gzip.decompress available in Python >= 3.2
+    def gzip_decompress(data):
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:
+            return f.read()
+
+
 def error_from_xml(doc, message_template):
     try:
         item_node = doc.getElementsByTagName("Error")
@@ -79,7 +91,7 @@ def get_ca_certchain(ca_host=None):
     chain = None
     conn = httplib.HTTPConnection(
         ca_host,
-        api.env.ca_install_port or 8090)
+        api.env.ca_install_port or 8080)
     conn.request("GET", "/ca/ee/ca/getCertChain")
     res = conn.getresponse()
     doc = None
@@ -125,7 +137,7 @@ def ca_status(ca_host=None):
     if ca_host is None:
         ca_host = api.env.ca_host
     status, _headers, body = http_request(
-        ca_host, 8090, '/ca/admin/ca/getStatus',
+        ca_host, 8080, '/ca/admin/ca/getStatus',
         # timeout: CA sometimes forgot to answer, we have to try again
         timeout=api.env.http_timeout)
     if status == 503:
@@ -228,8 +240,14 @@ def _httplib_request(
         logger.debug("httplib request failed:", exc_info=True)
         raise NetworkError(uri=uri, error=str(e))
 
+    encoding = res.getheader('Content-Encoding')
+    if encoding == 'gzip':
+        http_body = gzip_decompress(http_body)
+    elif encoding == 'deflate':
+        http_body = zlib.decompress(http_body)
+
     logger.debug('response status %d',    http_status)
     logger.debug('response headers %s',   http_headers)
-    logger.debug('response body %r',      http_body)
+    logger.debug('response body (decoded): %r', http_body)
 
     return http_status, http_headers, http_body

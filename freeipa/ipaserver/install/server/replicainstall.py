@@ -2,7 +2,7 @@
 # Copyright (C) 2015  FreeIPA Contributors see COPYING for license
 #
 
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import contextlib
 import logging
@@ -14,17 +14,20 @@ import dns.reversename as dnsreversename
 import os
 import shutil
 import socket
+import sys
 import tempfile
+import textwrap
 import traceback
 
 from pkg_resources import parse_version
 import six
 
+from ipaclient.install.client import check_ldap_conf
 from ipaclient.install.ipachangeconf import IPAChangeConf
-import ipaclient.install.ntpconf
+import ipaclient.install.timeconf
 from ipalib.install import certstore, sysrestore
 from ipalib.install.kinit import kinit_keytab
-from ipapython import ipaldap, ipautil
+from ipapython import ipaldap, ipautil, version
 from ipapython.certdb import IPA_CA_TRUST_FLAGS, EXTERNAL_CA_TRUST_FLAGS
 from ipapython.dn import DN
 from ipapython.admintool import ScriptError
@@ -37,8 +40,7 @@ from ipalib.util import no_matching_interface_for_ip_address_warning
 from ipaclient.install.client import configure_krb5_conf, purge_host_keytab
 from ipaserver.install import (
     adtrust, bindinstance, ca, certs, dns, dsinstance, httpinstance,
-    installutils, kra, krbinstance,
-    ntpinstance, otpdinstance, custodiainstance, service)
+    installutils, kra, krbinstance, otpdinstance, custodiainstance, service)
 from ipaserver.install.installutils import (
     create_replica_config, ReplicaConfig, load_pkcs12, is_ipa_configured)
 from ipaserver.install.replication import (
@@ -143,7 +145,7 @@ def install_ca_cert(ldap, base_dn, realm, cafile, destfile=paths.IPA_CA_CRT):
                 pass
         else:
             certs = [c[0] for c in certs if c[2] is not False]
-            x509.write_certificate_list(certs, destfile)
+            x509.write_certificate_list(certs, destfile, mode=0o644)
     except Exception as e:
         raise ScriptError("error copying files: " + str(e))
     return destfile
@@ -197,7 +199,16 @@ def install_dns_records(config, options, remote_api):
                     'on master: %s', str(e))
 
 
-def create_ipa_conf(fstore, config, ca_enabled):
+def create_ipa_conf(fstore, config, ca_enabled, master=None):
+    """
+    Create /etc/ipa/default.conf master configuration
+    :param fstore: sysrestore file store used for backup and restore of
+                   the server configuration
+    :param config: replica config
+    :param ca_enabled: True if the topology includes a CA
+    :param master: if set, the xmlrpc_uri parameter will use the provided
+                   master instead of this host
+    """
     # Save client file on Domain Level 1
     target_fname = paths.IPA_DEFAULT_CONF
     fstore.backup_file(target_fname)
@@ -206,8 +217,12 @@ def create_ipa_conf(fstore, config, ca_enabled):
     ipaconf.setOptionAssignment(" = ")
     ipaconf.setSectionNameDelimiters(("[", "]"))
 
-    xmlrpc_uri = 'https://{0}/ipa/xml'.format(
-                    ipautil.format_netloc(config.host_name))
+    if master:
+        xmlrpc_uri = 'https://{0}/ipa/xml'.format(
+            ipautil.format_netloc(master))
+    else:
+        xmlrpc_uri = 'https://{0}/ipa/xml'.format(
+                        ipautil.format_netloc(config.host_name))
     ldapi_uri = 'ldapi://%2fvar%2frun%2fslapd-{0}.socket\n'.format(
                     installutils.realm_to_serverid(config.realm_name))
 
@@ -226,11 +241,9 @@ def create_ipa_conf(fstore, config, ca_enabled):
         gopts.extend([
             ipaconf.setOption('enable_ra', 'True'),
             ipaconf.setOption('ra_plugin', 'dogtag'),
-            ipaconf.setOption('dogtag_version', '10')
+            ipaconf.setOption('dogtag_version', '10'),
+            ipaconf.setOption('ca_host', config.ca_host_name)
         ])
-
-        if not config.setup_ca:
-            gopts.append(ipaconf.setOption('ca_host', config.ca_host_name))
     else:
         gopts.extend([
             ipaconf.setOption('enable_ra', 'False'),
@@ -549,13 +562,14 @@ def check_remote_version(client, local_version):
     remote_version = parse_version(env['version'])
     if remote_version > local_version:
         raise ScriptError(
-            "Cannot install replica of a server of higher version ({}) than"
+            "Cannot install replica of a server of higher version ({}) than "
             "the local version ({})".format(remote_version, local_version))
 
 
 def common_check(no_ntp):
     tasks.check_ipv6_stack_enabled()
     tasks.check_selinux_status()
+    check_ldap_conf()
 
     if is_ipa_configured():
         raise ScriptError(
@@ -563,20 +577,16 @@ def common_check(no_ntp):
             "If you want to reinstall the IPA server, please uninstall "
             "it first using 'ipa-server-install --uninstall'.")
 
-    # Check to see if httpd is already configured to listen on 443
-    if httpinstance.httpd_443_configured():
-        raise ScriptError("Aborting installation")
-
     check_dirsrv()
 
     if not no_ntp:
         try:
-            ipaclient.install.ntpconf.check_timedate_services()
-        except ipaclient.install.ntpconf.NTPConflictingService as e:
+            ipaclient.install.timeconf.check_timedate_services()
+        except ipaclient.install.timeconf.NTPConflictingService as e:
             print("WARNING: conflicting time&date synchronization service "
-                  "'{svc}' will\nbe disabled in favor of ntpd\n"
+                  "'{svc}' will\nbe disabled in favor of chronyd\n"
                   .format(svc=e.conflicting_service))
-        except ipaclient.install.ntpconf.NTPConfigurationError:
+        except ipaclient.install.timeconf.NTPConfigurationError:
             pass
 
 
@@ -669,6 +679,10 @@ def install_check(installer):
     options = installer
     filename = installer.replica_file
     installer._enrollment_performed = False
+
+    print("This program will set up FreeIPA replica.")
+    print("Version {}".format(version.VERSION))
+    print("")
 
     if tasks.is_fips_enabled():
         raise RuntimeError(
@@ -789,8 +803,12 @@ def install_check(installer):
         check_domain_level_is_supported(domain_level)
         if domain_level != constants.DOMAIN_LEVEL_0:
             raise RuntimeError(
-                "You must provide a file generated by ipa-replica-prepare to "
-                "create a replica when the domain is at level 0."
+                "You used the wrong mechanism to install a replica in "
+                "domain level {dl}:\n"
+                "\tFor domain level >= 1 replica installation, first join the "
+                "domain by running ipa-client-install, then run "
+                "ipa-replica-install without a replica file."
+                .format(dl=domain_level)
             )
 
         # Check pre-existing host entry
@@ -894,7 +912,7 @@ def install_check(installer):
 
 
 def ensure_enrolled(installer):
-    args = [paths.IPA_CLIENT_INSTALL, "--unattended", "--no-ntp"]
+    args = [paths.IPA_CLIENT_INSTALL, "--unattended"]
     stdin = None
     nolog = []
 
@@ -931,6 +949,12 @@ def ensure_enrolled(installer):
         args.append("--mkhomedir")
     if installer.force_join:
         args.append("--force-join")
+    if installer.no_ntp:
+        args.append("--no-ntp")
+    if installer.ip_addresses:
+        for ip in installer.ip_addresses:
+            # installer.ip_addresses is of type [CheckedIPAddress]
+            args.extend(("--ip-address", str(ip)))
 
     try:
         # Call client install script
@@ -1033,7 +1057,7 @@ def promote_check(installer):
         if options.http_pin is None:
             options.http_pin = installutils.read_password(
                 "Enter Apache Server private key unlock",
-                confirm=False, validate=False)
+                confirm=False, validate=False, retry=False)
             if options.http_pin is None:
                 raise ScriptError(
                     "Apache Server private key unlock password required")
@@ -1049,7 +1073,7 @@ def promote_check(installer):
         if options.dirsrv_pin is None:
             options.dirsrv_pin = installutils.read_password(
                 "Enter Directory Server private key unlock",
-                confirm=False, validate=False)
+                confirm=False, validate=False, retry=False)
             if options.dirsrv_pin is None:
                 raise ScriptError(
                     "Directory Server private key unlock password required")
@@ -1065,7 +1089,7 @@ def promote_check(installer):
         if options.pkinit_pin is None:
             options.pkinit_pin = installutils.read_password(
                 "Enter Kerberos KDC private key unlock",
-                confirm=False, validate=False)
+                confirm=False, validate=False, retry=False)
             if options.pkinit_pin is None:
                 raise ScriptError(
                     "Kerberos KDC private key unlock password required")
@@ -1133,12 +1157,8 @@ def promote_check(installer):
         check_domain_level_is_supported(domain_level)
         if domain_level < constants.DOMAIN_LEVEL_1:
             raise RuntimeError(
-                "You used the wrong mechanism to install a replica in "
-                "domain level {dl}:\n"
-                "\tFor domain level >= 1 replica installation, first join the "
-                "domain by running ipa-client-install, then run "
-                "ipa-replica-install without a replica file."
-                .format(dl=domain_level)
+                "You must provide a file generated by ipa-replica-prepare to "
+                "create a replica when the domain is at level 0."
             )
 
         # Check authorization
@@ -1345,6 +1365,7 @@ def install(installer):
     fstore = installer._fstore
     sstore = installer._sstore
     config = installer._config
+    config.promote = installer.promote
     promote = installer.promote
     cafile = installer._ca_file
     dirsrv_pkcs12_info = installer._dirsrv_pkcs12_info
@@ -1375,11 +1396,9 @@ def install(installer):
     elif installer._update_hosts_file:
         installutils.update_hosts_file(config.ips, config.host_name, fstore)
 
-    # Configure ntpd
-    if not options.no_ntp:
-        ipaclient.install.ntpconf.force_ntpd(sstore)
-        ntp = ntpinstance.NTPInstance()
-        ntp.create_instance()
+    if not promote and not options.no_ntp:
+        # in DL1, chrony is already installed
+        ipaclient.install.timeconf.force_chrony(sstore)
 
     try:
         if promote:
@@ -1409,8 +1428,6 @@ def install(installer):
         # Always try to install DNS records
         install_dns_records(config, options, remote_api)
 
-        ntpinstance.ntp_ldap_enable(config.host_name, ds.suffix,
-                                    remote_api.env.realm)
     finally:
         if conn.isconnected():
             conn.disconnect()
@@ -1430,6 +1447,25 @@ def install(installer):
         pkcs12_info=pkinit_pkcs12_info,
         promote=promote)
 
+    if promote:
+        # We need to point to the master when certmonger asks for
+        # a DS or HTTP certificate.
+        # During http installation, the <service>/hostname principal is
+        # created locally then the installer waits for the entry to appear
+        # on the master selected for the installation.
+        # In a later step, the installer requests a SSL certificate through
+        # Certmonger (and the op adds the principal if it does not exist yet).
+        # If xmlrpc_uri points to the soon-to-be replica,
+        # the httpd service is not ready yet to handle certmonger requests
+        # and certmonger tries to find another master. The master can be
+        # different from the one selected for the installation, and it is
+        # possible that the principal has not been replicated yet. This
+        # may lead to a replication conflict.
+        # This is why we need to force the use of the same master by
+        # setting xmlrpc_uri
+        create_ipa_conf(fstore, config, ca_enabled,
+                        master=config.master_host_name)
+
     # we now need to enable ssl on the ds
     ds.enable_ssl()
 
@@ -1441,23 +1477,30 @@ def install(installer):
         ca_is_configured=ca_enabled,
         ca_file=cafile)
 
+    if promote:
+        # Need to point back to ourself after the cert for HTTP is obtained
+        create_ipa_conf(fstore, config, ca_enabled)
+
     otpd = otpdinstance.OtpdInstance()
     otpd.create_instance('OTPD', config.host_name,
                          ipautil.realm_to_suffix(config.realm_name))
 
-    custodia = custodiainstance.CustodiaInstance(config.host_name,
-                                                 config.realm_name)
-    if promote:
-        custodia.create_replica(config.master_host_name)
+    if kra_enabled:
+        # A KRA peer always provides a CA, too.
+        mode = custodiainstance.CustodiaModes.KRA_PEER
+    elif ca_enabled:
+        mode = custodiainstance.CustodiaModes.CA_PEER
     else:
-        custodia.create_instance()
+        mode = custodiainstance.CustodiaModes.MASTER_PEER
+    custodia = custodiainstance.get_custodia_instance(config, mode)
+    custodia.create_instance()
 
     if ca_enabled:
         options.realm_name = config.realm_name
         options.domain_name = config.domain_name
         options.host_name = config.host_name
         options.dm_password = config.dirman_password
-        ca.install(False, config, options)
+        ca.install(False, config, options, custodia=custodia)
 
     # configure PKINIT now that all required services are in place
     krb.enable_ssl()
@@ -1465,27 +1508,25 @@ def install(installer):
     # Apply any LDAP updates. Needs to be done after the replica is synced-up
     service.print_msg("Applying LDAP updates")
     ds.apply_updates()
+    service.print_msg("Finalize replication settings")
+    ds.finalize_replica_config()
 
     if kra_enabled:
-        kra.install(api, config, options)
+        kra.install(api, config, options, custodia=custodia)
 
     service.print_msg("Restarting the KDC")
     krb.restart()
 
     if promote:
-        custodia.import_dm_password(config.master_host_name)
+        custodia.import_dm_password()
         promote_sssd(config.host_name)
         promote_openldap_conf(config.host_name, config.master_host_name)
 
     if options.setup_dns:
         dns.install(False, True, options, api)
-    else:
-        api.Command.dns_update_system_records()
 
     if options.setup_adtrust:
         adtrust.install(False, options, fstore, api)
-
-    api.Backend.ldap2.disconnect()
 
     if not promote:
         # Call client install script
@@ -1514,8 +1555,23 @@ def install(installer):
         # remove the extracted replica file
         remove_replica_info_dir(installer)
 
+    # Enable configured services and update DNS SRV records
+    service.enable_services(config.host_name)
+    api.Command.dns_update_system_records()
+    ca_servers = service.find_providing_servers('CA', api.Backend.ldap2, api)
+    api.Backend.ldap2.disconnect()
+
     # Everything installed properly, activate ipa service.
     services.knownservices.ipa.enable()
+
+    # Print a warning if CA role is only installed on one server
+    if len(ca_servers) == 1:
+        msg = textwrap.dedent(u'''
+            WARNING: The CA service is only installed on one server ({}).
+            It is strongly recommended to install it on another server.
+            Run ipa-ca-install(1) on another master to accomplish this.
+        '''.format(ca_servers[0]))
+        print(msg, file=sys.stderr)
 
 
 def init(installer):

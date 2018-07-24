@@ -18,6 +18,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import absolute_import
+
 import logging
 import time
 from time import gmtime, strftime
@@ -305,12 +307,12 @@ class user(baseuser):
                 'businesscategory', 'carlicense', 'cn', 'departmentnumber',
                 'description', 'displayname', 'employeetype',
                 'employeenumber', 'facsimiletelephonenumber',
-                'gecos', 'givenname', 'homephone', 'inetuserhttpurl',
-                'initials', 'l', 'labeleduri', 'loginshell', 'manager', 'mail',
-                'mepmanagedentry', 'mobile', 'objectclass', 'ou', 'pager',
-                'postalcode', 'roomnumber', 'secretary', 'seealso', 'sn', 'st',
-                'street', 'telephonenumber', 'title', 'userclass',
-                'preferredlanguage',
+                'gecos', 'givenname', 'homedirectory', 'homephone',
+                'inetuserhttpurl', 'initials', 'l', 'labeleduri', 'loginshell',
+                'manager', 'mail', 'mepmanagedentry', 'mobile', 'objectclass',
+                'ou', 'pager', 'postalcode', 'roomnumber', 'secretary',
+                'seealso', 'sn', 'st', 'street', 'telephonenumber', 'title',
+                'userclass', 'preferredlanguage'
             },
             'replaces': [
                 '(targetattr = "givenname || sn || cn || displayname || title || initials || loginshell || gecos || homephone || mobile || pager || facsimiletelephonenumber || telephonenumber || street || roomnumber || l || st || postalcode || manager || secretary || description || carlicense || labeleduri || inetuserhttpurl || seealso || employeetype || businesscategory || ou || mepmanagedentry || objectclass")(target = "ldap:///uid=*,cn=users,cn=accounts,$SUFFIX")(version 3.0;acl "permission:Modify Users";allow (write) groupdn = "ldap:///cn=Modify Users,cn=permissions,cn=pbac,$SUFFIX";)',
@@ -830,8 +832,9 @@ class user_find(baseuser_find):
                 DN(self.obj.active_container_dn, self.api.env.basedn),
                 DN(self.obj.delete_container_dn, self.api.env.basedn),
             )
-            entries[:] = [e for e in entries
-                          if any(e.dn.endswith(bd) for bd in base_dns)]
+            entries[:] = list(
+                e for e in entries if any(e.dn.endswith(bd) for bd in base_dns)
+            )
 
         self.post_common_callback(ldap, entries, lockout=False, **options)
         for entry in entries:

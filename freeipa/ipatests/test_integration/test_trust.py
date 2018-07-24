@@ -17,8 +17,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import nose
+from __future__ import absolute_import
+
 import re
+import unittest
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_plugins.integration import tasks
@@ -35,7 +37,7 @@ class ADTrustBase(IntegrationTest):
     @classmethod
     def install(cls, mh):
         if not cls.master.transport.file_exists('/usr/bin/rpcclient'):
-            raise nose.SkipTest("Package samba-client not available "
+            raise unittest.SkipTest("Package samba-client not available "
                                 "on {}".format(cls.master.hostname))
         super(ADTrustBase, cls).install(mh)
         cls.ad = cls.ad_domains[0].ads[0]
@@ -99,7 +101,7 @@ class ADTrustBase(IntegrationTest):
         """
 
         if self.ad_subdomain is None:
-            raise nose.SkipTest('AD subdomain is not available.')
+            raise unittest.SkipTest('AD subdomain is not available.')
 
         result = self.master.run_command(['ipa',
                                           'trustdomain-find',
@@ -125,7 +127,7 @@ class ADTrustSubdomainBase(ADTrustBase):
     def install(cls, mh):
         super(ADTrustSubdomainBase, cls).install(mh)
         if not cls.ad_subdomain:
-            raise nose.SkipTest('AD subdomain is not available.')
+            raise unittest.SkipTest('AD subdomain is not available.')
 
 
 class ADTrustTreedomainBase(ADTrustBase):
@@ -142,7 +144,7 @@ class ADTrustTreedomainBase(ADTrustBase):
     def install(cls, mh):
         super(ADTrustTreedomainBase, cls).install(mh)
         if not cls.ad_treedomain:
-            raise nose.SkipTest('AD tree root domain is not available.')
+            raise unittest.SkipTest('AD tree root domain is not available.')
 
 
 class TestBasicADTrust(ADTrustBase):
@@ -206,8 +208,10 @@ class TestPosixADTrust(ADTrustBase):
     """Integration test for Active Directory with POSIX support"""
 
     def test_establish_trust(self):
-        # Not specifying the --range-type directly, it should be detected
-        tasks.establish_trust_with_ad(self.master, self.ad_domain)
+        tasks.establish_trust_with_ad(
+            self.master, self.ad_domain,
+            extra_args=['--range-type', 'ipa-ad-trust-posix']
+        )
 
     def test_range_properties_in_posix_trust(self):
         # Check the properties of the created range
@@ -258,8 +262,11 @@ class TestEnforcedPosixADTrust(TestPosixADTrust):
     This test is intented to copycat PosixADTrust, since enforcing the POSIX
     trust type should not make a difference.
     """
+    """Re-difene method from test_establish_trust_with_posix_attributes
+    to test_establish_trust. win server 2016 no more have support for MFU/NIS,
+    so autodetection doesn't work"""
 
-    def test_establish_trust_with_posix_attributes(self):
+    def test_establish_trust(self):
         tasks.establish_trust_with_ad(self.master, self.ad_domain,
             extra_args=['--range-type', 'ipa-ad-trust-posix'])
 
@@ -353,7 +360,7 @@ class TestNonexternalTrustWithSubdomain(ADTrustSubdomainBase):
             self.ad_subdomain) in result.stderr_text)
 
     def test_all_trustdomains_found(self):
-        raise nose.SkipTest(
+        raise unittest.SkipTest(
             'Test case unapplicable, present for inheritance reason only')
 
 
@@ -420,7 +427,7 @@ class TestNonexternalTrustWithTreedomain(ADTrustTreedomainBase):
             self.ad_treedomain) in result.stderr_text)
 
     def test_all_trustdomains_found(self):
-        raise nose.SkipTest(
+        raise unittest.SkipTest(
             'Test case unapplicable, present for inheritance reason only')
 
 

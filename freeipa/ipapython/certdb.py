@@ -25,15 +25,15 @@ import io
 import pwd
 import grp
 import re
-import stat  # pylint: disable=bad-python3-import
+import stat
 import tempfile
 from tempfile import NamedTemporaryFile
 import shutil
 
 import cryptography.x509
 
-from ipaplatform.constants import constants
 from ipaplatform.paths import paths
+from ipaplatform.tasks import tasks
 from ipapython.dn import DN
 from ipapython.kerberos import Principal
 from ipapython import ipautil
@@ -205,6 +205,17 @@ def verify_kdc_cert_validity(kdc_cert, ca_certs, realm):
             raise ValueError("invalid for realm %s" % realm)
 
 
+CERT_RE = re.compile(
+    r'^(?P<nick>.+?)\s+(?P<flags>\w*,\w*,\w*)\s*$'
+)
+KEY_RE = re.compile(
+    r'^<\s*(?P<slot>\d+)>'
+    r'\s+(?P<algo>\w+)'
+    r'\s+(?P<keyid>[0-9a-z]+)'
+    r'\s+(?P<nick>.*?)\s*$'
+)
+
+
 class NSSDatabase(object):
     """A general-purpose wrapper around a NSS cert database
 
@@ -223,43 +234,55 @@ class NSSDatabase(object):
         if nssdir is None:
             self.secdir = tempfile.mkdtemp()
             self._is_temporary = True
-            if dbtype == 'auto':
-                dbtype = constants.NSS_DEFAULT_DBTYPE
         else:
             self.secdir = nssdir
             self._is_temporary = False
             if dbtype == 'auto':
-                if os.path.isfile(os.path.join(self.secdir, "cert9.db")):
-                    dbtype = 'sql'
-                elif os.path.isfile(os.path.join(self.secdir, "cert8.db")):
-                    dbtype = 'dbm'
-                else:
-                    dbtype = constants.NSS_DEFAULT_DBTYPE
+                dbtype = self._detect_dbtype()
 
         self.pwd_file = os.path.join(self.secdir, 'pwdfile.txt')
         self.dbtype = None
         self.certdb = self.keydb = self.secmod = None
+        # files in actual db
         self.filenames = ()
+        # all files that are handled by create_db(backup=True)
+        self.backup_filenames = ()
         self._set_filenames(dbtype)
+
+    def _detect_dbtype(self):
+        if os.path.isfile(os.path.join(self.secdir, "cert9.db")):
+            return 'sql'
+        elif os.path.isfile(os.path.join(self.secdir, "cert8.db")):
+            return 'dbm'
+        else:
+            return 'auto'
 
     def _set_filenames(self, dbtype):
         self.dbtype = dbtype
+        dbmfiles = (
+            os.path.join(self.secdir, "cert8.db"),
+            os.path.join(self.secdir, "key3.db"),
+            os.path.join(self.secdir, "secmod.db")
+        )
+        sqlfiles = (
+            os.path.join(self.secdir, "cert9.db"),
+            os.path.join(self.secdir, "key4.db"),
+            os.path.join(self.secdir, "pkcs11.txt")
+        )
         if dbtype == 'dbm':
-            self.certdb = os.path.join(self.secdir, "cert8.db")
-            self.keydb = os.path.join(self.secdir, "key3.db")
-            self.secmod = os.path.join(self.secdir, "secmod.db")
+            self.certdb, self.keydb, self.secmod = dbmfiles
+            self.filenames = dbmfiles + (self.pwd_file,)
         elif dbtype == 'sql':
-            self.certdb = os.path.join(self.secdir, "cert9.db")
-            self.keydb = os.path.join(self.secdir, "key4.db")
-            self.secmod = os.path.join(self.secdir, "pkcs11.txt")
+            self.certdb, self.keydb, self.secmod = sqlfiles
+            self.filenames = sqlfiles + (self.pwd_file,)
+        elif dbtype == 'auto':
+            self.certdb = self.keydb = self.secmod = None
+            self.filenames = None
         else:
             raise ValueError(dbtype)
-        self.filenames = (
-            self.certdb,
-            self.keydb,
-            self.secmod,
+        self.backup_filenames = (
             self.pwd_file,
-        )
+        ) + sqlfiles + dbmfiles
 
     def close(self):
         if self._is_temporary:
@@ -271,22 +294,39 @@ class NSSDatabase(object):
     def __exit__(self, type, value, tb):
         self.close()
 
+    def _check_db(self):
+        if self.filenames is None:
+            raise RuntimeError(
+                "NSSDB '{}' not initialized.".format(self.secdir)
+            )
+
     def run_certutil(self, args, stdin=None, **kwargs):
+        self._check_db()
         new_args = [
             paths.CERTUTIL,
             "-d", '{}:{}'.format(self.dbtype, self.secdir)
         ]
         new_args.extend(args)
         new_args.extend(['-f', self.pwd_file])
-        return ipautil.run(new_args, stdin, **kwargs)
+        # When certutil makes a request it creates a file in the cwd, make
+        # sure we are in a unique place when this happens.
+        return ipautil.run(new_args, stdin, cwd=self.secdir, **kwargs)
 
     def run_pk12util(self, args, stdin=None, **kwargs):
+        self._check_db()
         new_args = [
             paths.PK12UTIL,
             "-d", '{}:{}'.format(self.dbtype, self.secdir)
         ]
         new_args.extend(args)
         return ipautil.run(new_args, stdin, **kwargs)
+
+    def exists(self):
+        """Check DB exists (all files are present)
+        """
+        if self.filenames is None:
+            return False
+        return all(os.path.isfile(filename) for filename in self.filenames)
 
     def create_db(self, user=None, group=None, mode=None, backup=False):
         """Create cert DB
@@ -313,9 +353,8 @@ class NSSDatabase(object):
             gid = grp.getgrnam(group).gr_gid
 
         if backup:
-            for filename in self.filenames:
-                path = os.path.join(self.secdir, filename)
-                ipautil.backup_file(path)
+            for filename in self.backup_filenames:
+                ipautil.backup_file(filename)
 
         if not os.path.exists(self.secdir):
             os.makedirs(self.secdir, dirmode)
@@ -326,22 +365,45 @@ class NSSDatabase(object):
                                  os.O_CREAT | os.O_WRONLY,
                                  pwdfilemode), 'w', closefd=True) as f:
                 f.write(ipautil.ipa_generate_password())
+                # flush and sync tempfile inode
                 f.flush()
+                os.fsync(f.fileno())
 
-        self.run_certutil(["-N", "-f", self.pwd_file])
+        # In case dbtype is auto, let certutil decide which type of DB
+        # to create.
+        if self.dbtype == 'auto':
+            dbdir = self.secdir
+        else:
+            dbdir = '{}:{}'.format(self.dbtype, self.secdir)
+        args = [
+            paths.CERTUTIL,
+            '-d', dbdir,
+            '-N',
+            '-f', self.pwd_file,
+            # -@ in case it's an old db and it must be migrated
+            '-@', self.pwd_file,
+        ]
+        ipautil.run(args, stdin=None, cwd=self.secdir)
+        self._set_filenames(self._detect_dbtype())
+        if self.filenames is None:
+            # something went wrong...
+            raise ValueError(
+                "Failed to create NSSDB at '{}'".format(self.secdir)
+            )
 
         # Finally fix up perms
         os.chown(self.secdir, uid, gid)
         os.chmod(self.secdir, dirmode)
+        tasks.restore_context(self.secdir, force=True)
         for filename in self.filenames:
-            path = os.path.join(self.secdir, filename)
-            if os.path.exists(path):
-                os.chown(path, uid, gid)
-                if path == self.pwd_file:
+            if os.path.exists(filename):
+                os.chown(filename, uid, gid)
+                if filename == self.pwd_file:
                     new_mode = pwdfilemode
                 else:
                     new_mode = filemode
-                os.chmod(path, new_mode)
+                os.chmod(filename, new_mode)
+                tasks.restore_context(filename, force=True)
 
     def convert_db(self, rename_old=True):
         """Convert DBM database format to SQL database format
@@ -369,7 +431,7 @@ class NSSDatabase(object):
             '-d', 'sql:{}'.format(self.secdir), '-N',
             '-f', self.pwd_file, '-@', self.pwd_file
         ]
-        ipautil.run(args)
+        ipautil.run(args, stdin=None, cwd=self.secdir)
 
         # retain file ownership and permission, backup old files
         migration = (
@@ -383,7 +445,7 @@ class NSSDatabase(object):
             oldstat = os.stat(oldname)
             os.chmod(newname, stat.S_IMODE(oldstat.st_mode))
             os.chown(newname, oldstat.st_uid, oldstat.st_gid)
-            # XXX also retain SELinux context?
+            tasks.restore_context(newname, force=True)
 
         self._set_filenames('sql')
         self.list_certs()  # self-test
@@ -394,15 +456,14 @@ class NSSDatabase(object):
                 os.rename(oldname, oldname + '.migrated')
 
     def restore(self):
-        for filename in self.filenames:
-            path = os.path.join(self.secdir, filename)
-            backup_path = path + '.orig'
-            save_path = path + '.ipasave'
+        for filename in self.backup_filenames:
+            backup_path = filename + '.orig'
+            save_path = filename + '.ipasave'
             try:
-                if os.path.exists(path):
-                    os.rename(path, save_path)
+                if os.path.exists(filename):
+                    os.rename(filename, save_path)
                 if os.path.exists(backup_path):
-                    os.rename(backup_path, path)
+                    os.rename(backup_path, filename)
             except OSError as e:
                 logger.debug('%s', e)
 
@@ -417,10 +478,10 @@ class NSSDatabase(object):
         # FIXME, this relies on NSS never changing the formatting of certutil
         certlist = []
         for cert in certs:
-            match = re.match(r'^(.+?)\s+(\w*,\w*,\w*)\s*$', cert)
+            match = CERT_RE.match(cert)
             if match:
-                nickname = match.group(1)
-                trust_flags = parse_trust_flags(match.group(2))
+                nickname = match.group('nick')
+                trust_flags = parse_trust_flags(match.group('flags'))
                 certlist.append((nickname, trust_flags))
 
         return tuple(certlist)
@@ -433,10 +494,14 @@ class NSSDatabase(object):
             return ()
         keylist = []
         for line in result.output.splitlines():
-            mo = re.match(r'^<\s*(\d+)>\s+(\w+)\s+([0-9a-z]+)\s+(.*)$', line)
+            mo = KEY_RE.match(line)
             if mo is not None:
-                slot, algo, keyid, nick = mo.groups()
-                keylist.append((int(slot), algo, keyid, nick.strip()))
+                keylist.append((
+                    int(mo.group('slot')),
+                    mo.group('algo'),
+                    mo.group('keyid'),
+                    mo.group('nick'),
+                ))
         return tuple(keylist)
 
     def find_server_certs(self):

@@ -35,8 +35,8 @@ ipa_topo_agreement_dn(TopoReplica *conf, TopoReplicaAgmt *agmt, char *rdn)
     char *dn;
     char *filter;
     Slapi_PBlock *pb;
-    Slapi_Entry **entries = NULL;
-    int ret = 0;
+    Slapi_Entry **entries;
+    int ret;
 
     pb = slapi_pblock_new();
     filter = slapi_ch_smprintf("(&(objectclass=nsds5replica)(nsds5replicaroot=%s))",
@@ -82,10 +82,10 @@ ipa_topo_agmt_new(char *hostname, TopoReplica *conf, TopoReplicaAgmt *agmt)
 int ipa_topo_agmt_mod(TopoReplica *conf, TopoReplicaAgmt *agmt, LDAPMod **mods,
                       char *direction)
 {
-    int ret = 0;
+    int ret;
     Slapi_PBlock *pb;
     char *dn = NULL;
-    Slapi_Entry **entries = NULL;
+    Slapi_Entry **entries;
     int i;
     LDAPMod *tmp;
     Slapi_Mods *smods = NULL;
@@ -190,7 +190,7 @@ ipa_topo_agmt_setup(char *hostname, TopoReplica *conf,
     char *cn;
     char port[] = "389";
     char *description;
-    int ret = 0;
+    int ret;
     /* Set up the new replication agreement entry */
     agmt->rdn = ipa_topo_agmt_gen_rdn(agmt->origin, agmt->target);
     dn = ipa_topo_agreement_dn(conf, agmt, agmt->rdn);

@@ -1,4 +1,3 @@
-#!/usr/bin/python2
 # Copyright (C) 2007  Red Hat
 # see file 'COPYING' for use and warranty information
 #
@@ -67,7 +66,6 @@ if __name__ == '__main__':
             "ipalib",
             "ipaplatform",
             "ipapython",
-            "nose",
             "polib",
             "pytest",
             "pytest_multihost",
@@ -79,5 +77,6 @@ if __name__ == '__main__':
             "ipaserver": ["ipaserver"],
             "webui": ["selenium", "pyyaml", "ipaserver"],
             "xmlrpc": ["ipaserver"],
+            ":python_version<'3'": ["mock"],
         }
     )

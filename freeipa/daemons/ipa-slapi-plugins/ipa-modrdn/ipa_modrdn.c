@@ -349,7 +349,7 @@ static int
 ipamodrdn_load_plugin_config(void)
 {
     int status = EOK;
-    int result = 0;
+    int result;
     int i;
     Slapi_PBlock *search_pb;
     Slapi_Entry **entries = NULL;
@@ -654,7 +654,7 @@ ipamodrdn_change_attr(struct configEntry *cfgentry,
     LDAPMod mod;
     LDAPMod *mods[2];
     char *val[2] = { NULL };
-    int ret = 0;
+    int ret;
 
     val[0] = slapi_ch_smprintf("%s%s%s",
                                cfgentry->prefix, value, cfgentry->suffix);

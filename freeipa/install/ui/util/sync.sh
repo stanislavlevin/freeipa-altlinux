@@ -353,9 +353,9 @@ fi
 if [[ $RESTART ]] ; then
     if [[ ! $HOST ]] ; then
         echo "Restarting httpd"
-        sudo systemctl restart httpd2.service
+        sudo systemctl restart httpd.service
     else
         echo "Restarting httpd: $HOST"
-        ssh $HOST "systemctl restart httpd2.service"
+        ssh $HOST "systemctl restart httpd.service"
     fi
 fi

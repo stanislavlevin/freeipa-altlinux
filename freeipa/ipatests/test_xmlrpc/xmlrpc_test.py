@@ -22,11 +22,10 @@ Base class for all XML-RPC tests
 """
 from __future__ import print_function
 
-import collections
 import datetime
 import inspect
+import unittest
 
-import nose
 import contextlib
 import six
 
@@ -34,6 +33,12 @@ from ipatests.util import assert_deepequal, Fuzzy
 from ipalib import api, request, errors
 from ipapython.version import API_VERSION
 
+# pylint: disable=no-name-in-module, import-error
+if six.PY3:
+    from collections.abc import Sequence
+else:
+    from collections import Sequence
+# pylint: enable=no-name-in-module, import-error
 
 # Matches a gidnumber like '1391016742'
 # FIXME: Does it make more sense to return gidnumber, uidnumber, etc. as `int`
@@ -57,7 +62,7 @@ fuzzy_base64 = Fuzzy('^[0-9A-Za-z/+]+={0,2}$')
 def fuzzy_sequence_of(fuzzy):
     """Construct a Fuzzy for a Sequence of values matching the given Fuzzy."""
     def test(xs):
-        if not isinstance(xs, collections.Sequence):
+        if not isinstance(xs, Sequence):
             return False
         else:
             return all(fuzzy == x for x in xs)
@@ -204,7 +209,7 @@ class XMLRPC_test(object):
     @classmethod
     def setup_class(cls):
         if not server_available:
-            raise nose.SkipTest('%r: Server not available: %r' %
+            raise unittest.SkipTest('%r: Server not available: %r' %
                                 (cls.__module__, api.env.xmlrpc_uri))
         if not api.Backend.rpcclient.isconnected():
             api.Backend.rpcclient.connect()
@@ -316,7 +321,7 @@ class Declarative(XMLRPC_test):
         (cmd, args, options) = command
         print('Cleanup:', cmd, args, options)
         if cmd not in api.Command:
-            raise nose.SkipTest(
+            raise unittest.SkipTest(
                 'cleanup command %r not in api.Command' % cmd
             )
         try:
@@ -338,7 +343,7 @@ class Declarative(XMLRPC_test):
         (cmd, args, options) = command
         options.setdefault('version', self.default_version)
         if cmd not in api.Command:
-            raise nose.SkipTest('%r not in api.Command' % cmd)
+            raise unittest.SkipTest('%r not in api.Command' % cmd)
         if isinstance(expected, errors.PublicError):
             self.check_exception(nice, cmd, args, options, expected)
         elif hasattr(expected, '__call__'):

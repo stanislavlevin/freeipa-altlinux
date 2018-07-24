@@ -208,8 +208,8 @@ static int ipapwd_pre_add(Slapi_PBlock *pb)
     char *userpw = NULL;
     char *dn = NULL;
     struct ipapwd_operation *pwdop = NULL;
-    void *op = NULL;
-    int is_repl_op = 0, is_root = 0, is_krb, is_smb, is_ipant;
+    void *op;
+    int is_repl_op, is_root, is_krb, is_smb, is_ipant;
     int ret;
     int rc = LDAP_SUCCESS;
 
@@ -340,7 +340,7 @@ static int ipapwd_pre_add(Slapi_PBlock *pb)
     if (is_root) {
         pwdop->pwdata.changetype = IPA_CHANGETYPE_DSMGR;
     } else {
-        char *binddn = NULL;
+        char *binddn;
         int i;
 
         pwdop->pwdata.changetype = IPA_CHANGETYPE_ADMIN;
@@ -454,7 +454,7 @@ static int ipapwd_pre_mod(Slapi_PBlock *pb)
 {
     struct ipapwd_krbcfg *krbcfg = NULL;
     char *errMesg = NULL;
-    LDAPMod **mods = NULL;
+    LDAPMod **mods;
     LDAPMod *lmod;
     Slapi_Mods *smods = NULL;
     char *userpw = NULL;
@@ -463,8 +463,8 @@ static int ipapwd_pre_mod(Slapi_PBlock *pb)
     Slapi_DN *tmp_dn;
     struct slapi_entry *e = NULL;
     struct ipapwd_operation *pwdop = NULL;
-    void *op = NULL;
-    int is_repl_op = 0, is_pwd_op, is_root = 0, is_krb, is_smb, is_ipant;
+    void *op;
+    int is_repl_op, is_pwd_op, is_root, is_krb, is_smb, is_ipant;
     int has_krb_keys = 0;
     int has_history = 0;
     int gen_krb_keys = 0;
@@ -807,7 +807,7 @@ static int ipapwd_pre_mod(Slapi_PBlock *pb)
     if (is_root) {
         pwdop->pwdata.changetype = IPA_CHANGETYPE_DSMGR;
     } else {
-        char *binddn = NULL;
+        char *binddn;
         Slapi_DN *bdn, *tdn;
         int i;
 
@@ -1024,7 +1024,7 @@ static int ipapwd_post_updatecfg(Slapi_PBlock *pb)
 
 static int ipapwd_post_modadd(Slapi_PBlock *pb)
 {
-    void *op = NULL;
+    void *op;
     struct ipapwd_operation *pwdop = NULL;
     Slapi_Mods *smods;
     Slapi_Value **pwvals;

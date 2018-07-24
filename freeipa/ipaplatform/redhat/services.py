@@ -22,6 +22,8 @@
 Contains Red Hat OS family-specific service class implementations.
 """
 
+from __future__ import absolute_import
+
 import logging
 import os
 import time
@@ -45,6 +47,7 @@ redhat_system_units = dict((x, "%s.service" % x)
 
 redhat_system_units['rpcgssd'] = 'nfs-secure.service'
 redhat_system_units['rpcidmapd'] = 'nfs-idmap.service'
+redhat_system_units['domainname'] = 'nis-domainname.service'
 
 # Rewrite dirsrv and pki-tomcatd services as they support instances via separate
 # service generator. To make this working, one needs to have both foo@.servic
