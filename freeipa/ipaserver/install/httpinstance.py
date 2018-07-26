@@ -126,6 +126,8 @@ class HTTPInstance(service.Service):
                   self.set_mod_ssl_protocol)
         self.step("configuring mod_ssl log directory",
                   self.set_mod_ssl_logdir)
+        self.step("disabling alt mod_ssl defaults",
+                  self.disable_mod_ssl_alt_defaults)
         self.step("disabling mod_ssl OCSP", self.disable_mod_ssl_ocsp)
         self.step("adding URL rewriting rules", self.__add_include)
         self.step("configuring httpd", self.__configure_http)
@@ -246,6 +248,17 @@ class HTTPInstance(service.Service):
 
     def set_mod_ssl_logdir(self):
         tasks.setup_httpd_logging()
+
+    def disable_mod_ssl_alt_defaults(self):
+        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
+                                   'DocumentRoot',
+                                   None, False)
+        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
+                                   'ServerName',
+                                   None, False)
+        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
+                                   'ServerAdmin',
+                                   None, False)
 
     def disable_mod_ssl_ocsp(self):
         if sysupgrade.get_upgrade_state('http', OCSP_ENABLED) is None:
@@ -647,6 +660,7 @@ class HTTPInstance(service.Service):
         self.configure_mod_ssl_certs()
         self.set_mod_ssl_protocol()
         self.set_mod_ssl_logdir()
+        self.disable_mod_ssl_alt_defaults()
         self.__add_include()
 
         self.cert = x509.load_certificate_from_file(paths.HTTPD_CERT_FILE)
