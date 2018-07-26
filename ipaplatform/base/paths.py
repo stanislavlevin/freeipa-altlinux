@@ -57,6 +57,7 @@ class BasePathNamespace:
     HTTPD_CERT_FILE = "/var/lib/ipa/certs/httpd.crt"
     HTTPD_KEY_FILE = "/var/lib/ipa/private/httpd.key"
     HTTPD_PASSWD_FILE_FMT = "/var/lib/ipa/passwds/{host}-443-RSA"
+    HTTPD_DEFAULT_STARTED_SITE_CONF = None
     # only used on Fedora
     HTTPD_IPA_WSGI_MODULES_CONF = None
     OLD_IPA_KEYTAB = "/etc/httpd/conf/ipa.keytab"
