@@ -56,11 +56,5 @@ class ALTLinuxServices(redhat_services.RedHatServices):
 # services will be disabled during IPA installation
 timedate_services = ['ntpd', 'chronyd', 'openntpd']
 
-httpd_ipa_modules = [
-        "ssl", "auth_gssapi", "rewrite", "filter", "deflate", "headers",
-        "authn_core", "authz_user", "expires", "lookup_identity", "session",
-        "session_cookie", "proxy_ajp", "proxy_http", "proxy",
-        ]
-
 service = altlinux_service_class_factory
 knownservices = ALTLinuxServices()
