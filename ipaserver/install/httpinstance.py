@@ -25,6 +25,7 @@ import os
 import glob
 import errno
 import shlex
+import sys
 import pipes
 import tempfile
 
@@ -131,6 +132,7 @@ class HTTPInstance(service.Service):
         self.step("disabling mod_ssl OCSP", self.disable_mod_ssl_ocsp)
         self.step("adding URL rewriting rules", self.__add_include)
         self.step("configuring httpd", self.__configure_http)
+        self.step("configuring httpd modules", self.configure_httpd_mods)
         self.step("setting up httpd keytab", self.request_service_keytab)
         self.step("configuring Gssproxy", self.configure_gssproxy)
         self.step("setting up ssl", self.__setup_ssl)
@@ -211,6 +213,50 @@ class HTTPInstance(service.Service):
         http_fd.write(http_txt)
         http_fd.close()
         os.chmod(target_fname, 0o644)
+
+    def configure_httpd_mods(self):
+        # Disable conflicting modules
+        for a2m in constants.HTTPD_IPA_CONFL_MODULES:
+            ipautil.run(["a2dismod", a2m], raiseonerr=False)
+
+        # Backup state of the httpd modules
+        for a2m in constants.HTTPD_IPA_MODULES:
+            ipautil.run(["a2enmod", a2m])
+
+        # Process wsgi modules
+        # wsgi module for Python and Python3 has the same name - wsgi,
+        # thus we cannot rely on the mod name
+        if sys.version_info.major == 2:
+            wsgi_module_enabled = 'wsgi'
+            wsgi_module_disabled = 'wsgi-py3'
+        else:
+            wsgi_module_enabled = 'wsgi-py3'
+            wsgi_module_disabled = 'wsgi'
+
+        ipautil.run(["a2dismod", wsgi_module_disabled], raiseonerr=False)
+        ipautil.run(["a2enmod", wsgi_module_enabled])
+
+        # Disable default ALTLinux site at sites-start.d
+        if os.path.exists(paths.HTTPD_DEFAULT_STARTED_SITE_CONF):
+            # First backup conf
+            self.fstore.backup_file(paths.HTTPD_DEFAULT_STARTED_SITE_CONF)
+
+            with open(paths.HTTPD_DEFAULT_STARTED_SITE_CONF) as (
+                    input_file), open(paths.HTTPD_DEFAULT_STARTED_SITE_CONF,
+                                      'r+') as output_file:
+                output_file.writelines(
+                    line.replace("default=yes", "default=no")
+                    for line in input_file)
+                output_file.truncate()
+        else:
+            service.print_msg(
+                "WARNING: ALTLinux default started sites conf -"
+                "%s doesn't exist" % paths.HTTPD_DEFAULT_STARTED_SITE_CONF)
+
+        ipautil.run(["a2chkconfig"])
+        ipautil.run(["a2enport", "https"])
+        ipautil.run(["a2ensite", "default_https"])
+        ipautil.run(["a2ensite", "ipa"])
 
     def configure_gssproxy(self):
         tasks.configure_http_gssproxy_conf(IPAAPI_USER)
@@ -531,13 +577,20 @@ class HTTPInstance(service.Service):
                 ca_iface.Set('org.fedorahosted.certmonger.ca',
                              'external-helper', helper)
 
-        for f in [paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF,
-                  paths.HTTPD_SSL_SITE_CONF, paths.HTTPD_NSS_CONF]:
+        # Disable apache2 ipa configs
+        ipautil.run(["a2dissite", "ipa"], raiseonerr=False)
+
+        for f in [
+            paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF,
+            paths.HTTPD_NSS_CONF, paths.HTTPD_SSL_SITE_CONF,
+            paths.HTTPD_DEFAULT_STARTED_SITE_CONF,
+        ]:
             try:
                 self.fstore.restore_file(f)
             except ValueError as error:
                 logger.debug("%s", error)
 
+        ipautil.run(["a2chkconfig"])
         # Remove the configuration files we create
         ipautil.remove_keytab(self.keytab)
         remove_files = [
