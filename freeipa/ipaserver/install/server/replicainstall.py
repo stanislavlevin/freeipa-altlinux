@@ -24,7 +24,6 @@ import six
 
 from ipaclient.install.client import check_ldap_conf
 from ipaclient.install.ipachangeconf import IPAChangeConf
-import ipaclient.install.timeconf
 from ipalib.install import certstore, sysrestore
 from ipalib.install.kinit import kinit_keytab
 from ipapython import ipaldap, ipautil, version
@@ -34,7 +33,8 @@ from ipapython.admintool import ScriptError
 from ipaplatform import services
 from ipaplatform.tasks import tasks
 from ipaplatform.paths import paths
-from ipalib import api, constants, create_api, errors, rpc, x509
+from ipalib import api, constants, create_api, errors, rpc, x509, ntpmethods
+from ipalib.ntpmethods import TIME_SERVICE
 from ipalib.config import Env
 from ipalib.util import no_matching_interface_for_ip_address_warning
 from ipaclient.install.client import configure_krb5_conf, purge_host_keytab
@@ -581,12 +581,12 @@ def common_check(no_ntp):
 
     if not no_ntp:
         try:
-            ipaclient.install.timeconf.check_timedate_services()
-        except ipaclient.install.timeconf.NTPConflictingService as e:
+            ntpmethods.check_timedate_services()
+        except ntpmethods.NTPConflictingService as e:
             print("WARNING: conflicting time&date synchronization service "
-                  "'{svc}' will\nbe disabled in favor of chronyd\n"
-                  .format(svc=e.conflicting_service))
-        except ipaclient.install.timeconf.NTPConfigurationError:
+                  "'{svc}' will\nbe disabled in favor of {ts}\n"
+                  .format(svc=e.conflicting_service, ts=TIME_SERVICE))
+        except ntpmethods.NTPConfigurationError:
             pass
 
 
@@ -1398,7 +1398,7 @@ def install(installer):
 
     if not promote and not options.no_ntp:
         # in DL1, chrony is already installed
-        ipaclient.install.timeconf.force_chrony(sstore)
+        ntpmethods.force_service(sstore)
 
     try:
         if promote:
