@@ -4,12 +4,13 @@
 from __future__ import absolute_import
 
 import shutil
-from pkgutil import find_loader
 import re
+import sys
 
 from ipaclient.install import ipadiscovery
 from ipaserver.install.service import Service
 from ipaplatform import services
+from ipapython import ipautil
 
 
 def __service_control():
@@ -37,17 +38,16 @@ def __service_command():
 
 
 def __detect_time_server():
-    ts_modules = ['ntpdlib', 'ontpdlib', 'chronylib']
-    ts = {
-        'ntpdlib': 'ntpd',
-        'ontpdlib': 'openntpd',
-        'chronylib': 'chrony',
-    }
-    for srv in ts_modules:
-        if find_loader('ipalib.%s' % srv):
-            return ts[srv]
+    ts_modules = ['chrony', 'ntpd', 'openntpd']
 
-    return False
+    for ts in ts_modules:
+        sys_ts = ipautil.run(['rpm', '-qa', ts], capture_output=True)
+        if sys_ts.output:
+            return ts
+
+    print("NTP daemon not found in your system. "
+          "Please, install NTP daemon and try again.")
+    sys.exit(1)
 
 
 def search_ntp_servers(statestore, cli_domain):
