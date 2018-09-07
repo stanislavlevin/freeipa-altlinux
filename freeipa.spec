@@ -179,6 +179,8 @@ hosts, services), Authentication (SSO, 2FA), and Authorization
 features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 
+###############################################################################
+
 %package server
 Summary: The IPA authentication server
 Group: System/Base
@@ -202,7 +204,6 @@ Requires: nss-utils
 Requires: krb5-kdc >= %krb5_version
 Requires: krb5-kinit >= %krb5_version
 Requires: libsasl2-plugin-gssapi
-Requires: openntpd
 Requires: fonts-font-awesome
 Requires: fonts-ttf-open-sans
 Requires: apache2-mod_auth_gssapi
@@ -236,6 +237,8 @@ features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If you are installing an IPA server, you need to install this package.
 
+###############################################################################
+
 %if_with python2
 %package -n python-module-ipaserver
 Summary: Python libraries used by IPA server
@@ -261,6 +264,8 @@ If you are installing an IPA server, you need to install this package.
 
 %endif
 
+###############################################################################
+
 %package -n python3-module-ipaserver
 Summary: Python libraries used by IPA server
 Group: System/Libraries
@@ -284,6 +289,8 @@ features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If you are installing an IPA server, you need to install this package.
 
+###############################################################################
+
 %package server-common
 Summary: Common files used by IPA server
 Group: System/Base
@@ -305,6 +312,8 @@ features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If you are installing an IPA server, you need to install this package.
 
+###############################################################################
+
 %package server-dns
 Summary: IPA integrated DNS server with support for automatic DNSSEC signing
 Group: System/Base
@@ -321,6 +330,8 @@ Obsoletes: %name-server <= 4.2.0
 %description server-dns
 IPA integrated DNS server with support for automatic DNSSEC signing.
 Integrated DNS server is BIND 9. OpenDNSSEC provides key management.
+
+###############################################################################
 
 %package server-trust-ad
 Summary: Virtual package to install packages required for Active Directory trusts
@@ -346,13 +357,13 @@ Cross-realm trusts with Active Directory in IPA require working Samba 4
 installation. This package is provided for convenience to install all required
 dependencies at once.
 
+###############################################################################
+
 %package client
 Summary: IPA authentication for use on clients
 Group: System/Base
 # Requires: authselect >= 0.4-2
 Requires: libsasl2-plugin-gssapi
-Requires: openntpd
-Requires: ntpdate
 Requires: curl
 Requires: sssd
 Requires: sssd-krb5
@@ -393,6 +404,8 @@ If your network uses IPA for authentication, this package should be
 installed on every client machine.
 This package provides command-line tools for IPA administrators.
 
+###############################################################################
+
 %if_with python2
 %package -n python-module-ipaclient
 Summary: Python libraries used by IPA client
@@ -400,6 +413,7 @@ Group: System/Libraries
 BuildArch: noarch
 Requires: %name-client-common = %EVR
 Requires: python-module-freeipa = %EVR
+Requires: python-module-%name-ntplib = %EVR
 Requires: python-module-dns
 
 %description -n python-module-ipaclient
@@ -413,12 +427,15 @@ installed on every client machine.
 
 %endif
 
+###############################################################################
+
 %package -n python3-module-ipaclient
 Summary: Python libraries used by IPA client
 Group: System/Libraries
 BuildArch: noarch
 Requires: %name-client-common = %EVR
 Requires: python3-module-freeipa = %EVR
+Requires: python3-module-%name-ntplib = %EVR
 Requires: python3-module-dns
 
 %description -n python3-module-ipaclient
@@ -429,6 +446,8 @@ features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If your network uses IPA for authentication, this package should be
 installed on every client machine.
+
+###############################################################################
 
 %package client-common
 Summary: Common files used by IPA client
@@ -444,6 +463,8 @@ features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If your network uses IPA for authentication, this package should be
 installed on every client machine.
+
+###############################################################################
 
 %if_with python2
 %package -n python-module-freeipa
@@ -473,6 +494,8 @@ and integration with Active Directory based infrastructures (Trusts).
 If you are using IPA, you need to install this package.
 
 %endif
+
+###############################################################################
 
 %package -n python3-module-freeipa
 Summary: Python3 libraries used by IPA
@@ -504,6 +527,30 @@ features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If you are using IPA with Python 3, you need to install this package.
 
+###############################################################################
+
+%if_with python2
+%package -n python-module-freeipa-ntplib
+Summary: Python IPA libraries for ntp services
+Group: Development/Python
+BuildArch: noarch
+
+%description -n python-module-freeipa-ntplib
+IPA libraries for synchronization IPA server and IPA client with time&data servers.
+
+%endif
+
+###############################################################################
+
+%package -n python3-module-freeipa-ntplib
+Summary: Python3 IPA libraries for ntp services
+Group: Development/Python3
+BuildArch: noarch
+
+%description -n python3-module-freeipa-ntplib
+IPA libraries for synchronization IPA server and IPA client with time&data servers.
+
+###############################################################################
 
 %package common
 Summary: Common files used by IPA
@@ -517,6 +564,8 @@ hosts, services), Authentication (SSO, 2FA), and Authorization
 features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If you are using IPA, you need to install this package.
+
+###############################################################################
 
 %if_with python2
 %package -n python-module-ipatests
@@ -545,6 +594,8 @@ This package contains tests that verify IPA functionality.
 
 %endif
 
+###############################################################################
+
 %package -n python3-module-ipatests
 Summary: IPA tests and test tools
 Group: System/Base
@@ -564,6 +615,8 @@ hosts, services), Authentication (SSO, 2FA), and Authorization
 features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 This package contains tests that verify IPA functionality under Python 3.
+
+###############################################################################
 
 %prep
 %setup -n %name-%version
@@ -1126,6 +1179,10 @@ fi
 %python_sitelibdir_noarch/ipalib-*.egg-info/
 %python_sitelibdir_noarch/ipaplatform-*.egg-info/
 %python_sitelibdir_noarch/ipaplatform-*-nspkg.pth
+
+%exclude %python_sitelibdir_noarch/ipalib/chrony*
+%exclude %python_sitelibdir_noarch/ipalib/ntpd*
+%exclude %python_sitelibdir_noarch/ipalib/ontpd*
 %endif
 
 %files common -f ipa.lang
@@ -1140,6 +1197,22 @@ fi
 %python3_sitelibdir_noarch/ipalib-*.egg-info/
 %python3_sitelibdir_noarch/ipaplatform-*.egg-info/
 %python3_sitelibdir_noarch/ipaplatform-*-nspkg.pth
+
+%exclude %python3_sitelibdir_noarch/ipalib/chrony*
+%exclude %python3_sitelibdir_noarch/ipalib/ntpd*
+%exclude %python3_sitelibdir_noarch/ipalib/ontpd*
+
+%if_with python2
+%files -n python-module-freeipa-ntplib
+%python_sitelibdir_noarch/ipalib/chrony*
+%python_sitelibdir_noarch/ipalib/ntpd*
+%python_sitelibdir_noarch/ipalib/ontpd*
+%endif
+
+%files -n python3-module-freeipa-ntplib
+%python3_sitelibdir_noarch/ipalib/chrony*
+%python3_sitelibdir_noarch/ipalib/ntpd*
+%python3_sitelibdir_noarch/ipalib/ontpd*
 
 %if_with python2
 %files -n python-module-ipatests
