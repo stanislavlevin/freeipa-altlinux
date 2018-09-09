@@ -346,8 +346,7 @@ class IPACertificate(object):
         gns = []
         for ext in extensions:
             if ext['extnID'] == OID_SAN:
-                der = decoder.decode(
-                    ext['extnValue'], asn1Spec=univ.OctetString())[0]
+                der = ext['extnValue']
                 gns = decoder.decode(der, asn1Spec=rfc2459.SubjectAltName())[0]
                 break
         return gns
