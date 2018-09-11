@@ -36,9 +36,8 @@
 %define bind_dyndb_ldap_version 11.0
 
 Name: freeipa
-Version: 4.6.3
-Release: alt6
-Summary: The Identity, Policy and Audit system
+Version: 4.7.0
+Release: alt1
 
 Summary: The Identity, Policy and Audit system
 License: GPLv3+
@@ -1250,6 +1249,15 @@ fi
 %endif
 
 %changelog
+* Fri Sep 07 2018 Stanislav Levin <slev@altlinux.org> 4.7.0-alt1
+- 4.6.3 -> 4.7.0.
+
+* Wed Sep 05 2018 Stanislav Levin <slev@altlinux.org> 4.6.3-alt8
+- Build with new softhsm.
+
+* Fri Aug 31 2018 Stanislav Levin <slev@altlinux.org> 4.6.3-alt7
+- Build with new openssl1.1.
+
 * Fri Jun 29 2018 Ivan Zakharyaschev <imz@altlinux.org> 4.6.3-alt6
 - Improved formal deps (in python*-module-freeipa, dropped the
   unnecessary explicit dep on setuptools in favor of autoreqs) so that
