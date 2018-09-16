@@ -868,6 +868,18 @@ class i18n_messages(Command):
                 "remove_from_netgroups": _(
                     "Remove netgroup '${primary_key}' from netgroups"
                 ),
+                "remove_groups": _(
+                    "Remove user groups from netgroup '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from netgroup '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from netgroup '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from netgroup '${primary_key}'"
+                ),
                 "specified_hosts": _("Specified Hosts and Groups"),
                 "specified_users": _("Specified Users and Groups"),
                 "user": _("User"),
