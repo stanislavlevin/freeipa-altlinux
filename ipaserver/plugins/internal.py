@@ -318,8 +318,30 @@ class i18n_messages(Command):
             "add_retrive": _("Allow ${other_entity} to retrieve keytab of ${primary_key}"),
             "allowed_to_create": _("Allowed to create keytab"),
             "allowed_to_retrieve": _("Allowed to retrieve keytab"),
-            "remove_create": _("Disallow ${other_entity} to create keytab of ${primary_key}"),
-            "remove_retrieve": _("Disallow ${other_entity} to retrieve keytab of ${primary_key}"),
+            "remove_groups_create": _(
+                "Disallow user groups to create keytab of '${primary_key}'"
+            ),
+            "remove_groups_retrieve": _(
+                "Disallow user groups to retrieve keytab of '${primary_key}'"
+            ),
+            "remove_hostgroups_create": _(
+                "Disallow host groups to create keytab of '${primary_key}'"
+            ),
+            "remove_hostgroups_retrieve": _(
+                "Disallow host groups to retrieve keytab of '${primary_key}'"
+            ),
+            "remove_hosts_create": _(
+                "Disallow hosts to create keytab of '${primary_key}'"
+            ),
+            "remove_hosts_retrieve": _(
+                "Disallow hosts to retrieve keytab of '${primary_key}'"
+            ),
+            "remove_users_create": _(
+                "Disallow users to create keytab of '${primary_key}'"
+            ),
+            "remove_users_retrieve": _(
+                "Disallow users to retrieve keytab of '${primary_key}'"
+            ),
         },
         "krbaliases": {
             "adder_title": _("Add Kerberos Principal Alias"),
@@ -454,6 +476,12 @@ class i18n_messages(Command):
                 "hostgrouprules": _("Host group rules"),
                 "inclusive": _("Inclusive"),
                 "remove": _("Remove auto membership rules"),
+                "remove_exc_conditions": _(
+                    "Remove exclusive conditions from rule '${primary_key}'"
+                ),
+                "remove_inc_conditions": _(
+                    "Remove inclusive conditions from rule '${primary_key}'"
+                ),
                 "usergrouprule": _("User group rule"),
                 "usergrouprules": _("User group rules"),
             },
@@ -484,6 +512,28 @@ class i18n_messages(Command):
                 "no_ca_msg": _("If no CAs are specified, requests to the default CA are allowed."),
                 "profile": _("Profiles"),
                 "remove": _("Remove CA ACLs"),
+                "remove_ca": _(
+                    "Remove Certificate Authorities from CA ACL "
+                    "'${primary_key}'"
+                ),
+                "remove_groups": _(
+                    "Remove user groups from CA ACL '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from CA ACL '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from CA ACL '${primary_key}'"
+                ),
+                "remove_profiles": _(
+                    "Remove certificate profiles from CA ACL '${primary_key}'"
+                ),
+                "remove_services": _(
+                    "Remove services from CA ACL '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from CA ACL '${primary_key}'"
+                ),
                 "specified_cas": _("Specified CAs"),
                 "specified_hosts": _("Specified Hosts and Groups"),
                 "specified_profiles": _("Specified Profiles"),
@@ -624,6 +674,7 @@ class i18n_messages(Command):
                 "ptr_redir_zones": _("Fetching DNS zones."),
                 "ptr_redir_zones_err": _("An error occurred while fetching dns zones."),
                 "redirection_dnszone": _("You will be redirected to DNS Zone."),
+                "remove": _("Remove DNS resource records"),
                 "standard": _("Standard Record Types"),
                 "title": _("Records for DNS Zone"),
                 "type": _("Record Type"),
@@ -690,6 +741,25 @@ class i18n_messages(Command):
                 "host": _("Accessing"),
                 "ipaenabledflag": _("Rule status"),
                 "remove": _("Remove HBAC rules"),
+                "remove_groups": _(
+                    "Remove user groups from HBAC rule '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from HBAC rule '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from HBAC rule '${primary_key}'"
+                ),
+                "remove_servicegroups": _(
+                    "Remove HBAC service groups from HBAC rule "
+                    "'${primary_key}'"
+                ),
+                "remove_services": _(
+                    "Remove HBAC services from HBAC rule '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from HBAC rule '${primary_key}'"
+                ),
                 "service": _("Via Service"),
                 "specified_hosts": _("Specified Hosts and Groups"),
                 "specified_services": _("Specified Services and Groups"),
@@ -768,7 +838,7 @@ class i18n_messages(Command):
                 "status": _("Status"),
                 "unprovision": _("Unprovision"),
                 "unprovision_confirmation": _("Are you sure you want to unprovision this host?"),
-                "unprovision_title": _("Unprovisioning ${entity}"),
+                "unprovision_title": _("Unprovisioning host"),
                 "unprovisioned": _("Host unprovisioned"),
             },
             "hostgroup": {
@@ -845,6 +915,18 @@ class i18n_messages(Command):
                 ),
                 "remove_from_netgroups": _(
                     "Remove netgroup '${primary_key}' from netgroups"
+                ),
+                "remove_groups": _(
+                    "Remove user groups from netgroup '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from netgroup '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from netgroup '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from netgroup '${primary_key}'"
                 ),
                 "specified_hosts": _("Specified Hosts and Groups"),
                 "specified_users": _("Specified Users and Groups"),
@@ -926,6 +1008,18 @@ class i18n_messages(Command):
                 "anyone": _("Anyone"),
                 "host": _("Host"),
                 "remove": _("Remove selinux user maps"),
+                "remove_groups": _(
+                    "Remove user groups from SELinux user map '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from SELinux user map '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from SELinux user map '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from SELinux user map '${primary_key}'"
+                ),
                 "specified_hosts": _("Specified Hosts and Groups"),
                 "specified_users": _("Specified Users and Groups"),
                 "user": _("User"),
@@ -958,7 +1052,7 @@ class i18n_messages(Command):
                 "status": _("Status"),
                 "unprovision": _("Unprovision"),
                 "unprovision_confirmation": _("Are you sure you want to unprovision this service?"),
-                "unprovision_title": _("Unprovisioning ${entity}"),
+                "unprovision_title": _("Unprovisioning service"),
                 "unprovisioned": _("Service unprovisioned"),
                 "valid": _("Kerberos Key Present, Service Provisioned"),
             },
@@ -1019,6 +1113,43 @@ class i18n_messages(Command):
                 "option_removed": _("${count} option(s) removed"),
                 "options": _("Options"),
                 "remove": _("Remove sudo rules"),
+                "remove_allow_cmds": _(
+                    "Remove allow sudo commands from sudo rule "
+                    "'${primary_key}'"
+                ),
+                "remove_allow_cmdgroups": _(
+                    "Remove allow sudo command groups from sudo rule "
+                    "'${primary_key}'"
+                ),
+                "remove_deny_cmds": _(
+                    "Remove deny sudo commands from sudo rule "
+                    "'${primary_key}'"
+                ),
+                "remove_deny_cmdgroups": _(
+                    "Remove deny sudo command groups from sudo rule "
+                    "'${primary_key}'"
+                ),
+                "remove_groups": _(
+                    "Remove user groups from sudo rule '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from sudo rule '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from sudo rule '${primary_key}'"
+                ),
+                "remove_runas_users": _(
+                    "Remove RunAs users from sudo rule '${primary_key}'"
+                ),
+                "remove_runas_usergroups": _(
+                    "Remove RunAs user groups from sudo rule '${primary_key}'"
+                ),
+                "remove_runas_groups": _(
+                    "Remove RunAs groups from sudo rule '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from sudo rule '${primary_key}'"
+                ),
                 "runas": _("As Whom"),
                 "specified_commands": _("Specified Commands and Groups"),
                 "specified_groups": _("Specified Groups"),
@@ -1037,6 +1168,9 @@ class i18n_messages(Command):
             },
             "topologylocation": {
                 "remove": _("Remove IPA locations"),
+                "remove_servers": _(
+                    "Remove IPA servers from IPA location '${primary_key}'"
+                ),
             },
             "topologysegment": {
                 "remove": _("Remove topology segments"),
@@ -1112,6 +1246,25 @@ class i18n_messages(Command):
                 "members": _("Members"),
                 "my_vaults_title": _("My User Vaults"),
                 "owners": _("Owners"),
+                "remove": _("Remove vaults"),
+                "remove_member_groups": _(
+                    "Remove user groups from members of vault '${primary_key}'"
+                ),
+                "remove_member_services": _(
+                    "Remove services from members of vault '${primary_key}'"
+                ),
+                "remove_member_users": _(
+                    "Remove users from members of vault '${primary_key}'"
+                ),
+                "remove_owner_groups": _(
+                    "Remove user groups from owners of vault '${primary_key}'"
+                ),
+                "remove_owner_services": _(
+                    "Remove services from owners of vault '${primary_key}'"
+                ),
+                "remove_owner_users": _(
+                    "Remove users from owners of vault '${primary_key}'"
+                ),
                 "service": _("Service"),
                 "service_vaults_title": _("Service Vaults"),
                 "shared": _("Shared"),
