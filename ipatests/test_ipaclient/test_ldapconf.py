@@ -46,7 +46,7 @@ BASEDN = 'cn=ipa,cn=example'
 SERVER = 'ldap.ipa.example'
 
 
-class DummyFStore(object):
+class DummyFStore:
     def backup_file(self, fname):
         pass
 

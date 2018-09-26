@@ -36,7 +36,7 @@ from ipapython import ipautil
 logger = logging.getLogger(__name__)
 
 
-class BaseTaskNamespace(object):
+class BaseTaskNamespace:
 
     def restore_context(self, filepath, force=False):
         """Restore SELinux security context on the given filepath.

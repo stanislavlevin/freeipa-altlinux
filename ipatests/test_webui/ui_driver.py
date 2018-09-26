@@ -137,7 +137,7 @@ def dismiss_unexpected_alert(fn):
     return wrapped
 
 
-class UI_driver(object):
+class UI_driver:
     """
     Base class for all UI integration tests
     """

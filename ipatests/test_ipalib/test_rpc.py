@@ -262,7 +262,7 @@ class test_xmlclient(PluginTester):
 
 @pytest.mark.skip_ipaclient_unittest
 @pytest.mark.needs_ipaapi
-class test_xml_introspection(object):
+class test_xml_introspection:
     @pytest.fixture(autouse=True, scope="class")
     def xml_introsp_setup(self, request):
         try:

@@ -279,7 +279,7 @@ def _set_services_state(fqdn, dest_state):
             )
 
 
-class Service(object):
+class Service:
     def __init__(self, service_name, service_desc=None, sstore=None,
                  fstore=None, api=api, realm_name=None,
                  service_user=None, service_prefix=None,

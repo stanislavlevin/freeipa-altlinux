@@ -219,7 +219,7 @@ master_data = {
 }
 
 
-class MockMasterTopology(object):
+class MockMasterTopology:
     """
     object that will set up and tear down entries in LDAP backend to mimic
     a presence of real IPA masters with services running on them.
@@ -588,7 +588,7 @@ def dns_server(request):
     return request.param
 
 
-class TestServerRoleStatusRetrieval(object):
+class TestServerRoleStatusRetrieval:
     def retrieve_role(self, master, role, mock_api, mock_masters):
         fqdn = mock_masters.get_fqdn(master)
         return mock_api.Backend.serverroles.server_role_retrieve(
@@ -684,7 +684,7 @@ class TestServerRoleStatusRetrieval(object):
                                    'ca-dns-dnssec-keymaster-pkinit-server'))
 
 
-class TestServerAttributes(object):
+class TestServerAttributes:
     def config_retrieve(self, assoc_role_name, mock_api):
         return mock_api.Backend.serverroles.config_retrieve(
             assoc_role_name)

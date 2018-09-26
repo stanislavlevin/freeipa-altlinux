@@ -60,7 +60,7 @@ SYSRESTORE_SEP = ","
 SYSRESTORE_STATEFILE = "sysrestore.state"
 
 
-class FileStore(object):
+class FileStore:
     """Class for handling backup and restore of files"""
 
     def __init__(self, path=SYSRESTORE_PATH, index_file=SYSRESTORE_INDEXFILE):
@@ -344,7 +344,7 @@ class FileStore(object):
         return True
 
 
-class StateFile(object):
+class StateFile:
     """A metadata file for recording system state which can
     be backed up and later restored.
     StateFile gets reloaded every time to prevent loss of information

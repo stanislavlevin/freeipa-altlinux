@@ -704,7 +704,7 @@ class help(frontend.Local):
     """
     Display help for a command or topic.
     """
-    class Writer(object):
+    class Writer:
         """
         Writer abstraction
         """
@@ -1084,7 +1084,7 @@ cli_application_commands = (
 )
 
 
-class Collector(object):
+class Collector:
     def __init__(self):
         object.__setattr__(self, '_Collector__options', {})
 

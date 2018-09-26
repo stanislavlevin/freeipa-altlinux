@@ -10,7 +10,7 @@ from ipapython.ntpmethods import detect_time_server
 logger = getLogger(__name__)
 
 
-class BaseNTPClient(object):
+class BaseNTPClient:
     def __init__(self, fstore=None, ntp_confile=None, ntp_bin=None,
                  statestore=None, cli_domain=None, timeout=None,
                  flag=None, ntp_servers=None, ntp_pool=None,

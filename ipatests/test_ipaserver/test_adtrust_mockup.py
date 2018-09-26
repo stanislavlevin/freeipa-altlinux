@@ -12,7 +12,7 @@ except ImportError:
 from io import StringIO
 
 
-class ApiMockup(object):
+class ApiMockup:
     Backend = namedtuple('Backend', 'ldap2')
     Calls = namedtuple('Callbacks', 'retrieve_netbios_name')
     env = namedtuple('Environment', 'domain')

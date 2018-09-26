@@ -42,7 +42,7 @@ SIZE_1024 = 'abcdefgh' * 128
     os.environ.get('RPM_BUILD_DIR') is not None,
     reason='these tests depend on the host Linux key retention service',
 )
-class test_keyring(object):
+class test_keyring:
     """
     Test the kernel keyring interface
     """

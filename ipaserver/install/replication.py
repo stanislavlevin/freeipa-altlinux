@@ -231,7 +231,7 @@ def get_ds_version(conn):
     return vendor_version
 
 
-class ReplicationManager(object):
+class ReplicationManager:
     """Manage replication agreements
 
     between DS servers, and sync  agreements with Windows servers

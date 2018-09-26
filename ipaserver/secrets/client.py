@@ -35,7 +35,7 @@ def ccache_env(ccache):
             os.environ['KRB5CCNAME'] = orig_ccache
 
 
-class CustodiaClient(object):
+class CustodiaClient():
     def __init__(self, client_service, keyfile, keytab, server, realm,
                  ldap_uri=None, auth_type=None):
         if client_service.endswith(realm) or "@" not in client_service:

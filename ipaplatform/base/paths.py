@@ -25,7 +25,7 @@ from __future__ import print_function
 import os
 
 
-class BasePathNamespace(object):
+class BasePathNamespace:
     BIN_HOSTNAMECTL = "/bin/hostnamectl"
     ECHO = "/bin/echo"
     GZIP = "/bin/gzip"

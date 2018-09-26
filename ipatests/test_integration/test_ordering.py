@@ -30,7 +30,7 @@ from pytest_sourceorder import ordered
 
 
 @ordered
-class TestBase(object):
+class TestBase:
     value = None
     @pytest.fixture(autouse=True, scope="class")
     def testbase_setup(self, request):
