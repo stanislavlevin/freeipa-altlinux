@@ -19,15 +19,15 @@ import six
 from ipaclient.install.client import check_ldap_conf
 from ipaclient.install.ipachangeconf import IPAChangeConf
 from ipalib.install import certmonger, sysrestore
-from ipapython import ipautil, version
+from ipapython import ipautil, version, ntpmethods
+from ipapython.ntpmethods import TIME_SERVICE
 from ipapython.ipautil import (
     ipa_generate_password, run, user_input)
 from ipapython.admintool import ScriptError
 from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
-from ipalib import api, errors, x509, ntpmethods, createntp
-from ipalib.ntpmethods import TIME_SERVICE
+from ipalib import api, errors, x509, createntp
 from ipalib.constants import DOMAIN_LEVEL_0
 from ipalib.util import (
     validate_domain_name,

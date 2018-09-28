@@ -2,8 +2,8 @@
 # Copyright (C) 2018  FreeIPA Contributors see COPYING for license
 #
 from ipaplatform.paths import paths
-from ipalib.basentpconf import BaseNTPServer
-from ipalib.ntpmethods import ntp_service
+from ipaserver.install.servntpconf import BaseNTPServer
+from ipapython.ntpmethods import ntp_service
 
 
 class ChronyServer(BaseNTPServer):

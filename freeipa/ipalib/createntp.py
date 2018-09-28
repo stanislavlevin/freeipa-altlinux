@@ -2,7 +2,7 @@
 # Copyright (C) 2018  FreeIPA Contributors see COPYING for license
 #
 from importlib import import_module
-from ipalib.ntpmethods import TIME_SERVICE
+from ipapython.ntpmethods import TIME_SERVICE
 
 
 def detect_ntp_daemon():
@@ -11,12 +11,21 @@ def detect_ntp_daemon():
         'ntpd': ['ntpdlib', 'NTPD'],
         'openntpd': ['ontpdlib', 'OpenNTPD'],
     }
-    sys_ntp_lib = import_module('ipalib.{}'.format(ntp_libs[TIME_SERVICE][0]))
 
-    tsinst = getattr(sys_ntp_lib, ntp_libs[TIME_SERVICE][1] + 'Server')
-    tsconf = getattr(sys_ntp_lib, ntp_libs[TIME_SERVICE][1] + 'Client')
+    clintplib = import_module("ipaclient.install.clintplib")
 
-    return tsinst, tsconf
+    try:
+        servntplib = import_module("ipaserver.install.servntplib")
+    except Exception:
+        servntplib = None
+
+    servts = None
+    if servntplib:
+        servts = getattr(servntplib, ntp_libs[TIME_SERVICE][1] + 'Server')
+
+    clits = getattr(clintplib, ntp_libs[TIME_SERVICE][1] + 'Client')
+
+    return servts, clits
 
 
 NTPSERVER, NTPCLIENT = detect_ntp_daemon()
@@ -61,7 +70,7 @@ def uninstall_server(fstore, sstore):
 def uninstall_client(fstore, sstore):
     cl = NTPCLIENT()
 
-    cl.sstore = sstore
+    cl.statestore = sstore
     cl.fstore = fstore
 
     cl.uninstall()

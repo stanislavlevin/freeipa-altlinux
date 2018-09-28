@@ -2,7 +2,7 @@
 # Copyright (C) 2018  FreeIPA Contributors see COPYING for license
 #
 from ipaplatform.paths import paths
-from ipalib.basentpconf import BaseNTPClient
+from ipaclient.install.clientntpconf import BaseNTPClient
 
 
 class ChronyClient(BaseNTPClient):

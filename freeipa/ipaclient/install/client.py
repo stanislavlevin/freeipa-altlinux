@@ -34,8 +34,7 @@ from six.moves.configparser import RawConfigParser
 from six.moves.urllib.parse import urlparse, urlunparse
 # pylint: enable=import-error
 
-from ipalib import api, errors, x509, ntpmethods, createntp
-from ipalib.ntpmethods import TIME_SERVICE
+from ipalib import api, errors, x509, createntp
 from ipalib.install import certmonger, certstore, service, sysrestore
 from ipalib.install import hostname as hostname_
 from ipalib.install.kinit import kinit_keytab, kinit_password
@@ -49,7 +48,8 @@ from ipalib.util import (
 from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
-from ipapython import certdb, kernel_keyring, ipaldap, ipautil
+from ipapython import certdb, kernel_keyring, ipaldap, ipautil, ntpmethods
+from ipapython.ntpmethods import TIME_SERVICE
 from ipapython.admintool import ScriptError
 from ipapython.dn import DN
 from ipapython.install import typing

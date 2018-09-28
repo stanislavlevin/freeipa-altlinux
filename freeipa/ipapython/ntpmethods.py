@@ -8,14 +8,8 @@ import re
 import sys
 
 from ipaclient.install import ipadiscovery
-from ipaserver.install.service import Service
 from ipaplatform import services
 from ipapython import ipautil
-
-
-def __service_control():
-    service = Service(ntp_service['service'])
-    return service
 
 
 def __service_command():
@@ -196,11 +190,9 @@ def set_config(path, pool=None, servers=None, opts=None):
 
 
 def uninstall(statestore, fstore, ntp_confile, logger):
-    if service_control.is_configured():
-        service_control.print_msg("Unconfiguring %s"
-                                  % service_control.service_name)
-
-    restore_state(statestore, fstore, ntp_confile, logger)
+    if statestore:
+        if statestore.has_state(ntp_service['service']):
+            restore_state(statestore, fstore, ntp_confile, logger)
 
 
 class NTPConfigurationError(Exception):
@@ -215,4 +207,3 @@ class NTPConflictingService(NTPConfigurationError):
 
 TIME_SERVICE = __detect_time_server()
 ntp_service = __service_command()
-service_control = __service_control()

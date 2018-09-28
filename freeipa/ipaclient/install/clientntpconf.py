@@ -4,8 +4,8 @@ from logging import getLogger
 from ipaplatform.tasks import tasks
 from ipaplatform.paths import paths
 from ipapython import ipautil
-from ipalib import ntpmethods
-from ipalib.ntpmethods import TIME_SERVICE
+from ipapython import ntpmethods
+from ipapython.ntpmethods import TIME_SERVICE
 
 logger = getLogger(__name__)
 
@@ -64,7 +64,7 @@ class BaseNTPClient(object):
                 return False
 
         config_content = ntpmethods.set_config(self.ntp_confile,
-                                               servers=self.ntp_servers,
+                                               servers=ntp_servers,
                                                pool=self.ntp_pool)
 
         logger.debug("Writing configuration to %s", self.ntp_confile)
@@ -75,7 +75,7 @@ class BaseNTPClient(object):
         return True
 
     def sync_time(self):
-        configured = self.__configure_ntp()
+        configured = False
 
         try:
             self.__configure_ntp()

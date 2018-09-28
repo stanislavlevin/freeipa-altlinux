@@ -26,15 +26,15 @@ from ipaclient.install.client import check_ldap_conf
 from ipaclient.install.ipachangeconf import IPAChangeConf
 from ipalib.install import certstore, sysrestore
 from ipalib.install.kinit import kinit_keytab
-from ipapython import ipaldap, ipautil, version
+from ipapython import ipaldap, ipautil, version, ntpmethods
+from ipapython.ntpmethods import TIME_SERVICE
 from ipapython.certdb import IPA_CA_TRUST_FLAGS, EXTERNAL_CA_TRUST_FLAGS
 from ipapython.dn import DN
 from ipapython.admintool import ScriptError
 from ipaplatform import services
 from ipaplatform.tasks import tasks
 from ipaplatform.paths import paths
-from ipalib import api, constants, create_api, errors, rpc, x509, ntpmethods
-from ipalib.ntpmethods import TIME_SERVICE
+from ipalib import api, constants, create_api, errors, rpc, x509
 from ipalib.config import Env
 from ipalib.util import no_matching_interface_for_ip_address_warning
 from ipaclient.install.client import configure_krb5_conf, purge_host_keytab

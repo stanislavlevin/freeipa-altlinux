@@ -9,8 +9,8 @@ from ipaplatform.paths import paths
 from ipapython import ipautil
 from ipalib.install import sysrestore
 from ipaserver.install import service
-from ipalib import ntpmethods
-from ipalib.ntpmethods import TIME_SERVICE
+from ipapython import ntpmethods
+from ipapython.ntpmethods import TIME_SERVICE
 
 logger = getLogger(__name__)
 
@@ -42,10 +42,20 @@ class BaseNTPServer(service.Service):
             self.fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
     def __configure_ntp(self):
+
         logger.debug("Backing up %s", self.ntp_confile)
-        self.fstore.backup_file(self.ntp_confile)
+        ntpmethods.backup_config(self.ntp_confile, self.fstore)
 
         logger.debug("Configuring %s", TIME_SERVICE)
+
+        enabled = ntpmethods.ntp_service['api'].is_enabled()
+        running = ntpmethods.ntp_service['api'].is_running()
+
+        if self.sstore:
+            self.sstore.backup_state(ntpmethods.ntp_service['service'],
+                                     'enabled', enabled)
+            self.sstore.backup_state(ntpmethods.ntp_service['service'],
+                                     'running', running)
 
         if not self.ntp_servers and not self.ntp_pool:
             self.ntp_pool = "pool.ntp.org"
