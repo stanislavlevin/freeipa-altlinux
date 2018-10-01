@@ -37,7 +37,7 @@
 
 Name: freeipa
 Version: 4.7.0
-Release: alt1
+Release: alt2
 
 Summary: The Identity, Policy and Audit system
 License: GPLv3+
@@ -1288,6 +1288,10 @@ fi
 %endif
 
 %changelog
+* Mon Oct 01 2018 Stanislav Levin <slev@altlinux.org> 4.7.0-alt2
+- Fixed client's requirements to server modules (by mrdrew@).
+- Fixed JS errors on web pages(ssbrowser and unauthorized) at production mode.
+
 * Fri Sep 07 2018 Stanislav Levin <slev@altlinux.org> 4.7.0-alt1
 - 4.6.3 -> 4.7.0.
 
