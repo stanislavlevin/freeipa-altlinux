@@ -842,8 +842,7 @@ class automember_find_orphans(LDAPSearch):
     )
 
     def execute(self, *keys, **options):
-        results = super(automember_find_orphans, self).execute(*keys,
-                                                               **options)
+        results = super().execute(*keys, **options)
 
         remove_option = options.get('remove')
         pkey_only = options.get('pkey_only', False)
