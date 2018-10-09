@@ -1,15 +1,6 @@
 # build defines
 %define _unpackaged_files_terminate_build 1
-%def_without python2      # define to build python2 packages
-%def_with default_python3 # define default python3 for scripts/tests
 %def_with lint
-
-%if_with default_python3
-    %define python python3
-%else
-    %def_with python2
-    %define python python
-%endif
 
 %if_with lint
     %define linter_options --enable-pylint --with-jslint
@@ -76,7 +67,6 @@ BuildRequires: python3-module-lesscpy
 #
 # Build dependencies for makeapi/makeaci
 #
-%if_with default_python3
 BuildRequires: python3-module-cffi
 BuildRequires: python3-module-dns
 BuildRequires: python3-module-ldap >= %python_ldap_version
@@ -85,16 +75,6 @@ BuildRequires: python3-module-pyasn1
 BuildRequires: python3-module-pyasn1-modules
 BuildRequires: python3-module-six
 BuildRequires: python3-module-sss_nss_idmap
-%else
-BuildRequires: python-module-cffi
-BuildRequires: python-module-dns
-BuildRequires: python-module-ldap >= %python_ldap_version
-BuildRequires: python-module-netaddr
-BuildRequires: python-module-pyasn1
-BuildRequires: python-module-pyasn1-modules
-BuildRequires: python-module-six
-BuildRequires: python-module-sss_nss_idmap
-%endif
 
 #
 # Build dependencies for lint and fastcheck
@@ -135,35 +115,6 @@ BuildRequires: python3-module-sssdconfig >= %sssd_version
 BuildRequires: python3-module-systemd
 BuildRequires: python3-module-yubico
 
-%if_with python2
-BuildRequires: pylint
-BuildRequires: python-module-augeas
-BuildRequires: python-module-cryptography
-BuildRequires: python-module-custodia
-BuildRequires: python-module-dateutil
-BuildRequires: python-module-dbus
-BuildRequires: python-module-dns
-BuildRequires: python-module-enum34
-BuildRequires: python-module-gssapi
-BuildRequires: python-module-ipa_hbac
-BuildRequires: python-module-jinja2
-BuildRequires: python-module-lxml
-BuildRequires: python-module-netifaces
-BuildRequires: python-module-paste
-BuildRequires: python-module-pki-base >= %pki_version
-BuildRequires: python-module-polib
-BuildRequires: python-module-pycodestyle
-BuildRequires: python-module-pytest-multihost
-BuildRequires: python-module-pytest_sourceorder
-BuildRequires: python-module-qrcode
-BuildRequires: python-module-samba
-BuildRequires: python-module-sss
-BuildRequires: python-module-sss-murmur
-BuildRequires: python-module-sssdconfig >= %sssd_version
-BuildRequires: python-module-systemd
-BuildRequires: python-module-yubico
-BuildRequires: python-module-jwcrypto
-%endif
 %endif
 
 #
@@ -208,19 +159,11 @@ Requires: fonts-ttf-open-sans
 Requires: apache2-mod_auth_gssapi
 Requires: apache2-mod_ssl
 Requires: apache2-mod_lookup_identity
-%if_with default_python3
 Requires: apache2-mod_wsgi-py3
 Requires: python3-module-ipaserver = %EVR
 Requires: python3-module-ldap >= %python_ldap_version
 Requires: python3-module-gssapi
 Requires: python3-module-systemd
-%else
-Requires: apache2-mod_wsgi
-Requires: python-module-ipaserver = %EVR
-Requires: python-module-ldap >= %python_ldap_version
-Requires: python-module-gssapi
-Requires: python-module-systemd
-%endif
 
 # upgrade path from monolithic -server to -server + -server-dns
 Obsoletes: %name-server <= 4.2.0
@@ -235,34 +178,6 @@ hosts, services), Authentication (SSO, 2FA), and Authorization
 features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If you are installing an IPA server, you need to install this package.
-
-###############################################################################
-
-%if_with python2
-%package -n python-module-ipaserver
-Summary: Python libraries used by IPA server
-Group: System/Libraries
-BuildArch: noarch
-Requires: %name-server-common = %EVR
-Requires: python-module-ipaclient = %EVR
-Requires: python-module-ipaclient-ntp = %EVR
-Requires: python-module-augeas
-Requires: python-module-gssapi
-Requires: python-module-kdcproxy
-Requires: python-module-ldap >= %python_ldap_version
-Requires: python-module-pki-base >= %pki_version
-Requires: python-module-sssdconfig >= %sssd_version
-Requires: librpm
-
-%description -n python-module-ipaserver
-IPA is an integrated solution to provide centrally managed Identity (users,
-hosts, services), Authentication (SSO, 2FA), and Authorization
-(host access control, SELinux user roles, services). The solution provides
-features for further integration with Linux based clients (SUDO, automount)
-and integration with Active Directory based infrastructures (Trusts).
-If you are installing an IPA server, you need to install this package.
-
-%endif
 
 ###############################################################################
 
@@ -299,11 +214,8 @@ BuildArch: noarch
 Requires: %name-client-common = %EVR
 Requires: apache2-base
 Requires: custodia
-# wsgi scripts requires either python2 or python3 modules
-%if_with default_python3
 %add_python3_path %_datadir/ipa/
 %add_python3_compile_exclude %_datadir/ipa/
-%endif
 
 %description server-common
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -343,15 +255,9 @@ Requires: %name-common = %EVR
 Requires: samba >= %samba_version
 Requires: samba-winbind
 
-%if_with default_python3
 Requires: python3-module-samba
 Requires: python3-module-sss_nss_idmap
 Requires: python3-module-sss
-%else
-Requires: python-module-samba
-Requires: python-module-sss_nss_idmap
-Requires: python-module-sss
-%endif
 
 %description server-trust-ad
 Cross-realm trusts with Active Directory in IPA require working Samba 4
@@ -380,17 +286,10 @@ Requires: autofs
 Requires: libnfsidmap
 Requires: nfs-utils
 Requires: policycoreutils
-%if_with default_python3
 Requires: python3-module-gssapi
 Requires: python3-module-ipaclient = %EVR
 Requires: python3-module-ldap >= %python_ldap_version
 Requires: python3-module-sssdconfig >= %sssd_version
-%else
-Requires: python-module-gssapi
-Requires: python-module-ipaclient = %EVR
-Requires: python-module-ldap >= %python_ldap_version
-Requires: python-module-sssdconfig >= %sssd_version
-%endif
 
 Obsoletes: %name-admintool < 4.4.1
 Provides: %name-admintools = %EVR
@@ -404,28 +303,6 @@ and integration with Active Directory based infrastructures (Trusts).
 If your network uses IPA for authentication, this package should be
 installed on every client machine.
 This package provides command-line tools for IPA administrators.
-
-###############################################################################
-
-%if_with python2
-%package -n python-module-ipaclient
-Summary: Python libraries used by IPA client
-Group: System/Libraries
-BuildArch: noarch
-Requires: %name-client-common = %EVR
-Requires: python-module-freeipa = %EVR
-Requires: python-module-dns
-
-%description -n python-module-ipaclient
-IPA is an integrated solution to provide centrally managed Identity (users,
-hosts, services), Authentication (SSO, 2FA), and Authorization
-(host access control, SELinux user roles, services). The solution provides
-features for further integration with Linux based clients (SUDO, automount)
-and integration with Active Directory based infrastructures (Trusts).
-If your network uses IPA for authentication, this package should be
-installed on every client machine.
-
-%endif
 
 ###############################################################################
 
@@ -466,37 +343,6 @@ installed on every client machine.
 
 ###############################################################################
 
-%if_with python2
-%package -n python-module-freeipa
-Summary: Python libraries used by IPA
-Group: System/Libraries
-BuildArch: noarch
-Requires: %name-common = %EVR
-Requires: gnupg2
-Requires: libkeyutils
-Requires: python-module-cffi
-Requires: python-module-ipa_hbac
-Requires: python-module-jwcrypto
-Requires: python-module-ldap >= %python_ldap_version
-Requires: python-module-pyusb
-Requires: python-module-qrcode
-Requires: python-module-requests
-Requires: python-module-sss-murmur
-Requires: python-module-yubico
-%py_provides ipaplatform
-
-%description -n python-module-freeipa
-IPA is an integrated solution to provide centrally managed Identity (users,
-hosts, services), Authentication (SSO, 2FA), and Authorization
-(host access control, SELinux user roles, services). The solution provides
-features for further integration with Linux based clients (SUDO, automount)
-and integration with Active Directory based infrastructures (Trusts).
-If you are using IPA, you need to install this package.
-
-%endif
-
-###############################################################################
-
 %package -n python3-module-freeipa
 Summary: Python3 libraries used by IPA
 Group: System/Libraries
@@ -529,19 +375,6 @@ If you are using IPA with Python 3, you need to install this package.
 
 ###############################################################################
 
-%if_with python2
-%package -n python-module-ipaserver-ntp
-Summary: Python IPA libraries for ntp services in IPA server
-Group: Development/Python
-BuildArch: noarch
-
-%description -n python-module-ipaserver-ntp
-IPA python libraries for synchronization IPA server with time&data servers.
-
-%endif
-
-###############################################################################
-
 %package -n python3-module-ipaserver-ntp
 Summary: Python3 IPA libraries for ntp services in IPA server
 Group: Development/Python3
@@ -549,19 +382,6 @@ BuildArch: noarch
 
 %description -n python3-module-ipaserver-ntp
 IPA python3 libraries for synchronization IPA server with time&data servers.
-
-###############################################################################
-
-%if_with python2
-%package -n python-module-ipaclient-ntp
-Summary: Python IPA libraries for ntp services in IPA client
-Group: Development/Python
-BuildArch: noarch
-
-%description -n python-module-ipaclient-ntp
-IPA python libraries for synchronization IPA client with time&data servers.
-
-%endif
 
 ###############################################################################
 
@@ -587,35 +407,6 @@ hosts, services), Authentication (SSO, 2FA), and Authorization
 features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If you are using IPA, you need to install this package.
-
-###############################################################################
-
-%if_with python2
-%package -n python-module-ipatests
-Summary: IPA tests and test tools
-Group: System/Base
-BuildArch: noarch
-Obsoletes: %name-tests <= 4.4.4
-Provides: %name-tests = %EVR
-Requires: python-module-ipaclient = %EVR
-Requires: python-module-ipaserver = %EVR
-Requires: tar
-Requires: xz
-Requires: python-module-coverage
-Requires: python-module-mock
-Requires: python-module-paste
-Requires: python-module-sssdconfig >= %sssd_version
-Requires: iptables
-
-%description -n python-module-ipatests
-IPA is an integrated solution to provide centrally managed Identity (users,
-hosts, services), Authentication (SSO, 2FA), and Authorization
-(host access control, SELinux user roles, services). The solution provides
-features for further integration with Linux based clients (SUDO, automount)
-and integration with Active Directory based infrastructures (Trusts).
-This package contains tests that verify IPA functionality.
-
-%endif
 
 ###############################################################################
 
@@ -648,49 +439,9 @@ This package contains tests that verify IPA functionality under Python 3.
 # Port 8080 is used by alterator-ahttpd-server
 grep -rl 8080 | xargs sed -i 's/\(\W\|^\)8080\(\W\|$\)/\18090\2/g'
 
-# cleanup before non first installation
-rm -rf %_builddir/{freeipa-python2,freeipa-python3}
-
-%if_with default_python3
-    %if_with python2
-        cp -a . ../freeipa-python2
-    %endif
-    mv %_builddir/{freeipa-%version,freeipa-python3}
-    ln -s %_builddir/{freeipa-python3,freeipa-%version}
-%else
-    cp -a . ../freeipa-python3
-    mv %_builddir/{freeipa-%version,freeipa-python2}
-    ln -s %_builddir/{freeipa-python2,freeipa-%version}
-%endif
-
-
 %build
 
-%if_with python2
-export PYTHON=%_bindir/python
-pushd ../freeipa-python2
-# Workaround: make sure all shebangs are pointing to Python 2
-# This should be solved properly using setuptools
-# and this hack should be removed.
-find \
-	! -name '*.pyc' -a \
-	! -name '*.pyo' -a \
-	-type f -exec grep -qsm1 '^#!.*\bpython' {} \; \
-	-exec sed -i -e '1 s|^#!.*\bpython[^ ]*|#!%_bindir/python|' {} \;
-
-%autoreconf
-%configure --with-vendor-suffix=-%release \
-           --enable-server \
-           --with-ipatests \
-	   --with-ipaplatform=altlinux \
-	   IPA_VERSION_IS_GIT_SNAPSHOT=no \
-           %linter_options
-popd
-%endif
-
 export PYTHON=%_bindir/python3
-
-pushd ../freeipa-python3
 %autoreconf
 %configure --with-vendor-suffix=-%release \
            --enable-server \
@@ -698,58 +449,12 @@ pushd ../freeipa-python3
 	   --with-ipaplatform=altlinux \
 	   IPA_VERSION_IS_GIT_SNAPSHOT=no \
            %linter_options
-popd
 %make_build
 
-
 %install
-# Please put as much logic as possible into make install. It allows:
-# - easier porting to other distributions
-# - rapid devel & install cycle using make install
-#   (instead of full RPM build and installation each time)
-#
-# All files and directories created by spec install should be marked as ghost.
-# (These are typically configuration files created by IPA installer.)
-# All other artifacts should be created by make install.
-#
-# Exception to this rule are test programs which where want to install
-# Python2/3 versions at the same time so we need to rename them. Yuck.
-
-# Python3 packages and commands
-pushd ../freeipa-python3
 %make python_install DESTDIR=%buildroot INSTALL="install -p"
-popd
 
-mv %buildroot%_bindir/{ipa-run-tests,ipa-run-tests-3}
-mv %buildroot%_bindir/{ipa-test-config,ipa-test-config-3}
-mv %buildroot%_bindir/{ipa-test-task,ipa-test-task-3}
-
-# Python2 packages and commands
-%if_with python2
-pushd ../freeipa-python2
-%make python_install DESTDIR=%buildroot INSTALL="install -p"
-popd
-
-mv %buildroot%_bindir/{ipa-run-tests,ipa-run-tests-2}
-mv %buildroot%_bindir/{ipa-test-config,ipa-test-config-2}
-mv %buildroot%_bindir/{ipa-test-task,ipa-test-task-2}
-%endif
-
-# default installation
-# This installs all Python packages twice and overrides the ipa-test
-# commands. We'll fix the command links later with ln --force.
 %makeinstall_std
-
-# Decide which Python (2 or 3) should be used as default for tests
-%if_with default_python3
-ln -fs %_bindir/ipa-run-tests-3 %buildroot%_bindir/ipa-run-tests
-ln -fs %_bindir/ipa-test-config-3 %buildroot%_bindir/ipa-test-config
-ln -fs %_bindir/ipa-test-task-3 %buildroot%_bindir/ipa-test-task
-%else
-ln -fs %_bindir/ipa-run-tests-2 %buildroot%_bindir/ipa-run-tests
-ln -fs %_bindir/ipa-test-config-2 %buildroot%_bindir/ipa-test-config
-ln -fs %_bindir/ipa-test-task-2 %buildroot%_bindir/ipa-test-task
-%endif
 
 # remove files which are useful only for make uninstall
 find %buildroot -wholename '*/site-packages/*/install_files.txt' -exec rm {} \;
@@ -857,7 +562,7 @@ if [ $1 = 0 ]; then
 fi
 
 %triggerpostun server-common -- freeipa-server-common <= 4.6.1
-if %python -c "import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);" > /dev/null 2>&1; then
+if python3 -c "import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);" > /dev/null 2>&1; then
         a2dismod ipa-nss >/dev/null 2>&1 ||:
 
         if systemctl is-enabled httpd2.service >/dev/null 2>&1; then
@@ -931,7 +636,7 @@ if [ $1 -gt 1 ] ; then
     fi
 
     if [ $restore -ge 2 ]; then
-        %python -c 'from ipaclient.install.client import update_ipa_nssdb; update_ipa_nssdb()' >/var/log/ipaupgrade.log 2>&1
+        python3 -c 'from ipaclient.install.client import update_ipa_nssdb; update_ipa_nssdb()' >/var/log/ipaupgrade.log 2>&1
     fi
 fi
 
@@ -1053,29 +758,12 @@ fi
 
 %_rpmlibdir/freeipa-server.filetrigger
 
-%if_with python2
-%files -n python-module-ipaserver
-%python_sitelibdir_noarch/ipaserver/
-%python_sitelibdir_noarch/ipaserver-*.egg-info/
-
-%exclude %python_sitelibdir_noarch/ipaserver/install/servntpconf*
-%exclude %python_sitelibdir_noarch/ipaserver/install/servntplib*
-
-%endif
-
 %files -n python3-module-ipaserver
 %python3_sitelibdir_noarch/ipaserver/
 %python3_sitelibdir_noarch/ipaserver-*.egg-info/
 
 %exclude %python3_sitelibdir_noarch/ipaserver/install/servntpconf*
 %exclude %python3_sitelibdir_noarch/ipaserver/install/servntplib*
-
-%if_with python2
-%files -n python-module-ipaserver-ntp
-%python_sitelibdir_noarch/ipaserver/install/servntpconf*
-%python_sitelibdir_noarch/ipaserver/install/servntplib*
-
-%endif
 
 %files -n python3-module-ipaserver-ntp
 %python3_sitelibdir_noarch/ipaserver/install/servntpconf*
@@ -1177,29 +865,12 @@ fi
 %_mandir/man1/ipa-certupdate.1*
 %_mandir/man1/ipa-join.1*
 
-%if_with python2
-%files -n python-module-ipaclient
-%python_sitelibdir_noarch/ipaclient/
-%python_sitelibdir_noarch/ipaclient-*.egg-info/
-
-%exclude %python_sitelibdir_noarch/ipaclient/install/clientntpconf*
-%exclude %python_sitelibdir_noarch/ipaclient/install/clintplib*
-
-%endif
-
 %files -n python3-module-ipaclient
 %python3_sitelibdir_noarch/ipaclient/
 %python3_sitelibdir_noarch/ipaclient-*.egg-info/
 
 %exclude %python3_sitelibdir_noarch/ipaclient/install/clientntpconf*
 %exclude %python3_sitelibdir_noarch/ipaclient/install/clintplib*
-
-%if_with python2
-%files -n python-module-ipaclient-ntp
-%python_sitelibdir_noarch/ipaclient/install/clientntpconf*
-%python_sitelibdir_noarch/ipaclient/install/clintplib*
-
-%endif
 
 %files -n python3-module-ipaclient-ntp
 %python3_sitelibdir_noarch/ipaclient/install/clientntpconf*
@@ -1227,18 +898,6 @@ fi
 %dir %_datadir/ipa/client
 %_datadir/ipa/client/*.template
 
-%if_with python2
-%files -n python-module-freeipa
-%python_sitelibdir_noarch/ipapython/
-%python_sitelibdir_noarch/ipalib/
-%python_sitelibdir_noarch/ipaplatform/
-%python_sitelibdir_noarch/ipapython-*.egg-info/
-%python_sitelibdir_noarch/ipalib-*.egg-info/
-%python_sitelibdir_noarch/ipaplatform-*.egg-info/
-%python_sitelibdir_noarch/ipaplatform-*-nspkg.pth
-
-%endif
-
 %files common -f ipa.lang
 %doc COPYING README.md Contributors.txt
 %dir %_datadir/ipa
@@ -1252,40 +911,15 @@ fi
 %python3_sitelibdir_noarch/ipaplatform-*.egg-info/
 %python3_sitelibdir_noarch/ipaplatform-*-nspkg.pth
 
-%if_with python2
-%files -n python-module-ipatests
-%python_sitelibdir_noarch/ipatests/
-%python_sitelibdir_noarch/ipatests-*.egg-info
-
-%if_without default_python3
-%_bindir/ipa-run-tests
-%_bindir/ipa-test-config
-%_bindir/ipa-test-task
-%_man1dir/ipa-run-tests.1*
-%_man1dir/ipa-test-config.1*
-%_man1dir/ipa-test-task.1*
-%endif
-
-%_bindir/ipa-run-tests-2
-%_bindir/ipa-test-config-2
-%_bindir/ipa-test-task-2
-%endif
-
 %files -n python3-module-ipatests
 %python3_sitelibdir_noarch/ipatests/
 %python3_sitelibdir_noarch/ipatests-*.egg-info
-%_bindir/ipa-run-tests-3
-%_bindir/ipa-test-config-3
-%_bindir/ipa-test-task-3
-
-%if_with default_python3
 %_bindir/ipa-run-tests
 %_bindir/ipa-test-config
 %_bindir/ipa-test-task
 %_man1dir/ipa-run-tests.1*
 %_man1dir/ipa-test-config.1*
 %_man1dir/ipa-test-task.1*
-%endif
 
 %changelog
 * Mon Oct 01 2018 Stanislav Levin <slev@altlinux.org> 4.7.0-alt2
