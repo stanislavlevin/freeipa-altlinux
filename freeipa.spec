@@ -26,7 +26,6 @@
 
 # versions defines
 %define krb5_version 1.15.2
-# Require 4.7.0 which brings Python 3 bindings
 %define samba_version 4.7.6
 %define slapi_nis_version 0.56.1
 %define python_ldap_version 3.0.0
@@ -34,6 +33,7 @@
 %define pki_version 10.6.6
 %define bind_version 9.11
 %define bind_dyndb_ldap_version 11.0
+%define sssd_version 1.16.3
 
 Name: freeipa
 Version: 4.7.0
@@ -62,7 +62,7 @@ BuildRequires: libsasl2-devel
 BuildRequires: libuuid-devel
 BuildRequires: libsss_idmap-devel
 BuildRequires: libsss_certmap-devel
-BuildRequires: libsss_nss_idmap-devel >= 1.15.3
+BuildRequires: libsss_nss_idmap-devel >= %sssd_version
 BuildRequires: libunistring-devel
 BuildRequires: libsystemd-devel
 
@@ -131,7 +131,7 @@ BuildRequires: python3-module-samba
 BuildRequires: python3-module-sss
 BuildRequires: python3-module-sss_nss_idmap
 BuildRequires: python3-module-sss-murmur
-BuildRequires: python3-module-sssdconfig
+BuildRequires: python3-module-sssdconfig >= %sssd_version
 BuildRequires: python3-module-systemd
 BuildRequires: python3-module-yubico
 
@@ -159,7 +159,7 @@ BuildRequires: python-module-qrcode
 BuildRequires: python-module-samba
 BuildRequires: python-module-sss
 BuildRequires: python-module-sss-murmur
-BuildRequires: python-module-sssdconfig
+BuildRequires: python-module-sssdconfig >= %sssd_version
 BuildRequires: python-module-systemd
 BuildRequires: python-module-yubico
 BuildRequires: python-module-jwcrypto
@@ -186,7 +186,7 @@ Group: System/Base
 Requires: %name-client = %EVR
 Requires: acl
 Requires: gssproxy
-Requires: sssd-dbus
+Requires: sssd-dbus >= %sssd_version
 Requires: selinux-policy
 Requires: pki-ca >= %pki_version
 Requires: pki-kra >= %pki_version
@@ -251,7 +251,7 @@ Requires: python-module-gssapi
 Requires: python-module-kdcproxy
 Requires: python-module-ldap >= %python_ldap_version
 Requires: python-module-pki-base >= %pki_version
-Requires: python-module-sssdconfig
+Requires: python-module-sssdconfig >= %sssd_version
 Requires: librpm
 
 %description -n python-module-ipaserver
@@ -278,7 +278,7 @@ Requires: python3-module-ipaserver-ntp = %EVR
 Requires: python3-module-kdcproxy
 Requires: python3-module-ldap >= %python_ldap_version
 Requires: python3-module-pki-base >= %pki_version
-Requires: python3-module-sssdconfig
+Requires: python3-module-sssdconfig >= %sssd_version
 Requires: python3-module-samba
 Requires: librpm
 
@@ -368,8 +368,8 @@ Requires: libsasl2-plugin-gssapi
 Requires: curl
 Requires: sssd
 Requires: sssd-krb5
-Requires: sssd-ipa
-Requires: sssd-tools
+Requires: sssd-ipa >= %sssd_version
+Requires: sssd-tools >= %sssd_version
 Requires: libsss_sudo
 Requires: libsss_autofs
 Requires: certmonger
@@ -384,12 +384,12 @@ Requires: policycoreutils
 Requires: python3-module-gssapi
 Requires: python3-module-ipaclient = %EVR
 Requires: python3-module-ldap >= %python_ldap_version
-Requires: python3-module-sssdconfig
+Requires: python3-module-sssdconfig >= %sssd_version
 %else
 Requires: python-module-gssapi
 Requires: python-module-ipaclient = %EVR
 Requires: python-module-ldap >= %python_ldap_version
-Requires: python-module-sssdconfig
+Requires: python-module-sssdconfig >= %sssd_version
 %endif
 
 Obsoletes: %name-admintool < 4.4.1
@@ -604,7 +604,7 @@ Requires: xz
 Requires: python-module-coverage
 Requires: python-module-mock
 Requires: python-module-paste
-Requires: python-module-sssdconfig
+Requires: python-module-sssdconfig >= %sssd_version
 Requires: iptables
 
 %description -n python-module-ipatests
@@ -628,7 +628,7 @@ Requires: python3-module-ipaserver = %EVR
 Requires: tar
 Requires: xz
 Requires: python3-module-coverage
-Requires: python3-module-sssdconfig
+Requires: python3-module-sssdconfig >= %sssd_version
 Requires: iptables
 
 %description -n python3-module-ipatests
@@ -978,7 +978,6 @@ fi
 %_sbindir/ipa-server-install
 %_sbindir/ipa-replica-conncheck
 %_sbindir/ipa-replica-install
-%_sbindir/ipa-replica-prepare
 %_sbindir/ipa-replica-manage
 %_sbindir/ipa-csreplica-manage
 %_sbindir/ipa-server-certinstall
@@ -1034,7 +1033,6 @@ fi
 %_man1dir/ipa-replica-install.1*
 %_man1dir/ipa-replica-manage.1*
 %_man1dir/ipa-csreplica-manage.1*
-%_man1dir/ipa-replica-prepare.1*
 %_man1dir/ipa-server-certinstall.1*
 %_man1dir/ipa-server-install.1*
 %_man1dir/ipa-server-upgrade.1*
