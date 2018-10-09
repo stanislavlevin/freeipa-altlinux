@@ -40,7 +40,6 @@ class BasePathNamespace(object):
     ETC_HOSTNAME = "/etc/hostname"
     HOSTS = "/etc/hosts"
     ETC_HTTPD_DIR = "/etc/httpd"
-    FONTS_AWESOME_DIR = None
     HTTPD_ALIAS_DIR = "/etc/httpd/alias"
     GSSAPI_SESSION_KEY = "/etc/httpd/alias/ipasession.key"
     OLD_KRA_AGENT_PEM = "/etc/httpd/alias/kra-agent.pem"
@@ -56,8 +55,6 @@ class BasePathNamespace(object):
     HTTPD_CERT_FILE = "/var/lib/ipa/certs/httpd.crt"
     HTTPD_KEY_FILE = "/var/lib/ipa/private/httpd.key"
     HTTPD_PASSWD_FILE_FMT = "/var/lib/ipa/passwds/{host}-443-RSA"
-    HTTPD_DEFAULT_STARTED_SITE_CONF = None
-    HTTPD_HTTPS_PORT_ENABLE_CONF = None
     # only used on Fedora
     HTTPD_IPA_WSGI_MODULES_CONF = None
     OLD_IPA_KEYTAB = "/etc/httpd/conf/ipa.keytab"
@@ -94,8 +91,6 @@ class BasePathNamespace(object):
     NSS_LDAP_CONF = "/etc/nss_ldap.conf"
     NSSWITCH_CONF = "/etc/nsswitch.conf"
     CHRONY_CONF = "/etc/chrony.conf"
-    ONTPD_CONF = "/etc/ntpd.conf"
-    NTPD_CONF = "/etc/ntp.conf"
     NTP_CONF = "/etc/ntp.conf"
     NTP_STEP_TICKERS = "/etc/ntp/step-tickers"
     ETC_OPENDNSSEC_DIR = "/etc/opendnssec"
@@ -114,7 +109,6 @@ class BasePathNamespace(object):
     PKI_TOMCAT_PASSWORD_CONF = "/etc/pki/pki-tomcat/password.conf"
     ETC_REDHAT_RELEASE = "/etc/redhat-release"
     RESOLV_CONF = "/etc/resolv.conf"
-    RESOLVCONF_CONF = None
     SAMBA_KEYTAB = "/etc/samba/samba.keytab"
     SMB_CONF = "/etc/samba/smb.conf"
     LIMITS_CONF = "/etc/security/limits.conf"
@@ -239,7 +233,6 @@ class BasePathNamespace(object):
     NAMED_PKCS11 = "/usr/sbin/named-pkcs11"
     CHRONYC = "/usr/bin/chronyc"
     CHRONYD = "/usr/sbin/chronyd"
-    NTPD = "/usr/sbin/ntpd"
     PKIDESTROY = "/usr/sbin/pkidestroy"
     PKISPAWN = "/usr/sbin/pkispawn"
     PKI = "/usr/bin/pki"

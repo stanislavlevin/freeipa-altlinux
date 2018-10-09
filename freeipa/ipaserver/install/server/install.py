@@ -19,20 +19,20 @@ import six
 from ipaclient.install.client import check_ldap_conf
 from ipaclient.install.ipachangeconf import IPAChangeConf
 from ipalib.install import certmonger, sysrestore
-from ipapython import ipautil, version, ntpmethods
-from ipapython.ntpmethods import TIME_SERVICE
+from ipapython import ipautil, version
 from ipapython.ipautil import (
     ipa_generate_password, run, user_input)
 from ipapython.admintool import ScriptError
 from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
-from ipalib import api, errors, x509, createntp
+from ipalib import api, errors, x509
 from ipalib.constants import DOMAIN_LEVEL_0
 from ipalib.util import (
     validate_domain_name,
     no_matching_interface_for_ip_address_warning,
 )
+import ipaclient.install.timeconf
 from ipaserver.install import (
     adtrust, bindinstance, ca, dns, dsinstance,
     httpinstance, installutils, kra, krbinstance,
@@ -389,7 +389,7 @@ def install_check(installer):
         print("  * Configure a stand-alone CA (dogtag) for certificate "
               "management")
     if not options.no_ntp:
-        print("  * Configure the NTP client ({})".format(TIME_SERVICE))
+        print("  * Configure the NTP client (chronyd)")
     print("  * Create and configure an instance of Directory Server")
     print("  * Create and configure a Kerberos Key Distribution Center (KDC)")
     print("  * Configure Apache (httpd)")
@@ -404,7 +404,7 @@ def install_check(installer):
     if options.no_ntp:
         print("")
         print("Excluded by options:")
-        print("  * Configure the NTP client ({})".format(TIME_SERVICE))
+        print("  * Configure the NTP client (chronyd)")
     if installer.interactive:
         print("")
         print("To accept the default shown in brackets, press the Enter key.")
@@ -416,13 +416,13 @@ def install_check(installer):
 
     if not options.no_ntp:
         try:
-            ntpmethods.check_timedate_services()
-        except ntpmethods.NTPConflictingService as e:
+            ipaclient.install.timeconf.check_timedate_services()
+        except ipaclient.install.timeconf.NTPConflictingService as e:
             print("WARNING: conflicting time&date synchronization service '{}'"
                   " will be disabled".format(e.conflicting_service))
-            print("in favor of {}".format(TIME_SERVICE))
+            print("in favor of chronyd")
             print("")
-        except ntpmethods.NTPConfigurationError:
+        except ipaclient.install.timeconf.NTPConfigurationError:
             pass
 
     if not options.setup_dns and installer.interactive:
@@ -743,7 +743,6 @@ def install(installer):
     host_name = options.host_name
     ip_addresses = options.ip_addresses
     setup_ca = options.setup_ca
-    options.promote = False  # first master, no promotion
 
     # Installation has started. No IPA sysrestore items are restored in case of
     # failure to enable root cause investigation
@@ -770,13 +769,10 @@ def install(installer):
         # chrony will be handled here in uninstall() method as well by invoking
         # the ipa-server-install --uninstall
         if not options.no_ntp:
-            if not createntp.sync_time_server(
-                    fstore, sstore, options.ntp_servers, options.ntp_pool):
-                print("Warning: IPA was unable to sync time with {}!".format(TIME_SERVICE))
+            if not ipaclient.install.client.sync_time(options, fstore, sstore):
+                print("Warning: IPA was unable to sync time with chrony!")
                 print("         Time synchronization is required for IPA "
                       "to work correctly")
-            else:
-                print("Successfully synchronization time with {}".format(TIME_SERVICE))
 
         if options.dirsrv_cert_files:
             ds = dsinstance.DsInstance(fstore=fstore,
@@ -826,7 +822,7 @@ def install(installer):
                       subject_base=options.subject_base)
 
     custodia = custodiainstance.get_custodia_instance(
-        options, custodiainstance.CustodiaModes.MASTER_PEER)
+        options, custodiainstance.CustodiaModes.FIRST_MASTER)
     custodia.create_instance()
 
     if setup_ca:
@@ -974,10 +970,10 @@ def install(installer):
           "user-add)")
     print("\t   and the web user interface.")
 
-    if not ntpmethods.is_running():
+    if not services.knownservices.chronyd.is_running():
         print("\t3. Kerberos requires time synchronization between clients")
         print("\t   and servers for correct operation. You should consider "
-              "enabling {}.".format(TIME_SERVICE))
+              "enabling chronyd.")
 
     print("")
     if setup_ca:
@@ -1102,7 +1098,7 @@ def uninstall(installer):
         except Exception:
             pass
 
-    createntp.uninstall_server(fstore, sstore)
+    ipaclient.install.client.restore_time_sync(sstore, fstore)
 
     kra.uninstall()
 
@@ -1133,6 +1129,8 @@ def uninstall(installer):
     # ipa-client-install removes /etc/ipa/default.conf
 
     sstore._load()
+
+    ipaclient.install.timeconf.restore_forced_timeservices(sstore)
 
     # Clean up group_exists (unused since IPA 2.2, not being set since 4.1)
     sstore.restore_state("install", "group_exists")

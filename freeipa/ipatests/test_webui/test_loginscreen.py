@@ -26,14 +26,18 @@ class TestLoginScreen(UI_driver):
 
     def setup(self, *args, **kwargs):
         super(TestLoginScreen, self).setup(*args, **kwargs)
+        self.init_app()
         self.add_test_user()
+        self.logout()
 
     def teardown(self, *args, **kwargs):
-        # to log in as administrator
+        # log out first
         if (self.logged_in()):
             self.logout()
         else:
             self.load_url(self.get_base_url())
+        # log in as administrator
+        self.login()
         self.delete_test_user()
         super(TestLoginScreen, self).teardown(*args, **kwargs)
 
@@ -41,7 +45,6 @@ class TestLoginScreen(UI_driver):
         """
         Delete user for tests
         """
-        self.init_app()
         # User is not logged in
         assert self.logged_in()
         self.navigate_to_entity(loginscreen.ENTITY)
@@ -51,12 +54,10 @@ class TestLoginScreen(UI_driver):
         """
         Add user for tests
         """
-        self.init_app()
         # User is not logged in
         assert self.logged_in()
         self.add_record(loginscreen.ENTITY, loginscreen.DATA_ITEST_USER,
                         navigate=False)
-        self.logout()
 
     def assert_notification(self, type='success', assert_text=None,
                             link_text=None, link_url=None):
@@ -131,8 +132,9 @@ class TestLoginScreen(UI_driver):
         """
         if (self.logged_in()):
             self.logout()
-        self.load_url(self.get_base_url())
-        self.init_app(loginscreen.PKEY, loginscreen.PASSWD_ITEST_USER_NEW)
+        else:
+            self.load_url(self.get_base_url())
+        self.login(loginscreen.PKEY, loginscreen.PASSWD_ITEST_USER_NEW)
         # User is not logged in
         assert self.logged_in()
 
@@ -199,15 +201,6 @@ class TestLoginScreen(UI_driver):
 
         return tuple(result)
 
-    def get_data_from_alert(self, data):
-        """
-        Parse data from the alert to a comparable structure
-        """
-        result = []
-        result.append(data.text)
-
-        return tuple(result)
-
     def assert_form_equals(self, actual_form, expected_form):
         """
         Compare two forms
@@ -235,7 +228,7 @@ class TestLoginScreen(UI_driver):
         """
         assert len(actual_alerts) == len(expected_alerts)
         for act_alert, exp_alert in zip(actual_alerts, expected_alerts):
-            assert self.get_data_from_alert(act_alert) == exp_alert
+            assert (act_alert.text,) == exp_alert
 
     def has_validation(self, parent):
         return self.find_xelement(".//div[@name='validation']", parent,

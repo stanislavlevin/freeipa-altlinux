@@ -258,7 +258,7 @@ class test_x509(object):
         not_after = datetime.datetime(2018, 10, 23, 5, 36, 59)
         assert cert.not_valid_before == not_before
         assert cert.not_valid_after == not_after
-        assert cert.san_general_names == [DNSName('ipa.demo1.freeipa.org')]
+        assert cert.san_general_names == [DNSName(u'ipa.demo1.freeipa.org')]
         assert cert.san_a_label_dns_names == ['ipa.demo1.freeipa.org']
         assert cert.extended_key_usage == {
             '1.3.6.1.5.5.7.3.1', '1.3.6.1.5.5.7.3.2'

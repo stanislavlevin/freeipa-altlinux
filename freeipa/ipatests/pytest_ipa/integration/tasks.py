@@ -32,8 +32,13 @@ import time
 
 import dns
 from ldif import LDIFWriter
+import pytest
 from SSSDConfig import SSSDConfig
 from six import StringIO
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
+
 
 from ipapython import ipautil
 from ipaplatform.paths import paths
@@ -41,7 +46,9 @@ from ipapython.dn import DN
 from ipalib import errors
 from ipalib.util import get_reverse_zone_default, verify_host_resolvable
 from ipalib.constants import (
-    DEFAULT_CONFIG, DOMAIN_SUFFIX_NAME, DOMAIN_LEVEL_0)
+    DEFAULT_CONFIG, DOMAIN_SUFFIX_NAME, DOMAIN_LEVEL_0,
+    MIN_DOMAIN_LEVEL, MAX_DOMAIN_LEVEL
+)
 
 from ipatests.create_external_ca import ExternalCA
 from .env_config import env_to_script
@@ -222,7 +229,7 @@ def restore_files(host):
     rmname = os.path.join(host.config.test_dir, 'file_remove')
 
     # Prepare command for restoring context of the backed-up files
-    sed_remove_backupdir = 's/%s//g' % backupname.replace('/', '\/')
+    sed_remove_backupdir = 's/%s//g' % backupname.replace('/', r'\/')
     restorecon_command = (
         "find %s | "
         "sed '%s' | "
@@ -287,6 +294,7 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
                    stdin_text=None, raiseonerr=True):
     if domain_level is None:
         domain_level = host.config.domain_level
+    check_domain_level(domain_level)
     setup_server_logs_collecting(host)
     apply_common_fixes(host)
     fix_apache_semaphores(host)
@@ -327,8 +335,17 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
     return result
 
 
-def get_replica_filename(replica):
-    return os.path.join(replica.config.test_dir, 'replica-info.gpg')
+def check_domain_level(domain_level):
+    if domain_level < MIN_DOMAIN_LEVEL:
+        pytest.fail(
+            "Domain level {} not supported, min level is {}.".format(
+                domain_level, MIN_DOMAIN_LEVEL)
+        )
+    if domain_level > MAX_DOMAIN_LEVEL:
+        pytest.fail(
+            "Domain level {} not supported, max level is {}.".format(
+                domain_level, MAX_DOMAIN_LEVEL)
+        )
 
 
 def domainlevel(host):
@@ -343,12 +360,14 @@ def domainlevel(host):
     """
     kinit_admin(host, raiseonerr=False)
     result = host.run_command(['ipa', 'domainlevel-get'], raiseonerr=False)
-    level = 0
-    domlevel_re = re.compile('.*(\d)')
+    level = MIN_DOMAIN_LEVEL
+    domlevel_re = re.compile(r'.*(\d)')
     if result.returncode == 0:
         # "domainlevel-get" command doesn't exist on ipa versions prior to 4.3
         level = int(domlevel_re.findall(result.stdout_text)[0])
+    check_domain_level(level)
     return level
+
 
 def master_authoritative_for_client_domain(master, client):
     zone = ".".join(client.hostname.split('.')[1:])
@@ -366,37 +385,13 @@ def _config_replica_resolvconf_with_master_data(master, replica):
     replica.put_file_contents(paths.RESOLV_CONF, content)
 
 
-def replica_prepare(master, replica, extra_args=(),
-                    raiseonerr=True, stdin_text=None):
-    fix_apache_semaphores(replica)
-    prepare_reverse_zone(master, replica.ip)
-
-    # in domain level 0 there is no autodiscovery, so it's necessary to
-    # change /etc/resolv.conf to find master DNS server
-    _config_replica_resolvconf_with_master_data(master, replica)
-
-    args = ['ipa-replica-prepare',
-            '-p', replica.config.dirman_password,
-            replica.hostname]
-    if master_authoritative_for_client_domain(master, replica):
-        args.extend(['--ip-address', replica.ip, '--auto-reverse'])
-    args.extend(extra_args)
-    result = master.run_command(args, raiseonerr=raiseonerr,
-                                stdin_text=stdin_text)
-    if result.returncode == 0:
-        replica_bundle = master.get_file_contents(
-            paths.REPLICA_INFO_GPG_TEMPLATE % replica.hostname)
-        replica_filename = get_replica_filename(replica)
-        replica.put_file_contents(replica_filename, replica_bundle)
-    return result
-
-
 def install_replica(master, replica, setup_ca=True, setup_dns=False,
                     setup_kra=False, setup_adtrust=False, extra_args=(),
                     domain_level=None, unattended=True, stdin_text=None,
                     raiseonerr=True):
     if domain_level is None:
         domain_level = domainlevel(master)
+    check_domain_level(domain_level)
     apply_common_fixes(replica)
     setup_server_logs_collecting(replica)
     allow_sync_ptr(master)
@@ -424,19 +419,10 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
 
     args.extend(extra_args)
 
-    if domain_level == DOMAIN_LEVEL_0:
-        # workaround #6274 - remove when fixed
-        time.sleep(30)  # wait until dogtag wakes up
-
-        # prepare the replica file on master and put it to replica, AKA "old way"
-        replica_prepare(master, replica)
-        replica_filename = get_replica_filename(replica)
-        args.append(replica_filename)
-    else:
-        # install client on a replica machine and then promote it to replica
-        install_client(master, replica)
-        fix_apache_semaphores(replica)
-        args.extend(['-r', replica.domain.realm])
+    # install client on a replica machine and then promote it to replica
+    install_client(master, replica)
+    fix_apache_semaphores(replica)
+    args.extend(['-r', replica.domain.realm])
 
     result = replica.run_command(args, raiseonerr=raiseonerr,
                                  stdin_text=stdin_text)
@@ -615,7 +601,7 @@ def setup_sssd_debugging(host):
 
     # Add the debug directive to each section
     host.run_command(['sed', '-i',
-                      '/\[*\]/ a\debug_level = 7',
+                      r'/\[*\]/ a\debug_level = 7',
                       paths.SSSD_CONF],
                      raiseonerr=False)
 
@@ -708,6 +694,7 @@ def sync_time(host, server):
 def connect_replica(master, replica, domain_level=None):
     if domain_level is None:
         domain_level = master.config.domain_level
+    check_domain_level(domain_level)
     if domain_level == DOMAIN_LEVEL_0:
         replica.run_command(['ipa-replica-manage', 'connect', master.hostname])
     else:
@@ -722,6 +709,7 @@ def connect_replica(master, replica, domain_level=None):
 def disconnect_replica(master, replica, domain_level=None):
     if domain_level is None:
         domain_level = master.config.domain_level
+    check_domain_level(domain_level)
     if domain_level == DOMAIN_LEVEL_0:
         replica.run_command(['ipa-replica-manage', 'disconnect', master.hostname])
     else:
@@ -738,7 +726,7 @@ def kinit_admin(host, raiseonerr=True):
 
 
 def uninstall_master(host, ignore_topology_disconnect=True,
-                     ignore_last_of_role=True, clean=True):
+                     ignore_last_of_role=True, clean=True, verbose=False):
     host.collect_log(paths.IPASERVER_UNINSTALL_LOG)
     uninstall_cmd = ['ipa-server-install', '--uninstall', '-U']
 
@@ -750,7 +738,12 @@ def uninstall_master(host, ignore_topology_disconnect=True,
     if ignore_last_of_role and host_domain_level != DOMAIN_LEVEL_0:
         uninstall_cmd.append('--ignore-last-of-role')
 
-    host.run_command(uninstall_cmd)
+    if verbose and host_domain_level != DOMAIN_LEVEL_0:
+        uninstall_cmd.append('-v')
+
+    result = host.run_command(uninstall_cmd)
+    assert "Traceback" not in result.stdout_text
+
     host.run_command(['pkidestroy', '-s', 'CA', '-i', 'pki-tomcat'],
                      raiseonerr=False)
     host.run_command(['rm', '-rf',
@@ -1007,7 +1000,7 @@ def two_connected_topo(master, replicas):
 
 @_topo('double-circle')
 def double_circle_topo(master, replicas, site_size=6):
-    """
+    r"""
                       R--R
                       |\/|
                       |/\|
@@ -1217,10 +1210,8 @@ def ipa_restore(master, backup_path):
 def install_kra(host, domain_level=None, first_instance=False, raiseonerr=True):
     if domain_level is None:
         domain_level = domainlevel(host)
+    check_domain_level(domain_level)
     command = ["ipa-kra-install", "-U", "-p", host.config.dirman_password]
-    if domain_level == DOMAIN_LEVEL_0 and not first_instance:
-        replica_file = get_replica_filename(host)
-        command.append(replica_file)
     try:
         result = host.run_command(command, raiseonerr=raiseonerr)
     finally:
@@ -1232,11 +1223,9 @@ def install_ca(host, domain_level=None, first_instance=False,
                external_ca=False, cert_files=None, raiseonerr=True):
     if domain_level is None:
         domain_level = domainlevel(host)
+    check_domain_level(domain_level)
     command = ["ipa-ca-install", "-U", "-p", host.config.dirman_password,
                "-P", 'admin', "-w", host.config.admin_password]
-    if domain_level == DOMAIN_LEVEL_0 and not first_instance:
-        replica_file = get_replica_filename(host)
-        command.append(replica_file)
     # First step of ipa-ca-install --external-ca
     if external_ca:
         command.append('--external-ca')
@@ -1474,3 +1463,40 @@ def sign_ca_and_transport(host, csr_name, root_ca_name, ipa_ca_name):
     host.put_file_contents(ipa_ca_fname, ipa_ca)
 
     return (root_ca_fname, ipa_ca_fname)
+
+
+def generate_ssh_keypair():
+    """
+    Create SSH keypair for key authentication testing
+    """
+    key = rsa.generate_private_key(backend=default_backend(),
+                                   public_exponent=65537,
+                                   key_size=2048)
+
+    public_key = key.public_key().public_bytes(
+        serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH)
+
+    pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+    private_key_str = pem.decode('utf-8')
+    public_key_str = public_key.decode('utf-8')
+
+    return (private_key_str, public_key_str)
+
+
+def strip_cert_header(pem):
+    """
+    Remove the header and footer from a certificate.
+    """
+    regexp = (
+        r"^-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----"
+    )
+    s = re.search(regexp, pem, re.MULTILINE | re.DOTALL)
+    if s is not None:
+        return s.group(1)
+    else:
+        return pem

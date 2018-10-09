@@ -64,7 +64,6 @@ if six.PY3:
 
 logger = logging.getLogger(__name__)
 
-
 named_conf_section_ipa_start_re = re.compile('\s*dyndb\s+"ipa"\s+"[^"]+"\s+{')
 named_conf_section_options_start_re = re.compile('\s*options\s+{')
 named_conf_section_end_re = re.compile('};')
@@ -438,26 +437,32 @@ def zonemgr_callback(option, opt_str, value, parser):
     """
     if value is not None:
         # validate the value first
-        try:
-            # IDNA support requires unicode
-            encoding = getattr(sys.stdin, 'encoding', None)
-            if encoding is None:
-                encoding = 'utf-8'
+        if six.PY3:
+            try:
+                validate_zonemgr_str(value)
+            except ValueError as e:
+                parser.error("invalid zonemgr: {}".format(e))
+        else:
+            try:
+                # IDNA support requires unicode
+                encoding = getattr(sys.stdin, 'encoding', None)
+                if encoding is None:
+                    encoding = 'utf-8'
 
-            # value is of a string type in both py2 and py3
-            if not isinstance(value, unicode):
-                value = value.decode(encoding)
+                # value is of a string type in both py2 and py3
+                if not isinstance(value, unicode):
+                    value = value.decode(encoding)
 
-            validate_zonemgr_str(value)
-        except ValueError as e:
-            # FIXME we can do this in better way
-            # https://fedorahosted.org/freeipa/ticket/4804
-            # decode to proper stderr encoding
-            stderr_encoding = getattr(sys.stderr, 'encoding', None)
-            if stderr_encoding is None:
-                stderr_encoding = 'utf-8'
-            error = unicode(e).encode(stderr_encoding)
-            parser.error(b"invalid zonemgr: " + error)
+                validate_zonemgr_str(value)
+            except ValueError as e:
+                # FIXME we can do this in better way
+                # https://fedorahosted.org/freeipa/ticket/4804
+                # decode to proper stderr encoding
+                stderr_encoding = getattr(sys.stderr, 'encoding', None)
+                if stderr_encoding is None:
+                    stderr_encoding = 'utf-8'
+                error = unicode(e).encode(stderr_encoding)
+                parser.error(b"invalid zonemgr: " + error)
 
     parser.values.zonemgr = value
 
@@ -715,6 +720,9 @@ class BindInstance(service.Service):
             if installutils.record_in_hosts(str(ip_address), self.fqdn) is None:
                 installutils.add_record_to_hosts(str(ip_address), self.fqdn)
 
+        # Make sure generate-rndc-key.sh runs before named restart
+        self.step("generating rndc key file", self.__generate_rndc_key)
+
         if self.first_instance:
             self.step("adding DNS container", self.__setup_dns_container)
 
@@ -739,8 +747,6 @@ class BindInstance(service.Service):
 
         self.step("configuring named to start on boot", self.__enable)
         self.step("changing resolv.conf to point to ourselves", self.__setup_resolv_conf)
-        self.step("adjust paths in bind configuration files", self.__adjust_config_paths)
-        self.step("disable chroot for bind", self.__disable_chroot)
         self.start_creation()
 
     def start_named(self):
@@ -996,7 +1002,7 @@ class BindInstance(service.Service):
 
         sysupgrade.set_upgrade_state('dns', 'server_config_to_ldap', True)
 
-    def __setup_resolv_conf_direct(self):
+    def __setup_resolv_conf(self):
         if not self.fstore.has_file(paths.RESOLV_CONF):
             self.fstore.backup_file(paths.RESOLV_CONF)
 
@@ -1024,73 +1030,9 @@ class BindInstance(service.Service):
             # we have to re-initialize it because resolv.conf has changed
             dns.resolver.default_resolver = None
 
-    def __setup_resolvconf(self):
-        if not self.fstore.has_file(paths.RESOLVCONF_CONF):
-            self.fstore.backup_file(paths.RESOLVCONF_CONF)
-
-        # Drop existing values
-        # TODO: save them
-        ipautil.run(['sed', '-i', '-r',
-                     '/^(name_servers|search_domains)=/d',
-                     paths.RESOLVCONF_CONF], raiseonerr=False)
-
-        resolv_txt = (
-            "\n# Added by FreeIPA server installer\nsearch_domains=" +
-            self.domain + "\n"
-        )
-
-        resolv_txt += "name_servers='"
-        ss = ''
-
-        for ip_address in self.ip_addresses:
-            if ip_address.version == 4:
-                resolv_txt += "127.0.0.1"
-                ss = ' '
-                break
-
-        for ip_address in self.ip_addresses:
-            if ip_address.version == 6:
-                resolv_txt += ss + "::1"
-                break
-
-        resolv_txt += "'\n"
-        try:
-            resolv_fd = open(paths.RESOLVCONF_CONF, 'a')
-            resolv_fd.write(resolv_txt)
-            resolv_fd.close()
-        except IOError as e:
-            logger.error('Could not write to resolvconf.conf: %s', e)
-        else:
-            # python DNS might have global resolver cached in this variable
-            # we have to re-initialize it because resolv.conf has changed
-            dns.resolver.default_resolver = None
-
-        ipautil.run(['resolvconf', '-u'])
-
-    def __setup_resolv_conf(self):
-       if os.path.exists(paths.RESOLVCONF_CONF):
-           self.__setup_resolvconf()
-       else:
-           self.__setup_resolv_conf_direct()
-
-    def __adjust_config_paths(self):
-        ipautil.run(['sed', '-i', '-r',
-                     '-e', 's|^include[[:blank:]]+"/etc/rfc1912\.conf";|include "/etc/bind/rfc1912.conf";|',
-                     '-e', 's|include[[:blank:]]+"/etc/rfc1918\.conf";|include "/etc/bind/rfc1918.conf";|',
-                     '-e', 's|^include[[:blank:]]+"/etc/resolvconf-zones\.conf";|include "/etc/bind/resolvconf-zones.conf";|',
-                     '/var/lib/bind/etc/local.conf'], raiseonerr=False)
-        ipautil.run(['sed', '-i', '-r',
-                     '-e', 's|directory "/zone";|directory "/etc/bind/zone";|',
-                     '-e', 's|include[[:blank:]]+"/etc/resolvconf-options\.conf";|include "/etc/bind/resolvconf-options.conf";|',
-                     '/var/lib/bind/etc/options.conf'], raiseonerr=False)
-        ipautil.run(['sed', '-i', '-r',
-                     's|^include[[:blank:]]+"/etc/rndc\.key";|include "/etc/bind/rndc.key";|',
-                     '/var/lib/bind/etc/rndc.conf'], raiseonerr=False)
-
-    def __disable_chroot(self):
-        result = ipautil.run(['control', 'bind-chroot'], capture_output=True)
-        self.sstore.backup_state('control', 'bind-chroot', result.output)
-        ipautil.run(['control', 'bind-chroot', 'disabled'])
+    def __generate_rndc_key(self):
+        installutils.check_entropy()
+        ipautil.run([paths.GENERATE_RNDC_KEY])
 
     def add_master_dns_records(self, fqdn, ip_addresses, realm_name, domain_name,
                                reverse_zones):
@@ -1267,8 +1209,7 @@ class BindInstance(service.Service):
 
         self.dns_backup.clear_records(self.api.Backend.ldap2.isconnected())
 
-
-        for f in [paths.NAMED_CONF, paths.RESOLV_CONF, paths.RESOLVCONF_CONF]:
+        for f in [paths.NAMED_CONF, paths.RESOLV_CONF]:
             try:
                 self.fstore.restore_file(f)
             except ValueError as error:
@@ -1276,17 +1217,11 @@ class BindInstance(service.Service):
 
         installutils.rmtree(paths.BIND_LDAP_DNS_IPA_WORKDIR)
 
-        ipautil.run(['resolvconf', '-u'])
-
         # disabled by default, by ldap_configure()
         if enabled:
             self.enable()
         else:
             self.disable()
-
-        value = self.sstore.restore_state('control', 'bind-chroot')
-        if value is not None:
-            ipautil.run(['control', 'bind-chroot', value])
 
         if running:
             self.restart()

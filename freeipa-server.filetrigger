@@ -1,9 +1,0 @@
-#!/bin/sh -e
-ipa_service="/lib/systemd/system/ipa.service"
-if egrep -qs "^${ipa_service}$"; then
-    if [ -f ${ipa_service} ]; then
-        if /bin/systemctl is-enabled ipa.service >/dev/null 2>&1; then
-            /bin/systemctl restart ipa.service ||:
-        fi
-    fi
-fi

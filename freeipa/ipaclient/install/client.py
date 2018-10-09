@@ -34,7 +34,7 @@ from six.moves.configparser import RawConfigParser
 from six.moves.urllib.parse import urlparse, urlunparse
 # pylint: enable=import-error
 
-from ipalib import api, errors, x509, createntp
+from ipalib import api, errors, x509
 from ipalib.install import certmonger, certstore, service, sysrestore
 from ipalib.install import hostname as hostname_
 from ipalib.install.kinit import kinit_keytab, kinit_password
@@ -48,8 +48,7 @@ from ipalib.util import (
 from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
-from ipapython import certdb, kernel_keyring, ipaldap, ipautil, ntpmethods
-from ipapython.ntpmethods import TIME_SERVICE
+from ipapython import certdb, kernel_keyring, ipaldap, ipautil
 from ipapython.admintool import ScriptError
 from ipapython.dn import DN
 from ipapython.install import typing
@@ -64,7 +63,7 @@ from ipapython.ipautil import (
 from ipapython.ssh import SSHPublicKey
 from ipapython import version
 
-from . import automount, ipadiscovery, sssd
+from . import automount, ipadiscovery, timeconf, sssd
 from .ipachangeconf import IPAChangeConf
 
 NoneType = type(None)
@@ -674,7 +673,7 @@ def configure_krb5_conf(
         os.path.basename(paths.KRB5_FREEIPA) + ".template"
     )
     shutil.copy(template, paths.KRB5_FREEIPA)
-    os.chmod(paths.KRB5_FREEIPA, 0x644)
+    os.chmod(paths.KRB5_FREEIPA, 0o644)
 
     # Then, perform the rest of our configuration into krb5.conf itself.
     krbconf = IPAChangeConf("IPA Installer")
@@ -2050,13 +2049,13 @@ def install_check(options):
 
     if options.conf_ntp:
         try:
-            ntpmethods.check_timedate_services()
-        except ntpmethods.NTPConflictingService as e:
+            timeconf.check_timedate_services()
+        except timeconf.NTPConflictingService as e:
             print("WARNING: conflicting time&date synchronization service '{}'"
                   " will be disabled".format(e.conflicting_service))
-            print("in favor of {}".format(TIME_SERVICE))
+            print("in favor of chronyd")
             print("")
-        except ntpmethods.NTPConfigurationError:
+        except timeconf.NTPConfigurationError:
             pass
 
     if options.unattended and (
@@ -2126,6 +2125,16 @@ def install_check(options):
     if options.keytab and options.force_join:
         logger.warning("Option 'force-join' has no additional effect "
                        "when used with together with option 'keytab'.")
+
+    # Remove invalid keytab file
+    try:
+        gssapi.Credentials(
+            store={'keytab': paths.KRB5_KEYTAB},
+            usage='accept',
+        )
+    except gssapi.exceptions.GSSError:
+        logger.debug("Deleting invalid keytab: '%s'.", paths.KRB5_KEYTAB)
+        remove_file(paths.KRB5_KEYTAB)
 
     # Check if old certificate exist and show warning
     if (
@@ -2416,6 +2425,67 @@ def update_ipa_nssdb():
                                    (nickname, sys_db.secdir, e))
 
 
+def sync_time(options, fstore, statestore):
+    """
+    Will disable any other time synchronization service and configure chrony
+    with given ntp(chrony) server and/or pool using Augeas.
+    If there is no option --ntp-server set IPADiscovery will try to find ntp
+    server in DNS records.
+    """
+    # We assume that NTP servers are discoverable through SRV records in DNS.
+
+    # disable other time&date services first
+    timeconf.force_chrony(statestore)
+
+    logger.info('Synchronizing time')
+
+    if not options.ntp_servers:
+        ds = ipadiscovery.IPADiscovery()
+        ntp_servers = ds.ipadns_search_srv(cli_domain, '_ntp._udp',
+                                           None, break_on_first=False)
+    else:
+        ntp_servers = options.ntp_servers
+
+    configured = False
+    if ntp_servers or options.ntp_pool:
+        configured = timeconf.configure_chrony(ntp_servers, options.ntp_pool,
+                                               fstore, statestore)
+    else:
+        logger.warning("No SRV records of NTP servers found and no NTP server "
+                       "or pool address was provided.")
+
+    if not configured:
+        print("Using default chrony configuration.")
+
+    return timeconf.sync_chrony()
+
+
+def restore_time_sync(statestore, fstore):
+    if statestore.has_state('chrony'):
+        chrony_enabled = statestore.restore_state('chrony', 'enabled')
+        restored = False
+
+        try:
+            # Restore might fail due to missing file(s) in backup.
+            # One example is if the client was updated from a previous version
+            # not configured with chrony. In such a cast it is OK to fail.
+            restored = fstore.restore_file(paths.CHRONY_CONF)
+        except ValueError:  # this will not handle possivble IOError
+            logger.debug("Configuration file %s was not restored.",
+                         paths.CHRONY_CONF)
+
+        if not chrony_enabled:
+            services.knownservices.chronyd.stop()
+            services.knownservices.chronyd.disable()
+        elif restored:
+            services.knownservices.chronyd.restart()
+
+    try:
+        timeconf.restore_forced_timeservices(statestore)
+    except CalledProcessError as e:
+        logger.error('Failed to restore time synchronization service: %s', e)
+
+
 def install(options):
     try:
         _install(options)
@@ -2462,20 +2532,13 @@ def _install(options):
         tasks.set_hostname(options.hostname)
 
     if options.conf_ntp:
-        # Attempt to configure and sync time with NTP server.
-        if not createntp.sync_time_client(fstore, statestore, cli_domain,
-                                          options.ntp_servers, options.ntp_pool):
-            print("Warning: IPA client was unable to sync time "
-                  "with IPA server!")
-            print("         Time synchronization is required for IPA "
-                  "to work correctly!")
-        else:
-            print("Successfully synchronization time with IPA server")
+        # Attempt to configure and sync time with NTP server (chrony).
+        sync_time(options, fstore, statestore)
     elif options.on_master:
         # If we're on master skipping the time sync here because it was done
         # in ipa-server-install
         logger.debug("Skipping attempt to configure and synchronize time with"
-                     " {} server as it has been already done on master.".format(TIME_SERVICE))
+                     " chrony server as it has been already done on master.")
     else:
         logger.info("Skipping chrony configuration")
 
@@ -2631,13 +2694,6 @@ def _install(options):
             else:
                 logger.info("Enrolled in IPA realm %s", cli_realm)
 
-            start = stderr.find('Certificate subject base is: ')
-            if start >= 0:
-                start = start + 29
-                subject_base = stderr[start:]
-                subject_base = subject_base.strip()
-                subject_base = DN(subject_base)
-
             if options.principal is not None:
                 run([paths.KDESTROY], raiseonerr=False, env=env)
 
@@ -2695,17 +2751,6 @@ def _install(options):
                                    options, client_domain, hostname):
                 raise ScriptError(rval=CLIENT_INSTALL_ERROR)
             logger.info("Configured /etc/sssd/sssd.conf")
-
-            # Configure nsswitch.conf
-            for database in 'passwd', 'group', 'gshadow', 'services', 'netgroup':
-                configure_nsswitch_database(fstore, database, ['sss'], default_value=['files'])
-            configure_nsswitch_database(fstore, 'shadow', ['sss'], default_value=['tcb', 'files'])
-            logger.info("Configured %s" % paths.NSSWITCH_CONF)
-            # Setup PAM
-            result = ipautil.run(['control', 'system-auth'], capture_output=True)
-            statestore.backup_state('control', 'system-auth', result.output)
-            ipautil.run(['control', 'system-auth', 'sss'])
-            logger.info("Configured PAM system-auth")
 
         if options.on_master:
             # If on master assume kerberos is already configured properly.
@@ -2813,6 +2858,20 @@ def _install(options):
         ca_enabled = result['result']['enable_ra']
     if not ca_enabled:
         disable_ra()
+
+    try:
+        result = api.Backend.rpcclient.forward(
+            'config_show',
+            raw=True,  # so that servroles are not queried
+            version=u'2.0'
+        )
+    except Exception as e:
+        logger.debug("config_show failed %s", e, exc_info=True)
+        raise ScriptError(
+            "Failed to retrieve CA certificate subject base: {}".format(e),
+            rval=CLIENT_INSTALL_ERROR)
+    else:
+        subject_base = DN(result['result']['ipacertificatesubjectbase'][0])
 
     # Create IPA NSS database
     try:
@@ -3320,10 +3379,6 @@ def uninstall(options):
                 e)
 
     tasks.restore_hostname(fstore, statestore)
-    if statestore.has_state('control'):
-        value = statestore.restore_state('control', 'system-auth')
-        if value is not None:
-            ipautil.run(['control', 'system-auth', value])
 
     if fstore.has_files():
         logger.info("Restoring client configuration files")
@@ -3344,7 +3399,7 @@ def uninstall(options):
                 service.service_name
             )
 
-    createntp.uninstall_client(fstore, statestore)
+    restore_time_sync(statestore, fstore)
 
     if was_sshd_configured and services.knownservices.sshd.is_running():
         services.knownservices.sshd.restart()
@@ -3642,7 +3697,6 @@ class ClientInstall(ClientInstallInterface,
     Client installer
     """
 
-    replica_file = None
     dm_password = None
 
     ca_cert_files = extend_knob(

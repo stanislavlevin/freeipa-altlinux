@@ -132,7 +132,7 @@ class TestSsbrowserPage(ConfigPageBase):
     @screenshot
     def test_long_text_of_ssbrowser_page(self):
         """
-        Tests whether the text from '@i18n:ssbrowser-page-content' is synced
+        Tests whether the text from '@i18n:ssbrowser-page' is synced
         against '<noscript>' tag to ensure a similarity of the behavior.
         """
 
@@ -151,7 +151,7 @@ class TestUnauthorizedPage(ConfigPageBase):
     @screenshot
     def test_long_text_of_unauthorized_page(self):
         """
-        Tests whether the text from '@i18n:unauthorized-page-content' is synced
+        Tests whether the text from '@i18n:unauthorized-page' is synced
         against '<noscript>' tag to ensure a similarity of the behavior.
         """
 
