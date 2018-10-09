@@ -34,7 +34,7 @@ from six.moves.configparser import RawConfigParser
 from six.moves.urllib.parse import urlparse, urlunparse
 # pylint: enable=import-error
 
-from ipalib import api, errors, x509
+from ipalib import api, errors, x509, createntp
 from ipalib.install import certmonger, certstore, service, sysrestore
 from ipalib.install import hostname as hostname_
 from ipalib.install.kinit import kinit_keytab, kinit_password
@@ -48,7 +48,8 @@ from ipalib.util import (
 from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
-from ipapython import certdb, kernel_keyring, ipaldap, ipautil
+from ipapython import certdb, kernel_keyring, ipaldap, ipautil, ntpmethods
+from ipapython.ntpmethods import TIME_SERVICE
 from ipapython.admintool import ScriptError
 from ipapython.dn import DN
 from ipapython.install import typing
@@ -63,7 +64,7 @@ from ipapython.ipautil import (
 from ipapython.ssh import SSHPublicKey
 from ipapython import version
 
-from . import automount, ipadiscovery, timeconf, sssd
+from . import automount, ipadiscovery, sssd
 from .ipachangeconf import IPAChangeConf
 
 NoneType = type(None)
@@ -2049,13 +2050,13 @@ def install_check(options):
 
     if options.conf_ntp:
         try:
-            timeconf.check_timedate_services()
-        except timeconf.NTPConflictingService as e:
+            ntpmethods.check_timedate_services()
+        except ntpmethods.NTPConflictingService as e:
             print("WARNING: conflicting time&date synchronization service '{}'"
                   " will be disabled".format(e.conflicting_service))
-            print("in favor of chronyd")
+            print("in favor of {}".format(TIME_SERVICE))
             print("")
-        except timeconf.NTPConfigurationError:
+        except ntpmethods.NTPConfigurationError:
             pass
 
     if options.unattended and (
@@ -2425,67 +2426,6 @@ def update_ipa_nssdb():
                                    (nickname, sys_db.secdir, e))
 
 
-def sync_time(options, fstore, statestore):
-    """
-    Will disable any other time synchronization service and configure chrony
-    with given ntp(chrony) server and/or pool using Augeas.
-    If there is no option --ntp-server set IPADiscovery will try to find ntp
-    server in DNS records.
-    """
-    # We assume that NTP servers are discoverable through SRV records in DNS.
-
-    # disable other time&date services first
-    timeconf.force_chrony(statestore)
-
-    logger.info('Synchronizing time')
-
-    if not options.ntp_servers:
-        ds = ipadiscovery.IPADiscovery()
-        ntp_servers = ds.ipadns_search_srv(cli_domain, '_ntp._udp',
-                                           None, break_on_first=False)
-    else:
-        ntp_servers = options.ntp_servers
-
-    configured = False
-    if ntp_servers or options.ntp_pool:
-        configured = timeconf.configure_chrony(ntp_servers, options.ntp_pool,
-                                               fstore, statestore)
-    else:
-        logger.warning("No SRV records of NTP servers found and no NTP server "
-                       "or pool address was provided.")
-
-    if not configured:
-        print("Using default chrony configuration.")
-
-    return timeconf.sync_chrony()
-
-
-def restore_time_sync(statestore, fstore):
-    if statestore.has_state('chrony'):
-        chrony_enabled = statestore.restore_state('chrony', 'enabled')
-        restored = False
-
-        try:
-            # Restore might fail due to missing file(s) in backup.
-            # One example is if the client was updated from a previous version
-            # not configured with chrony. In such a cast it is OK to fail.
-            restored = fstore.restore_file(paths.CHRONY_CONF)
-        except ValueError:  # this will not handle possivble IOError
-            logger.debug("Configuration file %s was not restored.",
-                         paths.CHRONY_CONF)
-
-        if not chrony_enabled:
-            services.knownservices.chronyd.stop()
-            services.knownservices.chronyd.disable()
-        elif restored:
-            services.knownservices.chronyd.restart()
-
-    try:
-        timeconf.restore_forced_timeservices(statestore)
-    except CalledProcessError as e:
-        logger.error('Failed to restore time synchronization service: %s', e)
-
-
 def install(options):
     try:
         _install(options)
@@ -2532,13 +2472,20 @@ def _install(options):
         tasks.set_hostname(options.hostname)
 
     if options.conf_ntp:
-        # Attempt to configure and sync time with NTP server (chrony).
-        sync_time(options, fstore, statestore)
+        # Attempt to configure and sync time with NTP server.
+        if not createntp.sync_time_client(fstore, statestore, cli_domain,
+                                          options.ntp_servers, options.ntp_pool):
+            print("Warning: IPA client was unable to sync time "
+                  "with IPA server!")
+            print("         Time synchronization is required for IPA "
+                  "to work correctly!")
+        else:
+            print("Successfully synchronization time with IPA server")
     elif options.on_master:
         # If we're on master skipping the time sync here because it was done
         # in ipa-server-install
         logger.debug("Skipping attempt to configure and synchronize time with"
-                     " chrony server as it has been already done on master.")
+                     " {} server as it has been already done on master.".format(TIME_SERVICE))
     else:
         logger.info("Skipping chrony configuration")
 
@@ -3414,7 +3361,7 @@ def uninstall(options):
                 service.service_name
             )
 
-    restore_time_sync(statestore, fstore)
+    createntp.uninstall_client(fstore, statestore)
 
     if was_sshd_configured and services.knownservices.sshd.is_running():
         services.knownservices.sshd.restart()
