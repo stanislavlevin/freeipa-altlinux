@@ -274,6 +274,7 @@ Requires: %name-server-common = %EVR
 Requires: python3-module-augeas
 Requires: python3-module-gssapi
 Requires: python3-module-ipaclient = %EVR
+Requires: python3-module-ipaserver-ntp = %EVR
 Requires: python3-module-kdcproxy
 Requires: python3-module-ldap >= %python_ldap_version
 Requires: python3-module-pki-base >= %pki_version
@@ -434,6 +435,7 @@ Group: System/Libraries
 BuildArch: noarch
 Requires: %name-client-common = %EVR
 Requires: python3-module-freeipa = %EVR
+Requires: python3-module-ipaclient-ntp = %EVR
 Requires: python3-module-dns
 
 %description -n python3-module-ipaclient
