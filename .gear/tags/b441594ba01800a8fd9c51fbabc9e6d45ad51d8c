@@ -1,0 +1,22 @@
+object 7eddb981c4d0b2c333e52ad68f6f353556ba24e4
+type commit
+tag release-4-7-1
+tagger Rob Crittenden <rcritten@redhat.com> 1538763039 -0400
+
+tagging IPAv4 4.7.1
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAABCAAdFiEEL88tWdi+3Yi1YO6/QPd0nE8v3u0FAlu3qR8ACgkQQPd0nE8v
+3u2MyA/8C95PH9mLmhqGYSABwRCbHGH8EPPASkL6w2L9ToMe1L0piV0zG6fNUnZS
+eeA8gBfFGRZPRBgONQDpN0+0jzkg1uztXI0q14SLqXOb+y9/iqYTFg7EecxA21ta
+qemHLcJ/z7zv+AUt7XHYz3Yh+t8kWBN7BUnQ4jqwBZ7w0feHU8W4jNrEn4Xj5gdu
+ykzc63aN15tW/bZvp2qpMQiWb5QDzBy/2DFoPvq8APPWeBg17puiQ96OgxExPU2D
+upl9xpAYRgpgU4lLrN1QxLTjSaVzkXyuYgHkoAZKEBxES2VFhOqoSkc/nAyj/nB8
+5UYQD+kNeU2y2LeqyoeaXTmjKBXjcNbxfApUJzPSOiK9FtB1HV8l7vrq7RdLSRw0
+gdkc0XebDv4ehiw5k82F7l1yFu6jt9RwnGnphilo0FU+9mU8fK2ofudSGrFEVX0R
+F8ArldxPfBFuH7eUOau+qAmQiPRyzpFjy1AaeNsFsL/UDilFDrFcAKfdGAX1Q0p0
+vAZ/5t/uNTABvmuWufilZyxcTNgNKtMgU3t1Oheavq5MnDeBtdO1dXcyUnhsXdIf
+qMav7lxgTAp3KTntfQ1vVk0d13pGxKHhwJneWroifk4rEu/4Yx29u1O4VrJ5MkSc
+UajoNL8iFjhr2KZXZTJdf9a2RETg9KdNaqHuuedZq0VrFX0k/Os=
+=6bCw
+-----END PGP SIGNATURE-----

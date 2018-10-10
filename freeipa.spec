@@ -27,8 +27,8 @@
 %define sssd_version 1.16.3
 
 Name: freeipa
-Version: 4.7.0
-Release: alt2
+Version: 4.7.1
+Release: alt1
 
 Summary: The Identity, Policy and Audit system
 License: GPLv3+
@@ -923,6 +923,9 @@ fi
 %_man1dir/ipa-test-task.1*
 
 %changelog
+* Tue Oct 09 2018 Stanislav Levin <slev@altlinux.org> 4.7.1-alt1
+- 4.7.0 -> 4.7.1.
+
 * Mon Oct 01 2018 Stanislav Levin <slev@altlinux.org> 4.7.0-alt2
 - Fixed client's requirements to server modules (by mrdrew@).
 - Fixed JS errors on web pages(ssbrowser and unauthorized) at production mode.
