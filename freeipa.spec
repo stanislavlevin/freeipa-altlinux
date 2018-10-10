@@ -360,6 +360,7 @@ Requires: python3-module-sss-murmur
 Requires: python3-module-yubico
 %py3_provides ipaplatform
 %py3_provides ipaplatform.constants
+%py3_provides ipaplatform.osinfo
 %py3_provides ipaplatform.paths
 %py3_provides ipaplatform.services
 %py3_provides ipaplatform.tasks
