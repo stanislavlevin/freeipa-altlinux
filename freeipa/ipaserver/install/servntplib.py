@@ -3,13 +3,13 @@
 #
 from ipaplatform.paths import paths
 from ipaserver.install.servntpconf import BaseNTPServer
-from ipapython.ntpmethods import ntp_service
+from ipapython.ntpmethods import service_command
 
 
 class ChronyServer(BaseNTPServer):
     def __init__(self):
         super(ChronyServer, self).__init__(
-            service_name=ntp_service['service'],
+            service_name=service_command()['service'],
             ntp_confile=paths.CHRONY_CONF,
             ntp_bin=paths.CHRONYD,
             flag='-q',
@@ -20,7 +20,7 @@ class ChronyServer(BaseNTPServer):
 class NTPDServer(BaseNTPServer):
     def __init__(self):
         super(NTPDServer, self).__init__(
-            service_name=ntp_service['service'],
+            service_name=service_command()['service'],
             ntp_confile=paths.NTPD_CONF,
             ntp_bin=paths.NTPD,
             flag='-gq',
@@ -32,7 +32,7 @@ class NTPDServer(BaseNTPServer):
 class OpenNTPDServer(BaseNTPServer):
     def __init__(self):
         super(OpenNTPDServer, self).__init__(
-            service_name=ntp_service['service'],
+            service_name=service_command()['service'],
             ntp_confile=paths.ONTPD_CONF,
             ntp_bin=paths.NTPD,
             flag='-s',

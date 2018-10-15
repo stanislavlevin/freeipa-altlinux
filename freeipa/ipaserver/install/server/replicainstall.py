@@ -27,7 +27,7 @@ from ipaclient.install.ipachangeconf import IPAChangeConf
 from ipalib.install import certstore, sysrestore
 from ipalib.install.kinit import kinit_keytab
 from ipapython import ipaldap, ipautil, ntpmethods
-from ipapython.ntpmethods import TIME_SERVICE
+from ipapython.ntpmethods import detect_time_server
 from ipapython.dn import DN
 from ipapython.admintool import ScriptError
 from ipaplatform import services
@@ -584,7 +584,7 @@ def common_check(no_ntp):
         except ntpmethods.NTPConflictingService as e:
             print("WARNING: conflicting time&date synchronization service "
                   "'{svc}' will\nbe disabled in favor of {ts}\n"
-                  .format(svc=e.conflicting_service, ts=TIME_SERVICE))
+                  .format(svc=e.conflicting_service, ts=detect_time_server()))
         except ntpmethods.NTPConfigurationError:
             pass
 

@@ -12,7 +12,8 @@ class ChronyClient(BaseNTPClient):
         super(ChronyClient, self).__init__(
             ntp_confile=paths.CHRONY_CONF,
             ntp_bin=paths.CHRONYC,
-            pre_args=[paths.CHRONYC, 'waitsync',
+            timeout=15,
+            post_args=[paths.CHRONYC, 'waitsync',
                       str(self.sync_attempt_count), '-d'],
         )
 

@@ -10,7 +10,7 @@ from ipapython import ipautil
 from ipalib.install import sysrestore
 from ipaserver.install import service
 from ipapython import ntpmethods
-from ipapython.ntpmethods import TIME_SERVICE
+from ipapython.ntpmethods import detect_time_server
 
 logger = getLogger(__name__)
 
@@ -46,15 +46,15 @@ class BaseNTPServer(service.Service):
         logger.debug("Backing up %s", self.ntp_confile)
         ntpmethods.backup_config(self.ntp_confile, self.fstore)
 
-        logger.debug("Configuring %s", TIME_SERVICE)
+        logger.debug("Configuring %s", detect_time_server())
 
-        enabled = ntpmethods.ntp_service['api'].is_enabled()
-        running = ntpmethods.ntp_service['api'].is_running()
+        enabled = ntpmethods.service_command()['api'].is_enabled()
+        running = ntpmethods.service_command()['api'].is_running()
 
         if self.sstore:
-            self.sstore.backup_state(ntpmethods.ntp_service['service'],
+            self.sstore.backup_state(ntpmethods.service_command()['service'],
                                      'enabled', enabled)
-            self.sstore.backup_state(ntpmethods.ntp_service['service'],
+            self.sstore.backup_state(ntpmethods.service_command()['service'],
                                      'running', running)
 
         if not self.ntp_servers and not self.ntp_pool:
@@ -69,11 +69,11 @@ class BaseNTPServer(service.Service):
 
         logger.debug("Writing configuration to %s", self.ntp_confile)
 
-        ntpmethods.ntp_service['api'].stop()
+        ntpmethods.service_command()['api'].stop()
         ntpmethods.write_config(self.ntp_confile, config_content)
 
     def __start_sync(self):
-        logger.debug("Sync time with %s", TIME_SERVICE)
+        logger.debug("Sync time with %s", detect_time_server())
         ipautil.run(self.args)
 
     def sync_time(self):
@@ -82,7 +82,7 @@ class BaseNTPServer(service.Service):
         self.step("configuring %s to start on boot"
                   % self.service_name, self.enable)
         self.step("synchronization time with %s"
-                  % TIME_SERVICE, self.__start_sync)
+                  % detect_time_server(), self.__start_sync)
         self.step("starting %s" % self.service_name, self.start)
 
         self.start_creation()

@@ -49,7 +49,7 @@ from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
 from ipapython import certdb, kernel_keyring, ipaldap, ipautil, ntpmethods
-from ipapython.ntpmethods import TIME_SERVICE
+from ipapython.ntpmethods import detect_time_server
 from ipapython.admintool import ScriptError
 from ipapython.dn import DN
 from ipapython.install import typing
@@ -2054,7 +2054,7 @@ def install_check(options):
         except ntpmethods.NTPConflictingService as e:
             print("WARNING: conflicting time&date synchronization service '{}'"
                   " will be disabled".format(e.conflicting_service))
-            print("in favor of {}".format(TIME_SERVICE))
+            print("in favor of {}".format(detect_time_server()))
             print("")
         except ntpmethods.NTPConfigurationError:
             pass
@@ -2485,7 +2485,7 @@ def _install(options):
         # If we're on master skipping the time sync here because it was done
         # in ipa-server-install
         logger.debug("Skipping attempt to configure and synchronize time with"
-                     " {} server as it has been already done on master.".format(TIME_SERVICE))
+                     " {} server as it has been already done on master.".format(detect_time_server()))
     else:
         logger.info("Skipping chrony configuration")
 

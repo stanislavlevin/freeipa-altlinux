@@ -2,7 +2,7 @@
 # Copyright (C) 2018  FreeIPA Contributors see COPYING for license
 #
 from importlib import import_module
-from ipapython.ntpmethods import TIME_SERVICE
+from ipapython.ntpmethods import detect_time_server
 
 
 def detect_ntp_daemon():
@@ -21,17 +21,15 @@ def detect_ntp_daemon():
 
     servts = None
     if servntplib:
-        servts = getattr(servntplib, ntp_libs[TIME_SERVICE][1] + 'Server')
+        servts = getattr(servntplib, ntp_libs[detect_time_server()][1] + 'Server')
 
-    clits = getattr(clintplib, ntp_libs[TIME_SERVICE][1] + 'Client')
+    clits = getattr(clintplib, ntp_libs[detect_time_server()][1] + 'Client')
 
     return servts, clits
 
 
-NTPSERVER, NTPCLIENT = detect_ntp_daemon()
-
-
 def sync_time_server(fstore, sstore, ntp_servers, ntp_pool):
+    NTPSERVER = detect_ntp_daemon()[0]
     cl = NTPSERVER()
 
     cl.fstore = fstore
@@ -47,6 +45,7 @@ def sync_time_server(fstore, sstore, ntp_servers, ntp_pool):
 
 
 def sync_time_client(fstore, statestore, cli_domain, ntp_servers, ntp_pool):
+    NTPCLIENT = detect_ntp_daemon()[1]
     cl = NTPCLIENT()
 
     cl.fstore = fstore
@@ -59,6 +58,7 @@ def sync_time_client(fstore, statestore, cli_domain, ntp_servers, ntp_pool):
 
 
 def uninstall_server(fstore, sstore):
+    NTPSERVER = detect_ntp_daemon()[0]
     cl = NTPSERVER()
 
     cl.sstore = sstore
@@ -68,6 +68,7 @@ def uninstall_server(fstore, sstore):
 
 
 def uninstall_client(fstore, sstore):
+    NTPCLIENT = detect_ntp_daemon()[1]
     cl = NTPCLIENT()
 
     cl.statestore = sstore

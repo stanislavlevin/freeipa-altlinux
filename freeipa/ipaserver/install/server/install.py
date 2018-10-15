@@ -20,7 +20,7 @@ from ipaclient.install.client import check_ldap_conf
 from ipaclient.install.ipachangeconf import IPAChangeConf
 from ipalib.install import certmonger, sysrestore
 from ipapython import ipautil, version, ntpmethods
-from ipapython.ntpmethods import TIME_SERVICE
+from ipapython.ntpmethods import detect_time_server
 from ipapython.ipautil import (
     ipa_generate_password, run, user_input)
 from ipapython.admintool import ScriptError
@@ -389,7 +389,7 @@ def install_check(installer):
         print("  * Configure a stand-alone CA (dogtag) for certificate "
               "management")
     if not options.no_ntp:
-        print("  * Configure the NTP client ({})".format(TIME_SERVICE))
+        print("  * Configure the NTP client ({})".format(detect_time_server()))
     print("  * Create and configure an instance of Directory Server")
     print("  * Create and configure a Kerberos Key Distribution Center (KDC)")
     print("  * Configure Apache (httpd)")
@@ -404,7 +404,7 @@ def install_check(installer):
     if options.no_ntp:
         print("")
         print("Excluded by options:")
-        print("  * Configure the NTP client ({})".format(TIME_SERVICE))
+        print("  * Configure the NTP client ({})".format(detect_time_server()))
     if installer.interactive:
         print("")
         print("To accept the default shown in brackets, press the Enter key.")
@@ -420,7 +420,7 @@ def install_check(installer):
         except ntpmethods.NTPConflictingService as e:
             print("WARNING: conflicting time&date synchronization service '{}'"
                   " will be disabled".format(e.conflicting_service))
-            print("in favor of {}".format(TIME_SERVICE))
+            print("in favor of {}".format(detect_time_server()))
             print("")
         except ntpmethods.NTPConfigurationError:
             pass
@@ -771,11 +771,11 @@ def install(installer):
         if not options.no_ntp:
             if not createntp.sync_time_server(
                     fstore, sstore, options.ntp_servers, options.ntp_pool):
-                print("Warning: IPA was unable to sync time with {}!".format(TIME_SERVICE))
+                print("Warning: IPA was unable to sync time with {}!".format(detect_time_server()))
                 print("         Time synchronization is required for IPA "
                       "to work correctly")
             else:
-                print("Successfully synchronization time with {}".format(TIME_SERVICE))
+                print("Successfully synchronization time with {}".format(detect_time_server()))
 
         if options.dirsrv_cert_files:
             ds = dsinstance.DsInstance(fstore=fstore,
@@ -976,7 +976,7 @@ def install(installer):
     if not ntpmethods.is_running():
         print("\t3. Kerberos requires time synchronization between clients")
         print("\t   and servers for correct operation. You should consider "
-              "enabling {}.".format(TIME_SERVICE))
+              "enabling {}.".format(detect_time_server()))
 
     print("")
     if setup_ca:

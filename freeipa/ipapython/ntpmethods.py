@@ -12,7 +12,7 @@ from ipaplatform import services
 from ipapython import ipautil
 
 
-def __service_command():
+def service_command():
     timedata_srv = {
         'openntpd': {
             'api': services.knownservices.ntpd,
@@ -28,14 +28,14 @@ def __service_command():
         }
     }
 
-    return timedata_srv[TIME_SERVICE]
+    return timedata_srv[detect_time_server()]
 
 
-def __detect_time_server():
+def detect_time_server():
     ts_modules = ['chrony', 'ntpd', 'openntpd']
 
     for ts in ts_modules:
-        sys_ts = ipautil.run(['rpm', '-qa', ts], capture_output=True)
+        sys_ts = ipautil.run(['rpm', '-qa', ts], capture_output=True, raiseonerr=False)
         if sys_ts.output:
             return ts
 
@@ -75,23 +75,23 @@ def restore_state(statestore, fstore, ntp_confile, logger):
     except ValueError:
         logger.debug("Configuration file %s was not restored.", ntp_confile)
 
-    ntp_service['api'].stop()
-    ntp_service['api'].disable()
+    service_command()['api'].stop()
+    service_command()['api'].disable()
 
     if statestore:
-        enabled = statestore.restore_state(ntp_service['service'], 'enabled')
-        running = statestore.restore_state(ntp_service['service'], 'running')
+        enabled = statestore.restore_state(service_command()['service'], 'enabled')
+        running = statestore.restore_state(service_command()['service'], 'running')
 
         if enabled:
-            ntp_service['api'].enable()
+            service_command()['api'].enable()
 
         if running:
-            ntp_service['api'].start()
+            service_command()['api'].start()
 
 
 def check_timedate_services():
     for service in services.timedate_services:
-        if service != ntp_service['service']:
+        if service != service_command()['service']:
             continue
         instance = services.service(service)
         if instance.is_enabled() or instance.is_running():
@@ -101,11 +101,11 @@ def check_timedate_services():
 
 
 def is_running():
-    return ntp_service['api'].is_running()
+    return service_command()['api'].is_running()
 
 
 def is_enabled():
-    return ntp_service['api'].is_enabled()
+    return service_command()['api'].is_enabled()
 
 
 def force_service(statestore):
@@ -114,14 +114,14 @@ def force_service(statestore):
     running = is_running()
 
     if statestore:
-        statestore.backup_state(ntp_service['service'], 'enabled', enabled)
-        statestore.backup_state(ntp_service['service'], 'running', running)
+        statestore.backup_state(service_command()['service'], 'enabled', enabled)
+        statestore.backup_state(service_command()['service'], 'running', running)
 
     if running:
-        ntp_service['api'].stop()
+        service_command()['api'].stop()
 
     if enabled:
-        ntp_service['api'].disable()
+        service_command()['api'].disable()
 
 
 def __get_confile_list(path):
@@ -156,7 +156,7 @@ def __get_confile_params():
             'option': 'iburst',
         },
     }
-    return confile_params[TIME_SERVICE]
+    return confile_params[detect_time_server()]
 
 
 def set_config(path, pool=None, servers=None, opts=None):
@@ -191,7 +191,7 @@ def set_config(path, pool=None, servers=None, opts=None):
 
 def uninstall(statestore, fstore, ntp_confile, logger):
     if statestore:
-        if statestore.has_state(ntp_service['service']):
+        if statestore.has_state(service_command()['service']):
             restore_state(statestore, fstore, ntp_confile, logger)
 
 
@@ -203,7 +203,3 @@ class NTPConflictingService(NTPConfigurationError):
     def __init__(self, message='', conflicting_service=None):
         super(NTPConflictingService, self).__init__(self, message)
         self.conflicting_service = conflicting_service
-
-
-TIME_SERVICE = __detect_time_server()
-ntp_service = __service_command()
