@@ -762,6 +762,7 @@ def install(installer):
     if installer._update_hosts_file:
         update_hosts_file(ip_addresses, host_name, fstore)
 
+    ntp_role = False
     # Create a directory server instance
     if not options.external_cert_files:
         # We have to sync time before certificate handling on master.
@@ -775,6 +776,7 @@ def install(installer):
                 print("         Time synchronization is required for IPA "
                       "to work correctly")
             else:
+                ntp_role = True
                 print("Successfully synchronization time with {}".format(detect_time_server()))
 
         if options.dirsrv_cert_files:
@@ -902,7 +904,7 @@ def install(installer):
         kra.install(api, None, options, custodia=custodia)
 
     if options.setup_dns:
-        dns.install(False, False, options)
+        dns.install(False, False, options, ntp_role=ntp_role)
 
     if options.setup_adtrust:
         adtrust.install(False, options, fstore, api)
