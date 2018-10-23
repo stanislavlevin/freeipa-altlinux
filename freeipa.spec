@@ -548,7 +548,6 @@ printf '%_libdir/krb5/plugins/libkrb5/winbind_krb5_locator.so\t/dev/null\t90\n' 
 %make check VERBOSE=yes LIBDIR=%_libdir
 
 %post server
-%post_service ipa
 %post_service certmonger
 %post_service dbus
 %post_service oddjobd
