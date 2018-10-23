@@ -12,6 +12,8 @@ import sys
 from ipaplatform.base.paths import BasePathNamespace
 
 class ALTLinuxPathNamespace(BasePathNamespace):
+    AUTHCONFIG = "/bin/true"
+    AUTHSELECT = "/bin/true"
     SH = "/bin/bash"
     GENERATE_RNDC_KEY = "/bin/true"
     SYSTEMCTL = "/sbin/systemctl"
