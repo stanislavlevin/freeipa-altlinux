@@ -1,9 +1,22 @@
 #!/bin/sh -e
 ipa_service="/lib/systemd/system/ipa.service"
-if egrep -qs "^${ipa_service}$"; then
-    if [ -f ${ipa_service} ]; then
-        if /bin/systemctl is-enabled ipa.service >/dev/null 2>&1; then
-            /bin/systemctl restart ipa.service ||:
-        fi
+ipa_pluginsdir="/usr/lib/python3/site-packages/ipaserver/plugins/"
+ipa_new_plugin="/run/ipa/rpmfiletrigger_newplugin"
+
+if egrep -qs "^${ipa_service}$|^${ipa_pluginsdir}"; then
+    [[ -f "$ipa_service" ]] && [[ -d "$ipa_pluginsdir" ]] || exit
+    if [ -f "$ipa_new_plugin" ]; then
+        rm -f "$ipa_new_plugin"
+        /usr/bin/python3 -c "import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);" >/dev/null 2>&1 || exit
+        echo "Perform the IPA upgrade. This may take a while."
+        if /usr/sbin/ipa-server-upgrade >/dev/null 2>&1; then
+	    echo "The IPA upgrade was successful."
+	else
+	    echo "IPA server upgrade failed: Inspect /var/log/ipaupgrade.log and run command ipa-server-upgrade manually."
+	fi
+    fi
+    if /bin/systemctl is-enabled ipa.service >/dev/null 2>&1; then
+        /bin/systemctl restart ipa.service ||:
     fi
 fi
+
