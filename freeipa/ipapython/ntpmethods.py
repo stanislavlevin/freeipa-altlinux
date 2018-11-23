@@ -10,6 +10,7 @@ import sys
 from ipaclient.install import ipadiscovery
 from ipaplatform import services
 from ipapython import ipautil
+from ipalib import api
 
 
 def service_command():
@@ -93,7 +94,7 @@ def check_timedate_services():
     for service in services.timedate_services:
         if service != service_command()['service']:
             continue
-        instance = services.service(service)
+        instance = services.service(service, api)
         if instance.is_enabled() or instance.is_running():
             raise NTPConflictingService(
                 conflicting_service=instance.service_name
