@@ -140,15 +140,17 @@ def configure_xml(fstore):
 
 def configure_nsswitch(fstore, options):
     """
-    Point automount to ldap in nsswitch.conf. This function is for non-SSSD
-    setups only
+    Point automount to ldap in nsswitch.conf
     """
     fstore.backup_file(paths.NSSWITCH_CONF)
 
     conf = ipachangeconf.IPAChangeConf("IPA Installer")
     conf.setOptionAssignment(':')
 
-    nss_value = ' files ldap'
+    if options.sssd:
+        nss_value = ' sss files'
+    else:
+        nss_value = ' ldap files'
 
     opts = [{'name':'automount', 'type':'option', 'action':'set', 'value':nss_value},
             {'name':'empty', 'type':'empty'}]
@@ -513,8 +515,7 @@ def main():
         sys.exit("Installation aborted")
 
     try:
-        if not options.sssd:
-            configure_nsswitch(fstore, options)
+        configure_nsswitch(fstore, options)
         configure_nfs(fstore, statestore)
         if options.sssd:
             configure_autofs_sssd(fstore, statestore, autodiscover, options)
