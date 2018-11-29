@@ -263,7 +263,7 @@ def uninstall(fstore, statestore):
        paths.AUTOFS_LDAP_AUTH_CONF,
        paths.IDMAPD_CONF,
     ]
-    STATES=['autofs', 'rpcidmapd', 'rpcgssd']
+    STATES=['autofs', 'nfsclient']
 
     # automount only touches /etc/nsswitch.conf if LDAP is
     # used. Don't restore it otherwise.
@@ -315,22 +315,14 @@ def uninstall(fstore, statestore):
                 print('Unable to restore SSSD configuration: %s' % str(e))
                 logger.debug('Unable to restore SSSD configuration: %s',
                              str(e))
-    if statestore.has_state('rpcidmapd'):
-        enabled = statestore.restore_state('rpcidmapd', 'enabled')
-        running = statestore.restore_state('rpcidmapd', 'running')
-        rpcidmapd = services.knownservices.rpcidmapd
+    if statestore.has_state('nfsclient'):
+        enabled = statestore.restore_state('nfsclient', 'enabled')
+        running = statestore.restore_state('nfsclient', 'running')
+        nfsclient = services.knownservices.nfs_client
         if not enabled:
-            rpcidmapd.disable()
+            nfsclient.disable()
         if not running:
-            rpcidmapd.stop()
-    if statestore.has_state('rpcgssd'):
-        enabled = statestore.restore_state('rpcgssd', 'enabled')
-        running = statestore.restore_state('rpcgssd', 'running')
-        rpcgssd = services.knownservices.rpcgssd
-        if not enabled:
-            rpcgssd.disable()
-        if not running:
-            rpcgssd.stop()
+            nfsclient.stop()
 
     return 0
 
@@ -358,35 +350,20 @@ def configure_nfs(fstore, statestore):
 
     print("Configured %s" % paths.IDMAPD_CONF)
 
-    rpcidmapd = services.knownservices.rpcidmapd
-    statestore.backup_state('rpcidmapd', 'enabled', rpcidmapd.is_enabled())
-    statestore.backup_state('rpcidmapd', 'running', rpcidmapd.is_running())
+    nfsclient = services.knownservices.nfs_client
+    statestore.backup_state('nfsclient', 'enabled', nfsclient.is_enabled())
+    statestore.backup_state('nfsclient', 'running', nfsclient.is_running())
     try:
-        rpcidmapd.restart()
-        print("Started %s" % rpcidmapd.service_name)
+        nfsclient.restart()
+        print("Started %s" % nfsclient.service_name)
     except Exception as e:
-        logger.error("%s failed to restart: %s", rpcidmapd.service_name, e)
+        logger.error("%s failed to restart: %s", nfsclient.service_name, e)
     try:
-        rpcidmapd.enable()
+        nfsclient.enable()
     except Exception as e:
-        print("Failed to configure automatic startup of the %s daemon" % (rpcidmapd.service_name))
-        logger.error("Failed to enable automatic startup of the %s daemon: %s",
-                     rpcidmapd.service_name, str(e))
-
-    rpcgssd = services.knownservices.rpcgssd
-    statestore.backup_state('rpcgssd', 'enabled', rpcgssd.is_enabled())
-    statestore.backup_state('rpcgssd', 'running', rpcgssd.is_running())
-    try:
-        rpcgssd.restart()
-        print("Started %s" % rpcgssd.service_name)
-    except Exception as e:
-        logger.error("%s failed to restart: %s", rpcgssd.service_name, e)
-    try:
-        rpcgssd.enable()
-    except Exception as e:
-        print("Failed to configure automatic startup of the %s daemon" % (rpcgssd.service_name))
-        logger.error("Failed to enable automatic startup of the %s daemon: %s",
-                     rpcgssd.service_name, str(e))
+        print("Failed to configure automatic startup of the %s target" % (nfsclient.service_name))
+        logger.error("Failed to enable automatic startup of the %s target: %s",
+                     nfsclient.service_name, str(e))
 
 def main():
     try:
