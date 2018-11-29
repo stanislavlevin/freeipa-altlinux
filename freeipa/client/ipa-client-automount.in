@@ -261,7 +261,6 @@ def uninstall(fstore, statestore):
        paths.SYSCONFIG_AUTOFS,
        paths.NSSWITCH_CONF,
        paths.AUTOFS_LDAP_AUTH_CONF,
-       paths.SYSCONFIG_NFS,
        paths.IDMAPD_CONF,
     ]
     STATES=['autofs', 'rpcidmapd', 'rpcgssd']
@@ -339,14 +338,6 @@ def configure_nfs(fstore, statestore):
     """
     Configure secure NFS
     """
-    replacevars = {
-        constants.SECURE_NFS_VAR: 'yes',
-    }
-    ipautil.backup_config_and_replace_variables(fstore,
-        paths.SYSCONFIG_NFS, replacevars=replacevars)
-    tasks.restore_context(paths.SYSCONFIG_NFS)
-
-    print("Configured %s" % paths.SYSCONFIG_NFS)
 
     # Prepare the changes
     # We need to use IPAChangeConf as simple regexp substitution
