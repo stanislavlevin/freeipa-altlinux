@@ -5,7 +5,7 @@
 """
 Contains ALT Linux specific service class implementations.
 """
-
+from ipaplatform.base import services as base_services
 from ipaplatform.redhat import services as redhat_services
 
 # Mappings from service names as FreeIPA code references to these services
@@ -22,7 +22,7 @@ altlinux_system_units['rpcidmapd'] = 'nfs-idmapd.service'
 class ALTLinuxService(redhat_services.RedHatService):
     system_units = altlinux_system_units
 
-class ALTLinuxNoService(redhat_services.RedHatService):
+class ALTLinuxNoService(base_services.PlatformService):
     @staticmethod
     def start():
         return True
