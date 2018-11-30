@@ -278,14 +278,10 @@ Requires: sssd-krb5
 Requires: sssd-ipa >= %sssd_version
 Requires: sssd-tools >= %sssd_version
 Requires: libsss_sudo
-Requires: libsss_autofs
 Requires: certmonger
 Requires: nss-utils
 Requires: bind-utils
 Requires: oddjob-mkhomedir
-Requires: autofs
-Requires: libnfsidmap
-Requires: nfs-utils
 Requires: policycoreutils
 Requires: python3-module-gssapi
 Requires: python3-module-ipaclient = %EVR
@@ -304,6 +300,26 @@ and integration with Active Directory based infrastructures (Trusts).
 If your network uses IPA for authentication, this package should be
 installed on every client machine.
 This package provides command-line tools for IPA administrators.
+
+###############################################################################
+
+%package client-automount
+Summary: IPA Automount for use on clients
+Group: System/Base
+BuildArch: noarch
+Requires: %name-client = %EVR
+Requires: autofs-sss
+Requires: libsss_autofs
+Requires: sssd-nfs-idmap
+
+%description client-automount
+IPA is an integrated solution to provide centrally managed Identity (users,
+hosts, services), Authentication (SSO, 2FA), and Authorization
+(host access control, SELinux user roles, services). The solution provides
+features for further integration with Linux based clients (SUDO, automount)
+and integration with Active Directory based infrastructures (Trusts).
+If your network uses IPA for authentication and you would like to use
+Automount, this package should be installed.
 
 ###############################################################################
 
@@ -849,7 +865,6 @@ fi
 
 %files client
 %_sbindir/ipa-client-install
-%_sbindir/ipa-client-automount
 %_sbindir/ipa-certupdate
 %_sbindir/ipa-getkeytab
 %_sbindir/ipa-rmkeytab
@@ -860,9 +875,12 @@ fi
 %_mandir/man1/ipa-getkeytab.1*
 %_mandir/man1/ipa-rmkeytab.1*
 %_mandir/man1/ipa-client-install.1*
-%_mandir/man1/ipa-client-automount.1*
 %_mandir/man1/ipa-certupdate.1*
 %_mandir/man1/ipa-join.1*
+
+%files client-automount
+%_sbindir/ipa-client-automount
+%_mandir/man1/ipa-client-automount.1*
 
 %files -n python3-module-ipaclient
 %python3_sitelibdir_noarch/ipaclient/
