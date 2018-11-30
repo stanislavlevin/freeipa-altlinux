@@ -3087,12 +3087,13 @@ def uninstall(options):
     fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
     statestore = sysrestore.StateFile(paths.IPA_CLIENT_SYSRESTORE)
 
-    try:
-        run([paths.IPA_CLIENT_AUTOMOUNT, "--uninstall", "--debug"])
-    except CalledProcessError as e:
-        if e.returncode != CLIENT_NOT_CONFIGURED:
-            logger.error(
-                "Unconfigured automount client failed: %s", str(e))
+    if os.path.isfile(paths.IPA_CLIENT_AUTOMOUNT):
+        try:
+            run([paths.IPA_CLIENT_AUTOMOUNT, "--uninstall", "--debug"])
+        except CalledProcessError as e:
+            if e.returncode != CLIENT_NOT_CONFIGURED:
+                logger.error(
+                    "Unconfigured automount client failed: %s", str(e))
 
     # Reload the state as automount unconfigure may have modified it
     fstore._load()
