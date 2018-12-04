@@ -737,7 +737,7 @@ class Service(object):
         if keytab is None:
             keytab = self.keytab
         if owner is None:
-            owner = self.service_user
+            owner = self.keytab_user
 
         pent = pwd.getpwnam(owner)
         os.chown(keytab, pent.pw_uid, pent.pw_gid)
