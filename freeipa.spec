@@ -495,7 +495,6 @@ touch %buildroot%etc_systemd_dir/httpd2.service.d/ipa.conf
 
 mkdir -p %buildroot%_sysconfdir/cron.d
 
-mkdir -p %buildroot%_sharedstatedir/kdcproxy
 mkdir -p %buildroot%_sharedstatedir/ipa/backup
 mkdir -p %buildroot%_sharedstatedir/ipa/gssproxy
 mkdir -p %buildroot%_sharedstatedir/ipa/sysrestore
@@ -772,7 +771,6 @@ fi
 %files server-common
 %dir %attr(0700,root,root) %_runtimedir/ipa
 %dir %attr(0700,root,root) %_runtimedir/ipa/ccaches
-%ghost %verify(not user group) %dir %_sharedstatedir/kdcproxy
 %dir %attr(0755,root,root) %_sysconfdir/ipa/kdcproxy
 %config(noreplace) %_sysconfdir/ipa/kdcproxy/kdcproxy.conf
 /lib/tmpfiles.d/ipa.conf
