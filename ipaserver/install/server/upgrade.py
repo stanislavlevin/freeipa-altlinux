@@ -1957,6 +1957,7 @@ def upgrade_configuration():
     update_ipa_httpd_service_conf(http)
     update_ipa_http_wsgi_conf(http)
     migrate_to_mod_ssl(http)
+    tasks.configure_ipa_gssproxy_dir()
     update_http_keytab(http)
     http.configure_gssproxy()
     http.configure_httpd_mods()
