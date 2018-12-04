@@ -138,7 +138,7 @@ Requires: %name-client = %EVR
 Requires: acl
 Requires: gssproxy
 Requires: sssd-dbus >= %sssd_version
-Requires: selinux-policy
+Requires: selinux-policy-alt
 Requires: pki-ca >= %pki_version
 Requires: pki-kra >= %pki_version
 Requires: certmonger
