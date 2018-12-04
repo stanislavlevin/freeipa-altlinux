@@ -525,8 +525,28 @@ class RedHatTaskNamespace(BaseTaskNamespace):
             )
         )
 
-        os.chmod(paths.GSSPROXY_CONF, 0o600)
+        if constants.GSSPROXY_USER.uid == 0:
+            # by default gssproxy user is root
+            mod = 0o600
+        else:
+            # gssproxy user is non-privileged
+            mod = 0o640
+        os.chmod(paths.GSSPROXY_CONF, mod)
+        os.chown(paths.GSSPROXY_CONF, 0, constants.GSSPROXY_USER.pgid)
         self.restore_context(paths.GSSPROXY_CONF)
+
+    def configure_ipa_gssproxy_dir(self):
+        ipa_gssproxy_dir = os.path.dirname(paths.HTTP_KEYTAB)
+        if constants.GSSPROXY_USER.uid == 0:
+            # by default gssproxy user is root
+            mod = 0o700
+        else:
+            # gssproxy user is non-privileged
+            mod = 0o770
+        if not os.path.isdir(ipa_gssproxy_dir):
+            os.mkdir(ipa_gssproxy_dir)
+        os.chmod(ipa_gssproxy_dir, mod)
+        os.chown(ipa_gssproxy_dir, 0, constants.GSSPROXY_USER.pgid)
 
     def configure_httpd_wsgi_conf(self):
         """Configure WSGI for correct Python version (Fedora)
