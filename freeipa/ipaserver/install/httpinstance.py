@@ -284,6 +284,7 @@ class HTTPInstance(service.Service):
 
     def configure_gssproxy(self):
         tasks.configure_http_gssproxy_conf(IPAAPI_USER)
+        tasks.configure_ipa_gssproxy_dir()
         services.knownservices.gssproxy.restart()
 
     def get_mod_nss_nickname(self):
@@ -708,6 +709,9 @@ class HTTPInstance(service.Service):
                          "issued by IPA", cert.subject)
 
     def request_service_keytab(self):
+        ipa_gssproxy_dir = os.path.dirname(paths.HTTP_KEYTAB)
+        if not os.path.isdir(ipa_gssproxy_dir):
+            os.mkdir(ipa_gssproxy_dir)
         super(HTTPInstance, self).request_service_keytab()
 
         if self.master_fqdn is not None:
