@@ -11,6 +11,7 @@ from ipaplatform.base.constants import BaseConstantsNamespace
 
 
 class ALTLinuxConstantsNamespace(BaseConstantsNamespace):
+    GSSPROXY_USER = "_gssproxy"
     HTTPD_USER = "apache2"
     HTTPD_GROUP = "apache2"
     ODS_USER = "_opendnssec"
