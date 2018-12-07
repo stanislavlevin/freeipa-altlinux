@@ -14,6 +14,7 @@ __all__ = ("constants", "User", "Group")
 
 class ALTLinuxConstantsNamespace(BaseConstantsNamespace):
     DEFAULT_SHELL = "/bin/bash"
+    GSSPROXY_USER = User("_gssproxy")
     HTTPD_USER = User("apache2")
     HTTPD_GROUP = Group("apache2")
     ODS_USER = User("_opendnssec")
