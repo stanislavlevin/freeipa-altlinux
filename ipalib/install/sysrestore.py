@@ -29,7 +29,6 @@ import collections
 import logging
 import os
 import os.path
-import random
 import shutil
 import stat
 from hashlib import sha256
@@ -80,8 +79,6 @@ class FileStore:
 
         self._path = path
         self._index = os.path.join(self._path, index_file)
-
-        self.random = random.Random()
 
         self.files = collections.OrderedDict()
         self._load()
