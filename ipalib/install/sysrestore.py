@@ -35,6 +35,8 @@ import stat
 from hashlib import sha256
 
 import six
+from ipaplatform.tasks import tasks
+from ipaplatform.paths import paths
 
 # pylint: disable=import-error
 if six.PY3:
@@ -43,9 +45,6 @@ if six.PY3:
 else:
     from ConfigParser import SafeConfigParser
 # pylint: enable=import-error
-
-from ipaplatform.tasks import tasks
-from ipaplatform.paths import paths
 
 if six.PY3:
     unicode = str
@@ -64,7 +63,7 @@ SYSRESTORE_STATEFILE = "sysrestore.state"
 class FileStore:
     """Class for handling backup and restore of files"""
 
-    def __init__(self, path = SYSRESTORE_PATH, index_file = SYSRESTORE_INDEXFILE):
+    def __init__(self, path=SYSRESTORE_PATH, index_file=SYSRESTORE_INDEXFILE):
         """Create a _StoreFiles object, that uses @path as the
         base directory.
 
@@ -165,7 +164,7 @@ class FileStore:
             cont_hash = sha256(f.read()).hexdigest()
 
         filename = "{hexhash}-{bcppath}".format(
-                hexhash=cont_hash, bcppath=backupfile)
+            hexhash=cont_hash, bcppath=backupfile)
 
         backup_path = os.path.join(self._path, filename)
         if os.path.isfile(backup_path):
@@ -196,7 +195,7 @@ class FileStore:
                 break
         return result
 
-    def restore_file(self, path, new_path = None):
+    def restore_file(self, path, new_path=None):
         """Restore the copy of a file at @path to its original
         location and delete the copy.
 
@@ -360,7 +359,7 @@ class StateFile:
     enabled=False
     """
 
-    def __init__(self, path = SYSRESTORE_PATH, state_file = SYSRESTORE_STATEFILE):
+    def __init__(self, path=SYSRESTORE_PATH, state_file=SYSRESTORE_STATEFILE):
         """Create a StateFile object, loading from @path.
 
         The dictionary @modules, a member of the returned object,
@@ -431,7 +430,9 @@ class StateFile:
         a string or boolean.
         """
         if not isinstance(value, (str, bool, unicode)):
-            raise ValueError("Only strings, booleans or unicode strings are supported")
+            raise ValueError(
+                "Only strings, booleans or unicode strings are supported"
+            )
 
         self._load()
 
