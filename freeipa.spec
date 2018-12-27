@@ -805,7 +805,7 @@ fi
 %_datadir/ipa/updates/*
 %dir %_sharedstatedir/ipa
 %attr(700,root,root) %dir %_sharedstatedir/ipa/backup
-%attr(700,root,root) %dir %_sharedstatedir/ipa/gssproxy
+%ghost %dir %_sharedstatedir/ipa/gssproxy
 %attr(711,root,root) %dir %_sharedstatedir/ipa/sysrestore
 %attr(700,root,root) %dir %_sharedstatedir/ipa/sysupgrade
 %attr(755,root,root) %dir %_sharedstatedir/ipa/pki-ca
