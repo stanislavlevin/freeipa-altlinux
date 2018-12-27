@@ -25,17 +25,15 @@
 
 from __future__ import absolute_import
 
-from hashlib import sha256
-from ipaplatform.paths import paths
-from ipaplatform.tasks import tasks
-
 import collections
 import logging
 import os
 import os.path
 import shutil
-import six
 import stat
+from hashlib import sha256
+
+import six
 
 # pylint: disable=import-error
 if six.PY3:
@@ -45,6 +43,8 @@ else:
     from ConfigParser import SafeConfigParser
 # pylint: enable=import-error
 
+from ipaplatform.tasks import tasks
+from ipaplatform.paths import paths
 
 if six.PY3:
     unicode = str
@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 SYSRESTORE_INDEXFILE = "sysrestore.index"
 SYSRESTORE_MAX_INDEX = 3
-SYSRESTORE_PATH = paths.TMP
+SYSRESTORE_PATH = paths.SYSRESTORE
 SYSRESTORE_PATH_INDEX = 3
 SYSRESTORE_SECTION = "files"
 SYSRESTORE_SEP = ","
@@ -70,6 +70,14 @@ class FileStore(object):
         The file @path/sysrestore.index is used to store information
         about the original location of the saved files.
         """
+        if not index_file:
+            raise ValueError("Index file should not be an empty")
+        if os.path.dirname(index_file):
+            raise ValueError(
+                "Index file should be a filename without leading dirs: {0}"
+                .format(index_file)
+            )
+
         self._path = path
         self._index = os.path.join(self._path, index_file)
 
