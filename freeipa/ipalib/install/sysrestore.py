@@ -25,15 +25,19 @@
 
 from __future__ import absolute_import
 
+from hashlib import sha256
+from ipaplatform.paths import paths
+from ipaplatform.tasks import tasks
+
+import collections
 import logging
 import os
 import os.path
-import shutil
 import random
-
-from hashlib import sha256
-
+import shutil
 import six
+import stat
+
 # pylint: disable=import-error
 if six.PY3:
     # The SafeConfigParser class has been renamed to ConfigParser in Py3
@@ -42,16 +46,18 @@ else:
     from ConfigParser import SafeConfigParser
 # pylint: enable=import-error
 
-from ipaplatform.tasks import tasks
-from ipaplatform.paths import paths
 
 if six.PY3:
     unicode = str
 
 logger = logging.getLogger(__name__)
 
-SYSRESTORE_PATH = paths.TMP
 SYSRESTORE_INDEXFILE = "sysrestore.index"
+SYSRESTORE_MAX_INDEX = 3
+SYSRESTORE_PATH = paths.TMP
+SYSRESTORE_PATH_INDEX = 3
+SYSRESTORE_SECTION = "files"
+SYSRESTORE_SEP = ","
 SYSRESTORE_STATEFILE = "sysrestore.state"
 
 
@@ -70,7 +76,7 @@ class FileStore(object):
 
         self.random = random.Random()
 
-        self.files = {}
+        self.files = collections.OrderedDict()
         self._load()
 
     def _load(self):
@@ -80,17 +86,20 @@ class FileStore(object):
 
         logger.debug("Loading Index file from '%s'", self._index)
 
-        self.files = {}
+        self.files = collections.OrderedDict()
 
         p = SafeConfigParser()
         p.optionxform = str
         p.read(self._index)
 
         for section in p.sections():
-            if section == "files":
+            if section == SYSRESTORE_SECTION:
                 for (key, value) in p.items(section):
+                    parts = value.split(SYSRESTORE_SEP)
+                    if (len(parts) != SYSRESTORE_MAX_INDEX + 1):
+                        raise ValueError("Broken store {0}"
+                                         .format(self._index))
                     self.files[key] = value
-
 
     def save(self):
         """Save the file list to @_index. If @files is an empty
@@ -107,9 +116,12 @@ class FileStore(object):
         p = SafeConfigParser()
         p.optionxform = str
 
-        p.add_section('files')
+        p.add_section(SYSRESTORE_SECTION)
         for (key, value) in self.files.items():
-            p.set('files', key, str(value))
+            parts = value.split(SYSRESTORE_SEP)
+            if (len(parts) != SYSRESTORE_MAX_INDEX + 1):
+                raise ValueError("Broken store {0}".format(self._index))
+            p.set(SYSRESTORE_SECTION, key, str(value))
 
         with open(self._index, "w") as f:
             p.write(f)
@@ -124,11 +136,22 @@ class FileStore(object):
         if not os.path.isabs(path):
             raise ValueError("Absolute path required")
 
-        if not os.path.isfile(path):
+        try:
+            stats = os.lstat(path)
+        except OSError:
             logger.debug("  -> Not backing up - '%s' doesn't exist", path)
             return
 
-        _reldir, backupfile = os.path.split(path)
+        mode = stats.st_mode
+        if not stat.S_ISREG(mode):
+            raise ValueError("Regular file required")
+
+        for value in self.files.values():
+            parts = value.split(SYSRESTORE_SEP)
+            if (len(parts) != SYSRESTORE_MAX_INDEX + 1):
+                raise ValueError("Broken store {0}".format(self._index))
+
+        backupfile = os.path.basename(path)
 
         with open(path, 'rb') as f:
             cont_hash = sha256(f.read()).hexdigest()
@@ -137,17 +160,15 @@ class FileStore(object):
                 hexhash=cont_hash, bcppath=backupfile)
 
         backup_path = os.path.join(self._path, filename)
-        if os.path.exists(backup_path):
+        if os.path.isfile(backup_path):
             logger.debug("  -> Not backing up - already have a copy of '%s'",
                          path)
             return
 
         shutil.copy2(path, backup_path)
 
-        stat = os.stat(path)
-
-        template = '{stat.st_mode},{stat.st_uid},{stat.st_gid},{path}'
-        self.files[filename] = template.format(stat=stat, path=path)
+        template = '{stats.st_mode},{stats.st_uid},{stats.st_gid},{path}'
+        self.files[filename] = template.format(stats=stats, path=path)
         self.save()
 
     def has_file(self, path):
@@ -156,8 +177,12 @@ class FileStore(object):
         Returns #True if the file exists in the file store, #False otherwise
         """
         result = False
-        for _key, value in self.files.items():
-            _mode, _uid, _gid, filepath = value.split(',', 3)
+        for value in self.files.values():
+            parts = value.split(SYSRESTORE_SEP)
+            if (len(parts) != SYSRESTORE_MAX_INDEX + 1):
+                raise ValueError("Broken store {0}".format(self._index))
+
+            filepath = parts[SYSRESTORE_PATH_INDEX]
             if (filepath == path):
                 result = True
                 break
@@ -191,8 +216,12 @@ class FileStore(object):
         gid = None
         filename = None
 
-        for (key, value) in self.files.items():
-            (mode,uid,gid,filepath) = value.split(',', 3)
+        for (key, value) in reversed(self.files.items()):
+            parts = value.split(SYSRESTORE_SEP)
+            if (len(parts) != SYSRESTORE_MAX_INDEX + 1):
+                raise ValueError("Broken store {0}".format(self._index))
+
+            (mode, uid, gid, filepath) = parts
             if (filepath == path):
                 filename = key
                 break
@@ -233,9 +262,9 @@ class FileStore(object):
         if len(self.files) == 0:
             return False
 
-        for (filename, value) in self.files.items():
+        for (filename, value) in reversed(self.files.items()):
 
-            (mode,uid,gid,path) = value.split(',', 3)
+            (mode, uid, gid, path) = value.split(SYSRESTORE_SEP)
 
             backup_path = os.path.join(self._path, filename)
             if not os.path.exists(backup_path):
@@ -252,7 +281,7 @@ class FileStore(object):
             tasks.restore_context(path)
 
         # force file to be deleted
-        self.files = {}
+        self.files = collections.OrderedDict()
         self.save()
 
         return True
@@ -281,8 +310,11 @@ class FileStore(object):
 
         filename = None
 
-        for (key, value) in self.files.items():
-            _mode, _uid, _gid, filepath = value.split(',', 3)
+        for (key, value) in reversed(self.files.items()):
+            parts = value.split(SYSRESTORE_SEP)
+            if (len(parts) != SYSRESTORE_MAX_INDEX + 1):
+                raise ValueError("Broken store {0}".format(self._index))
+            filepath = parts[SYSRESTORE_PATH_INDEX]
             if (filepath == path):
                 filename = key
                 break
