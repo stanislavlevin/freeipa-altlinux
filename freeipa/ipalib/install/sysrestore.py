@@ -64,7 +64,7 @@ SYSRESTORE_STATEFILE = "sysrestore.state"
 class FileStore(object):
     """Class for handling backup and restore of files"""
 
-    def __init__(self, path = SYSRESTORE_PATH, index_file = SYSRESTORE_INDEXFILE):
+    def __init__(self, path=SYSRESTORE_PATH, index_file=SYSRESTORE_INDEXFILE):
         """Create a _StoreFiles object, that uses @path as the
         base directory.
 
@@ -188,7 +188,7 @@ class FileStore(object):
                 break
         return result
 
-    def restore_file(self, path, new_path = None):
+    def restore_file(self, path, new_path=None):
         """Restore the copy of a file at @path to its original
         location and delete the copy.
 
@@ -352,7 +352,7 @@ class StateFile(object):
     enabled=False
     """
 
-    def __init__(self, path = SYSRESTORE_PATH, state_file = SYSRESTORE_STATEFILE):
+    def __init__(self, path=SYSRESTORE_PATH, state_file=SYSRESTORE_STATEFILE):
         """Create a StateFile object, loading from @path.
 
         The dictionary @modules, a member of the returned object,
@@ -423,7 +423,9 @@ class StateFile(object):
         a string or boolean.
         """
         if not isinstance(value, (str, bool, unicode)):
-            raise ValueError("Only strings, booleans or unicode strings are supported")
+            raise ValueError(
+                "Only strings, booleans or unicode strings are supported"
+            )
 
         self._load()
 
