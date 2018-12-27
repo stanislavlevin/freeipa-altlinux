@@ -35,7 +35,7 @@
 
 Name: freeipa
 Version: 4.7.1
-Release: alt4
+Release: alt5
 
 Summary: The Identity, Policy and Audit system
 License: GPLv3+
@@ -955,6 +955,11 @@ fi
 %python3_sitelibdir/ipaplatform-*-nspkg.pth
 
 %changelog
+* Fri Dec 28 2018 Stanislav Levin <slev@altlinux.org> 4.7.1-alt5
+- Fixed support for gssproxy non-privileged user.
+- Fixed support for Automount NFS.
+- Dropped build of freeipa-server for i586.
+
 * Tue Dec 04 2018 Stanislav Levin <slev@altlinux.org> 4.7.1-alt4
 - Drop Requires on selinux-policy (closes: #35686).
 
