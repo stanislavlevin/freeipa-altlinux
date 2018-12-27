@@ -25,6 +25,7 @@
 %define bind_version 9.11
 %define bind_dyndb_ldap_version 11.0
 %define sssd_version 1.16.3
+%define gssproxy_version 0.8.0-alt2
 
 Name: freeipa
 Version: 4.7.1
@@ -136,7 +137,7 @@ Summary: The IPA authentication server
 Group: System/Base
 Requires: %name-client = %EVR
 Requires: acl
-Requires: gssproxy
+Requires: gssproxy >= %gssproxy_version
 Requires: sssd-dbus >= %sssd_version
 Requires: selinux-policy-alt
 Requires: pki-ca >= %pki_version
