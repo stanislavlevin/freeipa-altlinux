@@ -42,6 +42,10 @@ class ALTLinuxTaskNamespace(RedHatTaskNamespace):
 
     def restore_auth_configuration(self, path):
         return True
+
+    def migrate_auth_configuration(self, statestore):
+        return True
+
     # END of TODO: use Alt tool like authconfig
 
 tasks = ALTLinuxTaskNamespace()
