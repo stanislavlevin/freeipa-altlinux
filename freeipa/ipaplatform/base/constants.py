@@ -51,6 +51,7 @@ class BaseConstantsNamespace(object):
     # remote password, and DSA cert authentication.
     TLS_HIGH_CIPHERS = "HIGH:!aNULL:!eNULL:!MD5:!RC4:!3DES:!PSK:!SRP:!aDSS"
     HTTPD_IPA_MODULES = None
+    HTTPD_IPA_CONFL_MODULES = None
 
 
 constants = BaseConstantsNamespace()

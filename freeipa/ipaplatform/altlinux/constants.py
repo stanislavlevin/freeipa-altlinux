@@ -29,4 +29,8 @@ class ALTLinuxConstantsNamespace(BaseConstantsNamespace):
         "session_cookie", "proxy_ajp", "proxy_http", "proxy",
     ]
 
+    HTTPD_IPA_CONFL_MODULES = [
+        "nss",
+    ]
+
 constants = ALTLinuxConstantsNamespace()

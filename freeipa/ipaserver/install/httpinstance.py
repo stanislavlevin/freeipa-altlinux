@@ -226,16 +226,16 @@ class HTTPInstance(service.Service):
             mod_list = [exclude_regex.sub("", item.strip()) for item in \
                     filter(include_regex.match, result.output.split('\n'))]
 
+        # Disable conflicting modules
+        for a2m in constants.HTTPD_IPA_CONFL_MODULES:
+            self.sstore.backup_state('httpd', 'mod_{0}'.format(a2m),
+                                     a2m in mod_list)
+            ipautil.run(["a2dismod", a2m], raiseonerr=False)
+
         # Backup state of the httpd modules
         for a2m in constants.HTTPD_IPA_MODULES:
-            self.sstore.backup_state('httpd', 'mod_%s' % a2m, a2m in mod_list)
-
-        # Disable conflicting modules
-        self.sstore.backup_state('httpd', 'mod_nss', 'nss' in mod_list)
-        ipautil.run(["a2dismod", 'nss'], raiseonerr=False)
-
-        # Enable apache2 modules and ipa configs
-        for a2m in constants.HTTPD_IPA_MODULES:
+            self.sstore.backup_state('httpd', 'mod_{0}'.format(a2m),
+                                     a2m in mod_list)
             ipautil.run(["a2enmod", a2m])
 
         # Process wsgi modules
@@ -619,12 +619,18 @@ class HTTPInstance(service.Service):
 
         # Restore mods states
         for a2m in constants.HTTPD_IPA_MODULES:
-            if not self.sstore.restore_state('httpd', 'mod_%s' % a2m):
+            if not self.sstore.restore_state('httpd', 'mod_{0}'.format(a2m)):
                 ipautil.run(["a2dismod", a2m], raiseonerr=False)
             else:
                 ipautil.run(["a2enmod", a2m], raiseonerr=False)
 
-        for a2m in ['nss', 'wsgi', 'wsgi-py3']:
+        for a2m in constants.HTTPD_IPA_CONFL_MODULES:
+            if not self.sstore.restore_state('httpd', 'mod_{0}'.format(a2m)):
+                ipautil.run(["a2dismod", a2m], raiseonerr=False)
+            else:
+                ipautil.run(["a2enmod", a2m], raiseonerr=False)
+
+        for a2m in ['wsgi', 'wsgi-py3']:
             if not self.sstore.restore_state('httpd', a2m):
                 ipautil.run(["a2dismod", a2m], raiseonerr=False)
             else:
