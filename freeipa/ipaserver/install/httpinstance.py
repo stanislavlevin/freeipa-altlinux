@@ -242,12 +242,10 @@ class HTTPInstance(service.Service):
         # wsgi module for Python and Python3 has the same name - wsgi,
         # thus we cannot rely on the mod name
         MODS_ENABLED_DIR = '/etc/httpd2/conf/mods-enabled'
-        if os.path.exists(os.path.join(MODS_ENABLED_DIR, 'wsgi.load')):
-            self.fstore.backup_file(os.path.join(MODS_ENABLED_DIR,
-                                                 'wsgi.load'))
-        if os.path.exists(os.path.join(MODS_ENABLED_DIR, 'wsgi-py3.load')):
-            self.fstore.backup_file(os.path.join(MODS_ENABLED_DIR,
-                                                 'wsgi-py3.load'))
+        if os.path.isfile(os.path.join(MODS_ENABLED_DIR, 'wsgi.load')):
+            self.sstore.backup_state('httpd', 'wsgi', True)
+        if os.path.isfile(os.path.join(MODS_ENABLED_DIR, 'wsgi-py3.load')):
+            self.sstore.backup_state('httpd', 'wsgi-py3', True)
 
         if sys.version_info.major == 2:
             wsgi_module_enabled = 'wsgi'
@@ -274,8 +272,8 @@ class HTTPInstance(service.Service):
             "%s doesn't exist" % paths.HTTPD_DEFAULT_STARTED_SITE_CONF)
 
         # Backup enabled ports
-        if os.path.exists(paths.HTTPD_HTTPS_PORT_ENABLE_CONF):
-            self.fstore.backup_file(paths.HTTPD_HTTPS_PORT_ENABLE_CONF)
+        if os.path.isfile(paths.HTTPD_HTTPS_PORT_ENABLE_CONF):
+            self.sstore.backup_state('httpd', 'https', True)
 
         ipautil.run(["a2chkconfig"])
         ipautil.run(["a2enport", "https"])
@@ -607,11 +605,17 @@ class HTTPInstance(service.Service):
         for f in [ paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF,
                   paths.HTTPD_NSS_CONF, paths.HTTPD_SSL_SITE_CONF,
                   paths.HTTPD_DEFAULT_STARTED_SITE_CONF,
-                  paths.HTTPD_HTTPS_PORT_ENABLE_CONF ]:
+                  ]:
             try:
                 self.fstore.restore_file(f)
             except ValueError as error:
                 logger.debug("%s", error)
+
+        # Restore port states
+        if not self.sstore.restore_state('httpd', 'https'):
+            ipautil.run(["a2disport", 'https'], raiseonerr=False)
+        else:
+            ipautil.run(["a2enport", 'https'], raiseonerr=False)
 
         # Restore mods states
         for a2m in constants.HTTPD_IPA_MODULES:
@@ -620,20 +624,11 @@ class HTTPInstance(service.Service):
             else:
                 ipautil.run(["a2enmod", a2m], raiseonerr=False)
 
-        MOD_NSS = 'mod_nss'
-        if not self.sstore.restore_state('httpd', MOD_NSS):
-            ipautil.run(["a2dismod", MOD_NSS], raiseonerr=False)
-        else:
-            ipautil.run(["a2enmod", MOD_NSS], raiseonerr=False)
-
-        MODS_ENABLED_DIR = '/etc/httpd2/conf/mods-enabled'
-        try:
-            self.fstore.restore_file(os.path.join(MODS_ENABLED_DIR,
-                                                  'wsgi.load'))
-            self.fstore.restore_file(os.path.join(MODS_ENABLED_DIR,
-                                                  'wsgi-py3.load'))
-        except ValueError as error:
-            logger.debug("%s", error)
+        for a2m in ['nss', 'wsgi', 'wsgi-py3']:
+            if not self.sstore.restore_state('httpd', a2m):
+                ipautil.run(["a2dismod", a2m], raiseonerr=False)
+            else:
+                ipautil.run(["a2enmod", a2m], raiseonerr=False)
 
         ipautil.run(["a2chkconfig"])
         # Remove the configuration files we create
