@@ -42,6 +42,7 @@ MARKERS = [
     'ds_acceptance: Acceptance test suite for 389 Directory Server',
     'skip_ipaclient_unittest: Skip in ipaclient unittest mode',
     'needs_ipaapi: Test needs IPA API',
+    'needs_install_package: Test needs ipa*.install subpackage',
 ]
 
 
@@ -101,6 +102,11 @@ def pytest_addoption(parser):
         help='Do not run tests that depends on IPA API',
         action='store_true',
     )
+    group.addoption(
+        '--skip-install-package',
+        help='Do not run tests that depends on ipa*.install subpackage',
+        action='store_true',
+    )
 
 
 def pytest_cmdline_main(config):
@@ -139,3 +145,7 @@ def pytest_runtest_setup(item):
             # pylint: disable=no-member
             if pytest.config.option.skip_ipaapi:
                 pytest.skip("Skip tests that needs an IPA API")
+        if item.get_marker('needs_install_package'):
+            # pylint: disable=no-member
+            if pytest.config.option.skip_install_package:
+                pytest.skip("Skip tests that needs an ipa*.install subpackage")
