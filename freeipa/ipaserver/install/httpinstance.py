@@ -618,13 +618,8 @@ class HTTPInstance(service.Service):
             ipautil.run(["a2enport", 'https'], raiseonerr=False)
 
         # Restore mods states
-        for a2m in constants.HTTPD_IPA_MODULES:
-            if not self.sstore.restore_state('httpd', 'mod_{0}'.format(a2m)):
-                ipautil.run(["a2dismod", a2m], raiseonerr=False)
-            else:
-                ipautil.run(["a2enmod", a2m], raiseonerr=False)
-
-        for a2m in constants.HTTPD_IPA_CONFL_MODULES:
+        for a2m in constants.HTTPD_IPA_MODULES + \
+            constants.HTTPD_IPA_CONFL_MODULES:
             if not self.sstore.restore_state('httpd', 'mod_{0}'.format(a2m)):
                 ipautil.run(["a2dismod", a2m], raiseonerr=False)
             else:
