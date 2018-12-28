@@ -2,6 +2,12 @@
 %define _unpackaged_files_terminate_build 1
 %def_with lint
 
+%ifarch %ix86
+%def_with only_client
+%else
+%def_without only_client
+%endif
+
 %if_with lint
     %define linter_options --enable-pylint --with-jslint
 %else
@@ -40,17 +46,21 @@ Source0: %name-%version.tar
 Source1: freeipa-server.filetrigger
 Patch: %name-%version-alt.patch
 
-BuildRequires(pre): rpm-macros-apache2
 BuildRequires(pre): rpm-build-python3
-# libs
-BuildRequires: libkrb5-devel >= %krb5_version
-BuildRequires: libsasl2-devel
-BuildRequires: libxmlrpc-devel
-BuildRequires: libpopt-devel
-BuildRequires: libnss-devel
-BuildRequires: libssl-devel
+
+BuildRequires: libcmocka-devel
 BuildRequires: libini_config-devel
+BuildRequires: libkrb5-devel >= %krb5_version
+BuildRequires: libnss-devel
+BuildRequires: libpopt-devel
 BuildRequires: libsasl2-devel
+BuildRequires: libssl-devel
+BuildRequires: libxmlrpc-devel
+BuildRequires: openldap-devel
+
+%if_without only_client
+BuildRequires(pre): rpm-macros-apache2
+
 BuildRequires: libuuid-devel
 BuildRequires: libsss_idmap-devel
 BuildRequires: libsss_certmap-devel
@@ -62,6 +72,7 @@ BuildRequires: apache2-base
 BuildRequires: 389-ds-base-devel >= %ds_version
 BuildRequires: samba-devel >= %samba_version
 BuildRequires: node-uglify-js
+%endif # only_client
 
 # python
 BuildRequires: python3-module-lesscpy
@@ -118,11 +129,6 @@ BuildRequires: python3-module-yubico
 
 %endif
 
-#
-# Build dependencies for unit tests
-#
-BuildRequires: libcmocka-devel
-
 %description
 IPA is an integrated solution to provide centrally managed Identity (users,
 hosts, services), Authentication (SSO, 2FA), and Authorization
@@ -132,6 +138,7 @@ and integration with Active Directory based infrastructures (Trusts).
 
 ###############################################################################
 
+%if_without only_client
 %package server
 Summary: The IPA authentication server
 Group: System/Base
@@ -262,6 +269,7 @@ Cross-realm trusts with Active Directory in IPA require working Samba 4
 installation. This package is provided for convenience to install all required
 dependencies at once.
 
+%endif # only_client
 ###############################################################################
 
 %package client
@@ -451,8 +459,13 @@ grep -rl 8080 | xargs sed -i 's/\(\W\|^\)8080\(\W\|$\)/\18090\2/g'
 export PYTHON=%_bindir/python3
 %autoreconf
 %configure --with-vendor-suffix=-%release \
+%if_without only_client
            --enable-server \
            --with-ipatests \
+%else
+           --disable-server \
+           --without-ipatests \
+%endif
 	   --with-ipaplatform=altlinux \
 	   IPA_VERSION_IS_GIT_SNAPSHOT=no \
            %linter_options
@@ -468,6 +481,7 @@ find %buildroot -wholename '*/site-packages/*/install_files.txt' -exec rm {} \;
 
 %find_lang ipa
 
+%if_without only_client
 # Remove .la files from libtool - we don't want to package these files
 rm %buildroot/%plugin_dir/libipa_pwd_extop.la
 rm %buildroot/%plugin_dir/libipa_enrollment_extop.la
@@ -494,8 +508,6 @@ mkdir -p %buildroot%apache2_confdir/{sites-available,extra-available,extra-enabl
 /bin/touch %buildroot%apache2_extra_enabled/{ipa-kdc-proxy.conf,ipa-pki-proxy.conf,ipa-rewrite.conf}
 /bin/touch %buildroot%_datadir/ipa/html/{ca.crt,krb.con,krb5.ini,krbrealm.con}
 
-/bin/touch %buildroot%_sysconfdir/ipa/{default.conf,ca.crt}
-
 mkdir -p %buildroot%etc_systemd_dir/httpd2.service.d
 touch %buildroot%etc_systemd_dir/httpd2.service.d/ipa.conf
 
@@ -516,6 +528,24 @@ touch %buildroot%_sharedstatedir/bind/zone/dyndb-ldap/ipa
 touch %buildroot%_sharedstatedir/ipa/pki-ca/publish
 touch %buildroot%_sysconfdir/ipa/kdcproxy/ipa-kdc-proxy.conf
 
+mkdir -p %buildroot%_runtimedir
+install -d -m 0700 %buildroot%_runtimedir/ipa
+install -d -m 0700 %buildroot%_runtimedir/ipa/ccaches
+
+# install filetrigger
+mkdir -p %buildroot%_rpmlibdir
+install -D -p -m 0755 %SOURCE1 %buildroot%_rpmlibdir/freeipa-server.filetrigger
+
+# We use alternatives to divert winbind_krb5_locator.so plugin to libkrb5
+# on the installes where server-trust-ad subpackage is installed because
+# IPA AD trusts cannot be used at the same time with the locator plugin
+# since Winbindd will be configured in a different mode
+mkdir -p %buildroot%_altdir
+printf '%_libdir/krb5/plugins/libkrb5/winbind_krb5_locator.so\t/dev/null\t90\n' > %buildroot%_altdir/winbind_krb5_locator.so
+
+%endif # only_client
+
+/bin/touch %buildroot%_sysconfdir/ipa/{default.conf,ca.crt}
 # NSS
 # old dbm format
 touch %buildroot%_sysconfdir/ipa/nssdb/cert8.db
@@ -534,23 +564,10 @@ mkdir -p %buildroot%_sharedstatedir/ipa-client
 mkdir -p %buildroot%_sharedstatedir/ipa-client/pki
 mkdir -p %buildroot%_sharedstatedir/ipa-client/sysrestore
 
-mkdir -p %buildroot%_runtimedir
-install -d -m 0700 %buildroot%_runtimedir/ipa
-install -d -m 0700 %buildroot%_runtimedir/ipa/ccaches
-
-# install filetrigger
-mkdir -p %buildroot%_rpmlibdir
-install -D -p -m 0755 %SOURCE1 %buildroot%_rpmlibdir/freeipa-server.filetrigger
-
-# We use alternatives to divert winbind_krb5_locator.so plugin to libkrb5
-# on the installes where server-trust-ad subpackage is installed because
-# IPA AD trusts cannot be used at the same time with the locator plugin
-# since Winbindd will be configured in a different mode
-mkdir -p %buildroot%_altdir
-printf '%_libdir/krb5/plugins/libkrb5/winbind_krb5_locator.so\t/dev/null\t90\n' > %buildroot%_altdir/winbind_krb5_locator.so
-
 %check
 %make check VERBOSE=yes LIBDIR=%_libdir
+
+%if_without only_client
 
 %post server
 %post_service certmonger
@@ -616,6 +633,7 @@ if [ $1 = 0 ]; then
     /bin/systemctl reload-or-try-restart dbus ||:
     /bin/systemctl reload-or-try-restart oddjobd ||:
 fi
+%endif # only_client
 
 %post client
 if [ $1 -gt 1 ] ; then
@@ -680,6 +698,7 @@ if [ -f '/etc/openssh/sshd_config' -a $restore -ge 2 ]; then
     fi
 fi
 
+%if_without only_client
 %files server
 %_sbindir/ipa-backup
 %_sbindir/ipa-restore
@@ -852,6 +871,18 @@ fi
 %_libexecdir/ipa/oddjob/com.redhat.idm.trust-fetch-domains
 %_altdir/winbind_krb5_locator.so
 
+%files -n python3-module-ipatests
+%python3_sitelibdir_noarch/ipatests/
+%python3_sitelibdir_noarch/ipatests-*.egg-info
+%_bindir/ipa-run-tests
+%_bindir/ipa-test-config
+%_bindir/ipa-test-task
+%_man1dir/ipa-run-tests.1*
+%_man1dir/ipa-test-config.1*
+%_man1dir/ipa-test-task.1*
+
+%endif # only_client
+
 %files client
 %_sbindir/ipa-client-install
 %_sbindir/ipa-certupdate
@@ -916,16 +947,6 @@ fi
 %python3_sitelibdir_noarch/ipalib-*.egg-info/
 %python3_sitelibdir_noarch/ipaplatform-*.egg-info/
 %python3_sitelibdir_noarch/ipaplatform-*-nspkg.pth
-
-%files -n python3-module-ipatests
-%python3_sitelibdir_noarch/ipatests/
-%python3_sitelibdir_noarch/ipatests-*.egg-info
-%_bindir/ipa-run-tests
-%_bindir/ipa-test-config
-%_bindir/ipa-test-task
-%_man1dir/ipa-run-tests.1*
-%_man1dir/ipa-test-config.1*
-%_man1dir/ipa-test-task.1*
 
 %changelog
 * Tue Dec 04 2018 Stanislav Levin <slev@altlinux.org> 4.7.1-alt4
