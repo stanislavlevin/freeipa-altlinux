@@ -479,6 +479,12 @@ export PYTHON=%_bindir/python3
 # remove files which are useful only for make uninstall
 find %buildroot -wholename '*/site-packages/*/install_files.txt' -exec rm {} \;
 
+# since we package python modules as arch dependent
+%if "%python3_sitelibdir" != "%python3_sitelibdir_noarch"
+mkdir -p %buildroot%python3_sitelibdir
+mv %buildroot%python3_sitelibdir_noarch/* %buildroot%python3_sitelibdir/
+%endif
+
 %find_lang ipa
 
 %if_without only_client
@@ -783,15 +789,15 @@ fi
 %_rpmlibdir/freeipa-server.filetrigger
 
 %files -n python3-module-ipaserver
-%python3_sitelibdir_noarch/ipaserver/
-%python3_sitelibdir_noarch/ipaserver-*.egg-info/
+%python3_sitelibdir/ipaserver/
+%python3_sitelibdir/ipaserver-*.egg-info/
 
-%exclude %python3_sitelibdir_noarch/ipaserver/install/servntpconf*
-%exclude %python3_sitelibdir_noarch/ipaserver/install/servntplib*
+%exclude %python3_sitelibdir/ipaserver/install/servntpconf*
+%exclude %python3_sitelibdir/ipaserver/install/servntplib*
 
 %files -n python3-module-ipaserver-ntp
-%python3_sitelibdir_noarch/ipaserver/install/servntpconf*
-%python3_sitelibdir_noarch/ipaserver/install/servntplib*
+%python3_sitelibdir/ipaserver/install/servntpconf*
+%python3_sitelibdir/ipaserver/install/servntplib*
 
 %files server-common
 %dir %attr(0700,root,root) %_runtimedir/ipa
@@ -872,8 +878,8 @@ fi
 %_altdir/winbind_krb5_locator.so
 
 %files -n python3-module-ipatests
-%python3_sitelibdir_noarch/ipatests/
-%python3_sitelibdir_noarch/ipatests-*.egg-info
+%python3_sitelibdir/ipatests/
+%python3_sitelibdir/ipatests-*.egg-info
 %_bindir/ipa-run-tests
 %_bindir/ipa-test-config
 %_bindir/ipa-test-task
@@ -903,15 +909,15 @@ fi
 %_mandir/man1/ipa-client-automount.1*
 
 %files -n python3-module-ipaclient
-%python3_sitelibdir_noarch/ipaclient/
-%python3_sitelibdir_noarch/ipaclient-*.egg-info/
+%python3_sitelibdir/ipaclient/
+%python3_sitelibdir/ipaclient-*.egg-info/
 
-%exclude %python3_sitelibdir_noarch/ipaclient/install/clientntpconf*
-%exclude %python3_sitelibdir_noarch/ipaclient/install/clintplib*
+%exclude %python3_sitelibdir/ipaclient/install/clientntpconf*
+%exclude %python3_sitelibdir/ipaclient/install/clintplib*
 
 %files -n python3-module-ipaclient-ntp
-%python3_sitelibdir_noarch/ipaclient/install/clientntpconf*
-%python3_sitelibdir_noarch/ipaclient/install/clintplib*
+%python3_sitelibdir/ipaclient/install/clientntpconf*
+%python3_sitelibdir/ipaclient/install/clintplib*
 
 %files client-common
 %dir %attr(0755,root,root) %_sysconfdir/ipa/
@@ -940,13 +946,13 @@ fi
 %dir %_datadir/ipa
 
 %files -n python3-module-freeipa
-%python3_sitelibdir_noarch/ipapython/
-%python3_sitelibdir_noarch/ipalib/
-%python3_sitelibdir_noarch/ipaplatform/
-%python3_sitelibdir_noarch/ipapython-*.egg-info/
-%python3_sitelibdir_noarch/ipalib-*.egg-info/
-%python3_sitelibdir_noarch/ipaplatform-*.egg-info/
-%python3_sitelibdir_noarch/ipaplatform-*-nspkg.pth
+%python3_sitelibdir/ipapython/
+%python3_sitelibdir/ipalib/
+%python3_sitelibdir/ipaplatform/
+%python3_sitelibdir/ipapython-*.egg-info/
+%python3_sitelibdir/ipalib-*.egg-info/
+%python3_sitelibdir/ipaplatform-*.egg-info/
+%python3_sitelibdir/ipaplatform-*-nspkg.pth
 
 %changelog
 * Tue Dec 04 2018 Stanislav Levin <slev@altlinux.org> 4.7.1-alt4
