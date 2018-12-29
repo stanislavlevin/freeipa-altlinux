@@ -185,7 +185,6 @@ If you are installing an IPA server, you need to install this package.
 %package -n python3-module-ipaserver
 Summary: Python libraries used by IPA server
 Group: System/Libraries
-BuildArch: noarch
 Requires: %name-server-common = %EVR
 Requires: python3-module-augeas
 Requires: python3-module-gssapi
@@ -211,7 +210,6 @@ If you are installing an IPA server, you need to install this package.
 %package server-common
 Summary: Common files used by IPA server
 Group: System/Base
-BuildArch: noarch
 Requires: %name-client-common = %EVR
 Requires: apache2-base
 Requires: custodia
@@ -231,7 +229,6 @@ If you are installing an IPA server, you need to install this package.
 %package server-dns
 Summary: IPA integrated DNS server with support for automatic DNSSEC signing
 Group: System/Base
-BuildArch: noarch
 Requires: %name-server = %EVR
 Requires: bind-dyndb-ldap >= %bind_dyndb_ldap_version
 Requires: bind >= %bind_version
@@ -306,7 +303,6 @@ This package provides command-line tools for IPA administrators.
 %package client-automount
 Summary: IPA Automount for use on clients
 Group: System/Base
-BuildArch: noarch
 Requires: %name-client = %EVR
 Requires: autofs-sss
 Requires: libsss_autofs
@@ -326,7 +322,6 @@ Automount, this package should be installed.
 %package -n python3-module-ipaclient
 Summary: Python libraries used by IPA client
 Group: System/Libraries
-BuildArch: noarch
 Requires: %name-client-common = %EVR
 Requires: python3-module-freeipa = %EVR
 Requires: python3-module-ipaclient-ntp = %EVR
@@ -346,7 +341,6 @@ installed on every client machine.
 %package client-common
 Summary: Common files used by IPA client
 Group: System/Base
-BuildArch: noarch
 Requires: ca-trust
 
 %description client-common
@@ -363,7 +357,6 @@ installed on every client machine.
 %package -n python3-module-freeipa
 Summary: Python3 libraries used by IPA
 Group: System/Libraries
-BuildArch: noarch
 Requires: %name-common = %EVR
 Requires: gnupg2
 Requires: libkeyutils
@@ -396,7 +389,6 @@ If you are using IPA with Python 3, you need to install this package.
 %package -n python3-module-ipaserver-ntp
 Summary: Python3 IPA libraries for ntp services in IPA server
 Group: Development/Python3
-BuildArch: noarch
 
 %description -n python3-module-ipaserver-ntp
 IPA python3 libraries for synchronization IPA server with time&data servers.
@@ -406,7 +398,6 @@ IPA python3 libraries for synchronization IPA server with time&data servers.
 %package -n python3-module-ipaclient-ntp
 Summary: Python3 IPA libraries for ntp services in IPA client
 Group: Development/Python3
-BuildArch: noarch
 
 %description -n python3-module-ipaclient-ntp
 IPA python3 libraries for synchronization IPA client with time&data servers.
@@ -416,7 +407,6 @@ IPA python3 libraries for synchronization IPA client with time&data servers.
 %package common
 Summary: Common files used by IPA
 Group: System/Libraries
-BuildArch: noarch
 
 %description common
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -431,7 +421,6 @@ If you are using IPA, you need to install this package.
 %package -n python3-module-ipatests
 Summary: IPA tests and test tools
 Group: System/Base
-BuildArch: noarch
 Requires: python3-module-ipaclient = %EVR
 Requires: python3-module-ipaserver = %EVR
 Requires: tar
