@@ -1,13 +1,13 @@
 #!/bin/sh -e
 ipa_service="/lib/systemd/system/ipa.service"
-ipa_pluginsdir="/usr/lib/python3/site-packages/ipaserver/plugins/"
+ipa_pluginsdir="/usr/lib64/python3/site-packages/ipaserver/plugins/"
 ipa_new_plugin="/run/ipa/rpmfiletrigger_newplugin"
 
 if egrep -qs "^${ipa_service}$|^${ipa_pluginsdir}"; then
-    [[ -f "$ipa_service" ]] && [[ -d "$ipa_pluginsdir" ]] || exit
+    [[ -f "$ipa_service" ]] && [[ -d "$ipa_pluginsdir" ]] || exit 0
     if [ -f "$ipa_new_plugin" ]; then
         rm -f "$ipa_new_plugin"
-        /usr/bin/python3 -c "import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);" >/dev/null 2>&1 || exit
+        /usr/bin/python3 -c "import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);" >/dev/null 2>&1 || exit 0
         echo "Perform the IPA upgrade. This may take a while."
         if /usr/sbin/ipa-server-upgrade >/dev/null 2>&1; then
 	    echo "The IPA upgrade was successful."
