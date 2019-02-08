@@ -151,6 +151,7 @@ Requires: pki-ca >= %pki_version
 Requires: pki-kra >= %pki_version
 Requires: certmonger
 Requires: 389-ds-base >= %ds_version
+Requires: 389-ds-base-legacy-tools >= %ds_version
 Requires: openssl
 Requires: softhsm
 Requires: libp11-kit
