@@ -2512,7 +2512,8 @@ def _install(options):
         # If we're on master skipping the time sync here because it was done
         # in ipa-server-install
         logger.debug("Skipping attempt to configure and synchronize time with"
-                     " {} server as it has been already done on master.".format(detect_time_server()))
+                     " %s server as it has been already done on master.",
+                     detect_time_server())
     else:
         logger.info("Skipping chrony configuration")
 
@@ -2730,7 +2731,7 @@ def _install(options):
             for database in 'passwd', 'group', 'gshadow', 'services', 'netgroup':
                 configure_nsswitch_database(fstore, database, ['sss'], default_value=['files'])
             configure_nsswitch_database(fstore, 'shadow', ['sss'], default_value=['tcb', 'files'])
-            logger.info("Configured %s" % paths.NSSWITCH_CONF)
+            logger.info("Configured %s", paths.NSSWITCH_CONF)
             # Setup PAM
             result = ipautil.run(['control', 'system-auth'], capture_output=True)
             statestore.backup_state('control', 'system-auth', result.output)

@@ -52,7 +52,6 @@ from ipalib.util import check_client_configuration
 from ipapython import ipautil
 from ipapython.ipa_log_manager import standard_logging_setup
 from ipapython.dn import DN
-from ipaplatform.constants import constants
 from ipaplatform.tasks import tasks
 from ipaplatform import services
 from ipaplatform.paths import paths
