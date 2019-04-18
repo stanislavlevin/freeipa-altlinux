@@ -22,16 +22,17 @@
 %define etc_systemd_dir %_sysconfdir/systemd/system
 
 # versions defines
-%define krb5_version 1.15.2
-%define samba_version 4.7.6
-%define slapi_nis_version 0.56.1
-%define python_ldap_version 3.0.0
-%define ds_version 1.3.8.8
-%define pki_version 10.6.6
 %define bind_version 9.11
 %define bind_dyndb_ldap_version 11.0
-%define sssd_version 1.16.3
+%define certmonger_version 0.79.7
+%define ds_version 1.4.1.1
 %define gssproxy_version 0.8.0-alt2
+%define krb5_version 1.16.3
+%define pki_version 10.6.7
+%define python_ldap_version 3.2.0
+%define samba_version 4.7.6
+%define slapi_nis_version 0.56.1
+%define sssd_version 1.16.3
 
 Name: freeipa
 Version: 4.7.1
@@ -107,6 +108,7 @@ BuildRequires: python3-module-ipa_hbac
 BuildRequires: python3-module-jinja2
 BuildRequires: python3-module-jwcrypto
 BuildRequires: python3-module-ldap >= %python_ldap_version
+BuildRequires: python3-module-lib389 >= %ds_version
 BuildRequires: python3-module-lxml
 BuildRequires: python3-module-netaddr
 BuildRequires: python3-module-netifaces
@@ -149,7 +151,7 @@ Requires: sssd-dbus >= %sssd_version
 Requires: selinux-policy-alt
 Requires: pki-ca >= %pki_version
 Requires: pki-kra >= %pki_version
-Requires: certmonger
+Requires: certmonger >= %certmonger_version
 Requires: 389-ds-base >= %ds_version
 Requires: 389-ds-base-legacy-tools >= %ds_version
 Requires: openssl
@@ -284,7 +286,7 @@ Requires: sssd-krb5
 Requires: sssd-ipa >= %sssd_version
 Requires: sssd-tools >= %sssd_version
 Requires: libsss_sudo
-Requires: certmonger
+Requires: certmonger >= %certmonger_version
 Requires: nss-utils
 Requires: bind-utils
 Requires: oddjob-mkhomedir
