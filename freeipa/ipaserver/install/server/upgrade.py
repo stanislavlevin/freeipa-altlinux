@@ -22,7 +22,7 @@ from ipalib.install import certmonger, sysrestore
 import SSSDConfig
 import ipalib.util
 import ipalib.errors
-from ipaclient.install.client import sssd_enable_service
+from ipaclient.install.client import sssd_enable_ifp
 from ipaplatform import services
 from ipaplatform.tasks import tasks
 from ipapython import ipautil, version
@@ -1406,6 +1406,22 @@ def set_sssd_domain_option(option, value):
     sssdconfig.write(paths.SSSD_CONF)
 
 
+def sssd_update():
+    sssdconfig = SSSDConfig.SSSDConfig()
+    sssdconfig.import_config()
+    # upgrade domain
+    domain = sssdconfig.get_domain(str(api.env.domain))
+    domain.set_option('ipa_server_mode', 'True')
+    domain.set_option('ipa_server', api.env.host)
+    sssdconfig.save_domain(domain)
+    # enable and configure IFP plugin
+    sssd_enable_ifp(sssdconfig)
+    # write config and restart service
+    sssdconfig.write(paths.SSSD_CONF)
+    sssd = services.service('sssd', api)
+    sssd.restart()
+
+
 def remove_ds_ra_cert(subject_base):
     logger.info('[Removing RA cert from DS NSS database]')
 
@@ -1728,7 +1744,8 @@ def upgrade_configuration():
         FONTS_DIR=paths.FONTS_DIR,
         FONTS_AWESOME_DIR=paths.FONTS_AWESOME_DIR,
         IPA_CCACHES=paths.IPA_CCACHES,
-        IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET
+        IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET,
+        KDCPROXY_CONFIG=paths.KDCPROXY_CONFIG,
     )
 
     subject_base = find_subject_base()
@@ -1768,6 +1785,9 @@ def upgrade_configuration():
         upgrade_file(sub_dict, paths.HTTPD_IPA_REWRITE_CONF,
                      os.path.join(paths.USR_SHARE_IPA_DIR,
                                   "ipa-rewrite.conf.template"))
+        upgrade_file(sub_dict, paths.HTTPD_IPA_KDCPROXY_CONF,
+                     os.path.join(paths.USR_SHARE_IPA_DIR,
+                                  "ipa-kdc-proxy.conf.template"))
         if ca.is_configured():
             upgrade_file(
                 sub_dict,
@@ -1971,15 +1991,8 @@ def upgrade_configuration():
         cainstance.ensure_ipa_authority_entry()
 
     migrate_to_authselect()
-    set_sssd_domain_option('ipa_server_mode', 'True')
-    set_sssd_domain_option('ipa_server', api.env.host)
 
-    sssdconfig = SSSDConfig.SSSDConfig()
-    sssdconfig.import_config()
-    sssd_enable_service(sssdconfig, 'ifp')
-
-    sssd = services.service('sssd', api)
-    sssd.restart()
+    sssd_update()
 
     krb = krbinstance.KrbInstance(fstore)
     krb.fqdn = fqdn
