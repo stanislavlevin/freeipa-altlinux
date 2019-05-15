@@ -1,3 +1,4 @@
+[![Board Status](https://dev.azure.com/slev0400/71051a8a-24b3-48d7-bb06-f545cc394053/a003910e-6d90-4fe0-9fec-9e493c0a7fe0/_apis/work/boardbadge/8ae4dc7e-a0f0-4684-99ab-3230ad0b647f)](https://dev.azure.com/slev0400/71051a8a-24b3-48d7-bb06-f545cc394053/_boards/board/t/a003910e-6d90-4fe0-9fec-9e493c0a7fe0/Microsoft.RequirementCategory)
 # FreeIPA Server
 
 FreeIPA allows Linux administrators to centrally manage identity,
