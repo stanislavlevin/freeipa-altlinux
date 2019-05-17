@@ -1260,7 +1260,7 @@ def uninstall_dogtag_9(ds, http):
     with open(paths.IPA_DEFAULT_CONF, 'w') as f:
         p.write(f)
 
-    sstore = sysrestore.StateFile(paths.SYSRESTORE)
+    sstore = sysrestore.StateFile()
     sstore.restore_state('pkids', 'enabled')
     sstore.restore_state('pkids', 'running')
     sstore.restore_state('pkids', 'user_exists')
@@ -1714,7 +1714,7 @@ def upgrade_configuration():
 
     logger.debug('IPA version %s', version.VENDOR_VERSION)
 
-    fstore = sysrestore.FileStore(paths.SYSRESTORE)
+    fstore = sysrestore.FileStore()
 
     fqdn = api.env.host
 

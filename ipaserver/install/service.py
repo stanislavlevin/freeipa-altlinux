@@ -297,12 +297,12 @@ class Service(object):
         if sstore:
             self.sstore = sstore
         else:
-            self.sstore = sysrestore.StateFile(paths.SYSRESTORE)
+            self.sstore = sysrestore.StateFile()
 
         if fstore:
             self.fstore = fstore
         else:
-            self.fstore = sysrestore.FileStore(paths.SYSRESTORE)
+            self.fstore = sysrestore.FileStore()
 
         self.realm = realm_name
         self.suffix = DN()
