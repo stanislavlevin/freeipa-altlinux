@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 #
 # Copyright (C) 2017 FreeIPA Contributors see COPYING for license
 #
@@ -33,6 +33,11 @@ if [[ "$TASK_TO_RUN" == "lint" ]]
 then
     if [[ "$TRAVIS_EVENT_TYPE" == "pull_request" ]]
     then
+        echo "travis_pull_request"
+        echo $(pwd)
+        cat tox.ini ||:
+        cat $PEP8_ERROR_LOG ||:
+        git diff origin/$TRAVIS_BRANCH -U0
         git diff origin/$TRAVIS_BRANCH -U0 | \
             pycodestyle --ignore=W504 --diff &> $PEP8_ERROR_LOG ||:
     fi
