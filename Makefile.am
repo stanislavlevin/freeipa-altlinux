@@ -223,8 +223,10 @@ endif
 	    | grep -E '\.py$$'); \
 	if [ -n "$${FILES}" ]; then \
 	    echo -e "Fast linting files:\n$${FILES}\n"; \
+	    echo $${MERGEBASE}; \
 	    echo "pycodestyle"; \
 	    echo "-----------"; \
+	    git diff -U0 $${MERGEBASE}; \
 	    git diff -U0 $${MERGEBASE} | \
 	        $(PYTHON) -m pycodestyle --diff || exit $$?; \
 	    echo -e "\npylint"; \

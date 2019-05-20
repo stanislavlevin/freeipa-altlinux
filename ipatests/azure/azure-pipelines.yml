@@ -3,6 +3,7 @@ trigger:
 
 variables:
   CI_RUNNER_LOGS_DIR: logs
+  SYSTEM_DEBUG: true
   localsdir: $(Build.Repository.LocalPath)
   builddir: /__w/1/s
 
