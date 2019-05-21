@@ -8,6 +8,7 @@
 %def_without only_client
 %endif
 
+%def_with fasttest
 %if_with lint
     %define linter_options --enable-pylint --with-jslint
 %else
@@ -93,10 +94,10 @@ BuildRequires: python3-module-sss_nss_idmap
 # Build dependencies for lint and fastcheck
 #
 %if_with lint
+BuildRequires: git-core
 BuildRequires: softhsm
 BuildRequires: jsl
 
-BuildRequires: pylint-py3
 BuildRequires: python3-module-augeas
 BuildRequires: python3-module-cryptography
 BuildRequires: python3-module-custodia
@@ -118,6 +119,7 @@ BuildRequires: python3-module-polib
 BuildRequires: python3-module-pyasn1
 BuildRequires: python3-module-pyasn1-modules
 BuildRequires: python3-module-pycodestyle
+BuildRequires: python3-module-pylint
 BuildRequires: python3-module-pytest-multihost
 BuildRequires: python3-module-pytest_sourceorder
 BuildRequires: python3-module-qrcode
@@ -452,10 +454,25 @@ This package contains tests that verify IPA functionality under Python 3.
 
 %prep
 %setup -n %name-%version
+%if_with lint
+# we need it to generate cumulative patch without context
+# this patch includes changes made by sed too
+git init
+git config user.email "you@example.com"
+git config user.name "Your Name"
+git add .
+git commit -m "upstream version"
+git checkout -b "patch"
+%endif # lint
+
 %patch -p1
 # change port from 8080 to 8090
 # Port 8080 is used by alterator-ahttpd-server
 grep -rl 8080 | xargs sed -i 's/\(\W\|^\)8080\(\W\|$\)/\18090\2/g'
+
+%if_with lint
+git commit -am 'with our changes'
+%endif
 
 %build
 
@@ -574,6 +591,10 @@ mkdir -p %buildroot%_sharedstatedir/ipa-client/pki
 mkdir -p %buildroot%_sharedstatedir/ipa-client/sysrestore
 
 %check
+# run tests in upstream PR manner
+%{?_with_lint:make "GIT_BRANCH=master" fastlint}
+%{?_with_fasttest:make fasttest}
+%{?_with_lint:make lint}
 %make check VERBOSE=yes LIBDIR=%_libdir
 
 %if_without only_client
