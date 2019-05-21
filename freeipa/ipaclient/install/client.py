@@ -2501,7 +2501,8 @@ def _install(options):
     if options.conf_ntp:
         # Attempt to configure and sync time with NTP server.
         if not createntp.sync_time_client(fstore, statestore, cli_domain,
-                                          options.ntp_servers, options.ntp_pool):
+                                          options.ntp_servers,
+                                          options.ntp_pool):
             print("Warning: IPA client was unable to sync time "
                   "with IPA server!")
             print("         Time synchronization is required for IPA "
@@ -2728,12 +2729,16 @@ def _install(options):
             logger.info("Configured /etc/sssd/sssd.conf")
 
             # Configure nsswitch.conf
-            for database in 'passwd', 'group', 'gshadow', 'services', 'netgroup':
-                configure_nsswitch_database(fstore, database, ['sss'], default_value=['files'])
-            configure_nsswitch_database(fstore, 'shadow', ['sss'], default_value=['tcb', 'files'])
+            for database in ('passwd', 'group', 'gshadow', 'services',
+                             'netgroup'):
+                configure_nsswitch_database(fstore, database, ['sss'],
+                                            default_value=['files'])
+            configure_nsswitch_database(fstore, 'shadow', ['sss'],
+                                        default_value=['tcb', 'files'])
             logger.info("Configured %s", paths.NSSWITCH_CONF)
             # Setup PAM
-            result = ipautil.run(['control', 'system-auth'], capture_output=True)
+            result = ipautil.run(['control', 'system-auth'],
+                                 capture_output=True)
             statestore.backup_state('control', 'system-auth', result.output)
             ipautil.run(['control', 'system-auth', 'sss'])
             logger.info("Configured PAM system-auth")

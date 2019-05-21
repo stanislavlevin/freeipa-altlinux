@@ -154,7 +154,7 @@ class FileStore(object):
             cont_hash = sha256(f.read()).hexdigest()
 
         filename = "{hexhash}-{bcppath}".format(
-                hexhash=cont_hash, bcppath=backupfile)
+            hexhash=cont_hash, bcppath=backupfile)
 
         backup_path = os.path.join(self._path, filename)
         if os.path.isfile(backup_path):

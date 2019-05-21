@@ -65,8 +65,8 @@ if six.PY3:
 logger = logging.getLogger(__name__)
 
 
-named_conf_section_ipa_start_re = re.compile('\s*dyndb\s+"ipa"\s+"[^"]+"\s+{')
-named_conf_section_options_start_re = re.compile('\s*options\s+{')
+named_conf_section_ipa_start_re = re.compile(r'\s*dyndb\s+"ipa"\s+"[^"]+"\s+{')
+named_conf_section_options_start_re = re.compile(r'\s*options\s+{')
 named_conf_section_end_re = re.compile('};')
 named_conf_arg_ipa_re = re.compile(
     r'(?P<indent>\s*)(?P<name>\S+)\s"(?P<value>[^"]+)";')
@@ -719,7 +719,8 @@ class BindInstance(service.Service):
             pass
 
         for ip_address in self.ip_addresses:
-            if installutils.record_in_hosts(str(ip_address), self.fqdn) is None:
+            if (installutils.record_in_hosts(str(ip_address), self.fqdn) is
+                    None):
                 installutils.add_record_to_hosts(str(ip_address), self.fqdn)
 
         if self.first_instance:
@@ -732,7 +733,8 @@ class BindInstance(service.Service):
 
         self.step("setting up our own record", self.__add_self)
         if self.first_instance:
-            self.step("setting up records for other masters", self.__add_others)
+            self.step("setting up records for other masters",
+                      self.__add_others)
         # all zones must be created before this step
         self.step("adding NS record to the zones", self.__add_self_ns)
         if self.ntp_role:
@@ -747,8 +749,10 @@ class BindInstance(service.Service):
         # self.step("restarting named", self.__start)
 
         self.step("configuring named to start on boot", self.__enable)
-        self.step("changing resolv.conf to point to ourselves", self.__setup_resolv_conf)
-        self.step("adjust paths in bind configuration files", self.__adjust_config_paths)
+        self.step("changing resolv.conf to point to ourselves",
+                  self.__setup_resolv_conf)
+        self.step("adjust paths in bind configuration files",
+                  self.__adjust_config_paths)
         self.step("disable chroot for bind", self.__disable_chroot)
         self.start_creation()
 
@@ -873,7 +877,8 @@ class BindInstance(service.Service):
 
     def __add_ntp_record(self):
         record_args = {"srvrecord": unicode("0 100 123 {}.".format(self.fqdn))}
-        api.Command.dnsrecord_add(unicode(self.domain), unicode('_ntp._udp'), **record_args)
+        api.Command.dnsrecord_add(unicode(self.domain), unicode('_ntp._udp'),
+                                  **record_args)
 
     def __setup_reverse_zone(self):
         # Always use force=True as named is not set up yet
@@ -1081,32 +1086,40 @@ class BindInstance(service.Service):
         ipautil.run(['resolvconf', '-u'])
 
     def __setup_resolv_conf(self):
-       if os.path.exists(paths.RESOLVCONF_CONF):
-           self.__setup_resolvconf()
-       else:
-           self.__setup_resolv_conf_direct()
+        if os.path.exists(paths.RESOLVCONF_CONF):
+            self.__setup_resolvconf()
+        else:
+            self.__setup_resolv_conf_direct()
 
     def __adjust_config_paths(self):
-        ipautil.run(['sed', '-i', '-r',
-                     '-e', 's|^include[[:blank:]]+"/etc/rfc1912\.conf";|include "/etc/bind/rfc1912.conf";|',
-                     '-e', 's|include[[:blank:]]+"/etc/rfc1918\.conf";|include "/etc/bind/rfc1918.conf";|',
-                     '-e', 's|^include[[:blank:]]+"/etc/resolvconf-zones\.conf";|include "/etc/bind/resolvconf-zones.conf";|',
-                     '/var/lib/bind/etc/local.conf'], raiseonerr=False)
-        ipautil.run(['sed', '-i', '-r',
-                     '-e', 's|directory "/zone";|directory "/etc/bind/zone";|',
-                     '-e', 's|include[[:blank:]]+"/etc/resolvconf-options\.conf";|include "/etc/bind/resolvconf-options.conf";|',
-                     '/var/lib/bind/etc/options.conf'], raiseonerr=False)
-        ipautil.run(['sed', '-i', '-r',
-                     's|^include[[:blank:]]+"/etc/rndc\.key";|include "/etc/bind/rndc.key";|',
-                     '/var/lib/bind/etc/rndc.conf'], raiseonerr=False)
+        ipautil.run(
+            ['sed', '-i', '-r',
+             '-e', (r's|^include[[:blank:]]+"/etc/rfc1912\.conf";'
+                    '|include "/etc/bind/rfc1912.conf";|'),
+             '-e', (r's|include[[:blank:]]+"/etc/rfc1918\.conf";'
+                    '|include "/etc/bind/rfc1918.conf";|'),
+             '-e', (r's|^include[[:blank:]]+"/etc/resolvconf-zones\.conf";'
+                    '|include "/etc/bind/resolvconf-zones.conf";|'),
+             '/var/lib/bind/etc/local.conf'], raiseonerr=False)
+        ipautil.run(
+            ['sed', '-i', '-r',
+             '-e', r's|directory "/zone";|directory "/etc/bind/zone";|',
+             '-e', (r's|include[[:blank:]]+"/etc/resolvconf-options\.conf";'
+                    '|include "/etc/bind/resolvconf-options.conf";|'),
+             '/var/lib/bind/etc/options.conf'], raiseonerr=False)
+        ipautil.run(
+            ['sed', '-i', '-r',
+             (r's|^include[[:blank:]]+"/etc/rndc\.key";'
+              '|include "/etc/bind/rndc.key";|'),
+             '/var/lib/bind/etc/rndc.conf'], raiseonerr=False)
 
     def __disable_chroot(self):
         result = ipautil.run(['control', 'bind-chroot'], capture_output=True)
         self.sstore.backup_state('control', 'bind-chroot', result.output)
         ipautil.run(['control', 'bind-chroot', 'disabled'])
 
-    def add_master_dns_records(self, fqdn, ip_addresses, realm_name, domain_name,
-                               reverse_zones):
+    def add_master_dns_records(self, fqdn, ip_addresses, realm_name,
+                               domain_name, reverse_zones):
         self.fqdn = fqdn
         self.ip_addresses = ip_addresses
         self.realm = realm_name
@@ -1279,7 +1292,6 @@ class BindInstance(service.Service):
         named_regular_enabled = self.restore_state("named-regular-enabled")
 
         self.dns_backup.clear_records(self.api.Backend.ldap2.isconnected())
-
 
         for f in [paths.NAMED_CONF, paths.RESOLV_CONF, paths.RESOLVCONF_CONF]:
             try:

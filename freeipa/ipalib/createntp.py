@@ -21,7 +21,8 @@ def detect_ntp_daemon():
 
     servts = None
     if servntplib:
-        servts = getattr(servntplib, ntp_libs[detect_time_server()][1] + 'Server')
+        servts = getattr(
+            servntplib, ntp_libs[detect_time_server()][1] + 'Server')
 
     clits = getattr(clintplib, ntp_libs[detect_time_server()][1] + 'Client')
 

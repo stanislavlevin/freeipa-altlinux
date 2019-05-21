@@ -15,7 +15,7 @@ class ALTLinuxConstantsNamespace(BaseConstantsNamespace):
     HTTPD_USER = "apache2"
     HTTPD_GROUP = "apache2"
     ODS_USER = "_opendnssec"
-    ODS_GROUP ="_opendnssec"
+    ODS_GROUP = "_opendnssec"
     SSSD_USER = "_sssd"
     NAMED_DATA_DIR = "/var/lib/bind/data/"
     NAMED_ZONE_COMMENT = "//"
@@ -32,5 +32,6 @@ class ALTLinuxConstantsNamespace(BaseConstantsNamespace):
     HTTPD_IPA_CONFL_MODULES = [
         "nss",
     ]
+
 
 constants = ALTLinuxConstantsNamespace()

@@ -43,10 +43,10 @@ class BaseNTPClient(object):
         running = ntpmethods.service_command()['api'].is_running()
 
         if self.statestore:
-            self.statestore.backup_state(ntpmethods.service_command()['service'],
-                                         'enabled', enabled)
-            self.statestore.backup_state(ntpmethods.service_command()['service'],
-                                         'running', running)
+            self.statestore.backup_state(
+                ntpmethods.service_command()['service'], 'enabled', enabled)
+            self.statestore.backup_state(
+                ntpmethods.service_command()['service'], 'running', running)
 
         logger.debug("Configuring %s", detect_time_server())
 
@@ -92,7 +92,8 @@ class BaseNTPClient(object):
             return False
 
         try:
-            logger.info("Attempting to sync time with %s", detect_time_server())
+            logger.info("Attempting to sync time with %s",
+                        detect_time_server())
             logger.info("Will timeout after %s seconds", self.timeout)
 
             if self.pre_args:

@@ -16,10 +16,11 @@ altlinux_system_units['named'] = 'bind.service'
 altlinux_system_units['httpd'] = 'httpd2.service'
 altlinux_system_units['nfs_client'] = 'nfs-client.target'
 
-# Service classes that implement ALT Linux specific behaviour
 
+# Service classes that implement ALT Linux specific behaviour
 class ALTLinuxService(redhat_services.RedHatService):
     system_units = altlinux_system_units
+
 
 class ALTLinuxNoService(base_services.PlatformService):
     @staticmethod
@@ -38,18 +39,21 @@ class ALTLinuxNoService(base_services.PlatformService):
     def disable():
         return True
 
+
 def altlinux_service_class_factory(name, api=None):
     if name in ('named', 'httpd', 'nfs_client'):
         return ALTLinuxService(name, api)
-    if name in ('domainname', 'named-pkcs11', 'named-regular', 'rpcgssd', 'rpcidmapd'):
+    if name in ('domainname', 'named-pkcs11', 'named-regular', 'rpcgssd',
+                'rpcidmapd'):
         return ALTLinuxNoService(name, api)
     return redhat_services.redhat_service_class_factory(name, api)
 
-# Magicdict containing ALTLinuxNoService instances.
 
+# Magicdict containing ALTLinuxNoService instances.
 class ALTLinuxServices(redhat_services.RedHatServices):
     def service_class_factory(self, name, api=None):
         return altlinux_service_class_factory(name, api)
+
 
 # System may support more time&date services. FreeIPA supports ntpd only, other
 # services will be disabled during IPA installation

@@ -89,7 +89,7 @@ notboth_err = _('HBAC rule and local members cannot both be set')
 
 
 def validate_selinuxuser(ugettext, user):
-    """
+    r"""
     An SELinux user has 3 components: user:MLS:MCS. user and MLS are required.
     user traditionally ends with _u but this is not mandatory.
       The regex is ^[a-zA-Z][a-zA-Z0-9_\.]*
@@ -112,7 +112,8 @@ def validate_selinuxuser(ugettext, user):
     (name, mls, mcs, _ignore) = (user + ':::').split(':', 3)
 
     if not regex_name.match(name):
-        return _('Invalid SELinux user name, only a-Z, 0-9, _ and . are allowed')
+        return _(
+            'Invalid SELinux user name, only a-Z, 0-9, _ and . are allowed')
     if not mls or not regex_mls.match(mls):
         return _('Invalid MLS value, must match s[0-15](-s[0-15])')
     m = regex_mcs.match(mcs)

@@ -3,10 +3,11 @@
 #
 
 """
-This module contains default ALT Linux specific implementations of system tasks.
+This module contains ALT Linux specific implementations of system tasks.
 """
 
 from ipaplatform.redhat.tasks import RedHatTaskNamespace
+
 
 class ALTLinuxTaskNamespace(RedHatTaskNamespace):
 
@@ -23,8 +24,8 @@ class ALTLinuxTaskNamespace(RedHatTaskNamespace):
 
     # TODO: use Alt tool like authconfig
     def restore_pre_ipa_client_configuration(self, fstore, statestore,
-                                                 was_sssd_installed,
-                                                 was_sssd_configured):
+                                             was_sssd_installed,
+                                             was_sssd_configured):
         return True
 
     def set_nisdomain(self, nisdomain):
@@ -47,5 +48,6 @@ class ALTLinuxTaskNamespace(RedHatTaskNamespace):
         return True
 
     # END of TODO: use Alt tool like authconfig
+
 
 tasks = ALTLinuxTaskNamespace()

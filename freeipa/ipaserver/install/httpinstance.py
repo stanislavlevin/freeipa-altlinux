@@ -216,15 +216,15 @@ class HTTPInstance(service.Service):
         os.chmod(target_fname, 0o644)
 
     def configure_httpd_mods(self):
-                # Get list of enabled apache modules for backup state
+        # Get list of enabled apache modules for backup state
         mod_list = ['']
-        result = ipautil.run([paths.HTTPD,'-M'],
+        result = ipautil.run([paths.HTTPD, '-M'],
                              raiseonerr=False, capture_output=True)
         if result.returncode == 0:
-            include_regex = re.compile('.*(?=_module[ ]*\((shared|static)\))')
-            exclude_regex = re.compile('(_module \((shared|static)\).*)')
-            mod_list = [exclude_regex.sub("", item.strip()) for item in \
-                    filter(include_regex.match, result.output.split('\n'))]
+            include_regex = re.compile(r'.*(?=_module[ ]*\((shared|static)\))')
+            exclude_regex = re.compile(r'(_module \((shared|static)\).*)')
+            mod_list = [exclude_regex.sub("", item.strip()) for item in
+                        filter(include_regex.match, result.output.split('\n'))]
 
         # Disable conflicting modules
         for a2m in constants.HTTPD_IPA_CONFL_MODULES:
@@ -263,13 +263,15 @@ class HTTPInstance(service.Service):
             self.fstore.backup_file(paths.HTTPD_DEFAULT_STARTED_SITE_CONF)
 
             with open(paths.HTTPD_DEFAULT_STARTED_SITE_CONF) as input_file, \
-                    open(paths.HTTPD_DEFAULT_STARTED_SITE_CONF, 'r+') as output_file:
-                output_file.writelines(line.replace("default=yes","default=no") \
-                        for line in input_file)
+                    open(paths.HTTPD_DEFAULT_STARTED_SITE_CONF, 'r+') as \
+                    output_file:
+                output_file.writelines(line.replace(
+                    "default=yes", "default=no") for line in input_file)
                 output_file.truncate()
         else:
-            service.print_msg("WARNING: ALTLinux default started sites conf -"
-            "%s doesn't exist" % paths.HTTPD_DEFAULT_STARTED_SITE_CONF)
+            service.print_msg(
+                "WARNING: ALTLinux default started sites conf - %s"
+                " doesn't exist" % paths.HTTPD_DEFAULT_STARTED_SITE_CONF)
 
         # Backup enabled ports
         if os.path.isfile(paths.HTTPD_HTTPS_PORT_ENABLE_CONF):
@@ -320,14 +322,11 @@ class HTTPInstance(service.Service):
 
     def disable_mod_ssl_alt_defaults(self):
         directivesetter.set_directive(paths.HTTPD_SSL_CONF,
-                                   'DocumentRoot',
-                                   None, False)
+                                      'DocumentRoot', None, False)
         directivesetter.set_directive(paths.HTTPD_SSL_CONF,
-                                   'ServerName',
-                                   None, False)
+                                      'ServerName', None, False)
         directivesetter.set_directive(paths.HTTPD_SSL_CONF,
-                                   'ServerAdmin',
-                                   None, False)
+                                      'ServerAdmin', None, False)
 
     def disable_mod_ssl_ocsp(self):
         if sysupgrade.get_upgrade_state('http', OCSP_ENABLED) is None:
@@ -602,10 +601,11 @@ class HTTPInstance(service.Service):
         # Disable apache2 ipa configs
         ipautil.run(["a2dissite", "ipa"], raiseonerr=False)
 
-        for f in [ paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF,
-                  paths.HTTPD_NSS_CONF, paths.HTTPD_SSL_SITE_CONF,
-                  paths.HTTPD_DEFAULT_STARTED_SITE_CONF,
-                  ]:
+        for f in [
+            paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF,
+            paths.HTTPD_NSS_CONF, paths.HTTPD_SSL_SITE_CONF,
+            paths.HTTPD_DEFAULT_STARTED_SITE_CONF,
+        ]:
             try:
                 self.fstore.restore_file(f)
             except ValueError as error:
@@ -618,8 +618,8 @@ class HTTPInstance(service.Service):
             ipautil.run(["a2enport", 'https'], raiseonerr=False)
 
         # Restore mods states
-        for a2m in constants.HTTPD_IPA_MODULES + \
-            constants.HTTPD_IPA_CONFL_MODULES:
+        for a2m in (constants.HTTPD_IPA_MODULES +
+                    constants.HTTPD_IPA_CONFL_MODULES):
             if not self.sstore.restore_state('httpd', 'mod_{0}'.format(a2m)):
                 ipautil.run(["a2dismod", a2m], raiseonerr=False)
             else:

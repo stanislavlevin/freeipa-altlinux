@@ -14,7 +14,7 @@ class ChronyClient(BaseNTPClient):
             ntp_bin=paths.CHRONYC,
             timeout=15,
             post_args=[paths.CHRONYC, 'waitsync',
-                      str(self.sync_attempt_count), '-d'],
+                       str(self.sync_attempt_count), '-d'],
         )
 
 

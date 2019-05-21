@@ -38,7 +38,8 @@ def detect_time_server():
     ts_modules = ['chrony', 'ntpd', 'openntpd']
 
     for ts in ts_modules:
-        sys_ts = ipautil.run(['rpm', '-qa', ts], capture_output=True, raiseonerr=False)
+        sys_ts = ipautil.run(['rpm', '-qa', ts], capture_output=True,
+                             raiseonerr=False)
         if sys_ts.output:
             return ts
 
@@ -82,8 +83,10 @@ def restore_state(statestore, fstore, ntp_confile, logger):
     service_command()['api'].disable()
 
     if statestore:
-        enabled = statestore.restore_state(service_command()['service'], 'enabled')
-        running = statestore.restore_state(service_command()['service'], 'running')
+        enabled = statestore.restore_state(service_command()['service'],
+                                           'enabled')
+        running = statestore.restore_state(service_command()['service'],
+                                           'running')
 
         if enabled:
             service_command()['api'].enable()
@@ -117,8 +120,10 @@ def force_service(statestore):
     running = is_running()
 
     if statestore:
-        statestore.backup_state(service_command()['service'], 'enabled', enabled)
-        statestore.backup_state(service_command()['service'], 'running', running)
+        statestore.backup_state(service_command()['service'],
+                                'enabled', enabled)
+        statestore.backup_state(service_command()['service'],
+                                'running', running)
 
     if running:
         service_command()['api'].stop()

@@ -11,6 +11,7 @@ import sys
 # Fallback to default path definitions
 from ipaplatform.base.paths import BasePathNamespace
 
+
 class ALTLinuxPathNamespace(BasePathNamespace):
     AUTHCONFIG = "/bin/true"
     AUTHSELECT = "/bin/true"
@@ -92,5 +93,6 @@ class ALTLinuxPathNamespace(BasePathNamespace):
         LIBSOFTHSM2_SO = BasePathNamespace.LIBSOFTHSM2_SO_64
         PAM_KRB5_SO = BasePathNamespace.PAM_KRB5_SO_64
         BIND_LDAP_SO = BasePathNamespace.BIND_LDAP_SO_64
+
 
 paths = ALTLinuxPathNamespace()

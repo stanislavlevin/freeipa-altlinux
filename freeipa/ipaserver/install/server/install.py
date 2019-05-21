@@ -772,12 +772,14 @@ def install(installer):
         if not options.no_ntp:
             if not createntp.sync_time_server(
                     fstore, sstore, options.ntp_servers, options.ntp_pool):
-                print("Warning: IPA was unable to sync time with {}!".format(detect_time_server()))
+                print("Warning: IPA was unable to sync time with {}!"
+                      .format(detect_time_server()))
                 print("         Time synchronization is required for IPA "
                       "to work correctly")
             else:
                 ntp_role = True
-                print("Successfully synchronization time with {}".format(detect_time_server()))
+                print("Successfully synchronization time with {}"
+                      .format(detect_time_server()))
 
         if options.dirsrv_cert_files:
             ds = dsinstance.DsInstance(fstore=fstore,
