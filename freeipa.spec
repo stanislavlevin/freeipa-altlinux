@@ -36,8 +36,8 @@
 %define sssd_version 1.16.3
 
 Name: freeipa
-Version: 4.7.1
-Release: alt8
+Version: 4.7.2
+Release: alt1
 
 Summary: The Identity, Policy and Audit system
 License: GPLv3+
@@ -979,6 +979,11 @@ fi
 %python3_sitelibdir/ipaplatform-*-nspkg.pth
 
 %changelog
+* Wed May 01 2019 Stanislav Levin <slev@altlinux.org> 4.7.2-alt1
+- 4.7.1 -> 4.7.2.
+- Enabled smoke tests.
+- Backported upstream patches for 389-ds 1.4.1.2.
+
 * Wed Apr 03 2019 Evgeny Sinelnikov <sin@altlinux.org> 4.7.1-alt8
 - Backport patch for samba-4.10.0 complatibility from upstream
 
