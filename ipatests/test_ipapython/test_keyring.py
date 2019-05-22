@@ -20,6 +20,8 @@
 Test the `kernel_keyring.py` module.
 """
 
+import os
+
 from ipapython import kernel_keyring
 
 import pytest
@@ -38,6 +40,10 @@ SIZE_1024 = 'abcdefgh' * 128
 
 @pytest.mark.skip_if_container(
     "any", reason="kernel keyrings are not namespaced yet"
+)
+@pytest.mark.skipif(
+    os.environ.get('RPM_BUILD_DIR') is not None,
+    reason='these tests depend on the host Linux key retention service',
 )
 class test_keyring:
     """
