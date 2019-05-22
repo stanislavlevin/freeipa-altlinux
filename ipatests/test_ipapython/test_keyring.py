@@ -20,6 +20,8 @@
 Test the `kernel_keyring.py` module.
 """
 
+import os
+
 from ipapython import kernel_keyring
 
 import pytest
@@ -36,6 +38,10 @@ SIZE_512 = 'abcdefgh' * 64
 SIZE_1024 = 'abcdefgh' * 128
 
 
+@pytest.mark.skipif(
+    os.environ.get('RPM_BUILD_DIR') is not None,
+    reason='these tests depend on the host Linux key retention service',
+)
 class test_keyring:
     """
     Test the kernel keyring interface
