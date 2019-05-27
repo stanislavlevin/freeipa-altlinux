@@ -78,6 +78,7 @@ BuildRequires: node-uglify-js
 
 # python
 BuildRequires: python3-module-lesscpy
+BuildRequires: python3-module-setuptools
 #
 # Build dependencies for makeapi/makeaci
 #
