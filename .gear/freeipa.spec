@@ -34,6 +34,7 @@
 %define samba_version 4.7.6
 %define slapi_nis_version 0.56.1
 %define sssd_version 1.16.3
+%define openldap_version 2.4.47-alt2
 
 Name: freeipa
 Version: 4.7.2
@@ -58,7 +59,7 @@ BuildRequires: libpopt-devel
 BuildRequires: libsasl2-devel
 BuildRequires: libssl-devel
 BuildRequires: libxmlrpc-devel
-BuildRequires: openldap-devel
+BuildRequires: openldap-devel >= %openldap_version
 
 %if_without only_client
 BuildRequires(pre): rpm-macros-apache2
@@ -167,7 +168,7 @@ Requires: libp11-kit
 Requires: gzip
 Requires: oddjob
 Requires: 389-ds-base >= %ds_version
-Requires: openldap-clients
+Requires: openldap-clients >= %openldap_version
 Requires: nss-utils
 Requires: krb5-kdc >= %krb5_version
 Requires: krb5-kinit >= %krb5_version
