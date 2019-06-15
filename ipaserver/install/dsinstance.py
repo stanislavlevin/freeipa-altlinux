@@ -529,26 +529,29 @@ class DsInstance(service.Service):
             idrange_size = self.idmax - self.idstart + 1
         except TypeError:
             idrange_size = None
-        self.sub_dict = dict(FQDN=self.fqdn, SERVERID=self.serverid,
-                             PASSWORD=self.dm_password,
-                             RANDOM_PASSWORD=ipautil.ipa_generate_password(),
-                             SUFFIX=self.suffix,
-                             REALM=self.realm, USER=DS_USER,
-                             SERVER_ROOT=server_root, DOMAIN=self.domain,
-                             TIME=int(time.time()), IDSTART=self.idstart,
-                             IDMAX=self.idmax, HOST=self.fqdn,
-                             ESCAPED_SUFFIX=str(self.suffix),
-                             GROUP=DS_GROUP,
-                             IDRANGE_SIZE=idrange_size,
-                             DOMAIN_LEVEL=self.domainlevel,
-                             MAX_DOMAIN_LEVEL=constants.MAX_DOMAIN_LEVEL,
-                             MIN_DOMAIN_LEVEL=constants.MIN_DOMAIN_LEVEL,
-                             STRIP_ATTRS=" ".join(replication.STRIP_ATTRS),
-                             EXCLUDES='(objectclass=*) $ EXCLUDE ' +
-                             ' '.join(replication.EXCLUDES),
-                             TOTAL_EXCLUDES='(objectclass=*) $ EXCLUDE ' +
-                             ' '.join(replication.TOTAL_EXCLUDES),
-                         )
+        self.sub_dict = dict(
+            FQDN=self.fqdn, SERVERID=self.serverid,
+            PASSWORD=self.dm_password,
+            RANDOM_PASSWORD=ipautil.ipa_generate_password(),
+            SUFFIX=self.suffix,
+            REALM=self.realm, USER=DS_USER,
+            SERVER_ROOT=server_root, DOMAIN=self.domain,
+            TIME=int(time.time()), IDSTART=self.idstart,
+            IDMAX=self.idmax, HOST=self.fqdn,
+            ESCAPED_SUFFIX=str(self.suffix),
+            GROUP=DS_GROUP,
+            IDRANGE_SIZE=idrange_size,
+            DOMAIN_LEVEL=self.domainlevel,
+            MAX_DOMAIN_LEVEL=constants.MAX_DOMAIN_LEVEL,
+            MIN_DOMAIN_LEVEL=constants.MIN_DOMAIN_LEVEL,
+            STRIP_ATTRS=" ".join(replication.STRIP_ATTRS),
+            EXCLUDES='(objectclass=*) $ EXCLUDE ' +
+            ' '.join(replication.EXCLUDES),
+            TOTAL_EXCLUDES='(objectclass=*) $ EXCLUDE ' +
+            ' '.join(replication.TOTAL_EXCLUDES),
+            DEFAULT_SHELL=platformconstants.DEFAULT_SHELL,
+            DEFAULT_ADMIN_SHELL=platformconstants.DEFAULT_ADMIN_SHELL,
+        )
 
     def __create_instance(self):
         pent = pwd.getpwnam(DS_USER)

@@ -22,6 +22,8 @@ from __future__ import absolute_import
 import re
 import unittest
 
+from ipaplatform.constants import constants as platformconstants
+
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipaplatform.paths import paths
@@ -33,6 +35,7 @@ class ADTrustBase(IntegrationTest):
     topology = 'line'
     num_ad_domains = 1
     optional_extra_roles = ['ad_subdomain', 'ad_treedomain']
+    default_shell = platformconstants.DEFAULT_SHELL
 
     @classmethod
     def install(cls, mh):
@@ -173,9 +176,11 @@ class TestBasicADTrust(ADTrustBase):
         # This regex checks that Test User does not have UID 10042 nor belongs
         # to the group with GID 10047
         testuser_regex = r"^testuser@%s:\*:(?!10042)(\d+):(?!10047)(\d+):"\
-                         r"Test User:/home/%s/testuser:/bin/sh$"\
+                         r"Test User:/home/%s/testuser:%s$"\
                          % (re.escape(self.ad_domain),
-                            re.escape(self.ad_domain))
+                            re.escape(self.ad_domain),
+                            self.default_shell,
+                            )
 
         assert re.search(testuser_regex, result.stdout_text)
 
@@ -236,8 +241,10 @@ class TestPosixADTrust(ADTrustBase):
         result = self.master.run_command(['getent', 'passwd', testuser])
 
         testuser_stdout = "testuser@%s:*:10042:10047:"\
-                          "Test User:/home/%s/testuser:/bin/sh"\
-                          % (self.ad_domain, self.ad_domain)
+                          "Test User:/home/%s/testuser:%s"\
+                          % (self.ad_domain, self.ad_domain,
+                             self.default_shell,
+                             )
 
         assert testuser_stdout in result.stdout_text
 
@@ -323,9 +330,12 @@ class TestExternalTrustWithSubdomain(ADTrustSubdomainBase):
 
         testuser_regex = (r"^subdomaintestuser@{0}:\*:(?!10142)(\d+):"
                           r"(?!10147)(\d+):Subdomaintest User:"
-                          r"/home/{1}/subdomaintestuser:/bin/sh$".format(
+                          r"/home/{1}/subdomaintestuser:{2}$"
+                          .format(
                               re.escape(self.ad_subdomain),
-                              re.escape(self.ad_subdomain)))
+                              re.escape(self.ad_subdomain),
+                              self.default_shell,
+                          ))
 
         assert re.search(testuser_regex, result.stdout_text)
 
@@ -390,9 +400,12 @@ class TestExternalTrustWithTreedomain(ADTrustTreedomainBase):
 
         testuser_regex = (r"^treetestuser@{0}:\*:(?!10242)(\d+):"
                           r"(?!10247)(\d+):TreeTest User:"
-                          r"/home/{1}/treetestuser:/bin/sh$".format(
+                          r"/home/{1}/treetestuser:{2}$"
+                          .format(
                               re.escape(self.ad_treedomain),
-                              re.escape(self.ad_treedomain)))
+                              re.escape(self.ad_treedomain),
+                              self.default_shell,
+                          ))
 
         assert re.search(testuser_regex, result.stdout_text)
 
@@ -484,9 +497,9 @@ class TestTrustWithUPN(ADTrustBase):
 
         # result will contain AD domain, not UPN
         upnuser_regex = (
-            r"^{}@{}:\*:(\d+):(\d+):{}:/home/{}/{}:/bin/sh$".format(
+            r"^{}@{}:\*:(\d+):(\d+):{}:/home/{}/{}:{}$".format(
                 self.upn_username, self.ad_domain, self.upn_name,
-                self.ad_domain, self.upn_username)
+                self.ad_domain, self.upn_username, self.default_shell)
         )
         assert re.search(upnuser_regex, result.stdout_text)
 

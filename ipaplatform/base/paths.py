@@ -23,12 +23,10 @@ This base platform module exports default filesystem paths.
 
 
 class BasePathNamespace(object):
-    BASH = "/bin/bash"
     BIN_HOSTNAMECTL = "/bin/hostnamectl"
     ECHO = "/bin/echo"
     GZIP = "/usr/bin/gzip"
     LS = "/bin/ls"
-    SH = "/bin/sh"
     SYSTEMCTL = "/bin/systemctl"
     TAR = "/bin/tar"
     AUTOFS_LDAP_AUTH_CONF = "/etc/autofs_ldap_auth.conf"
