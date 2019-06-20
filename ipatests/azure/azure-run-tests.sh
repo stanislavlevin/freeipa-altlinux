@@ -33,6 +33,8 @@ if [ "$install_result" -eq 0 ] ; then
 	echo "Installation complete. Performance of individual steps:"
 	grep 'service duration:' /var/log/ipaserver-install.log | sed -e 's/DEBUG //g'
 
+        export PATH=/root/.local/bin:$PATH
+
 	sed -ri "s/mode = production/mode = development/" /etc/ipa/default.conf
 	systemctl restart httpd.service
 	firewall-cmd --add-service={freeipa-ldap,freeipa-ldaps,dns}
@@ -47,7 +49,8 @@ if [ "$install_result" -eq 0 ] ; then
 	ipa-test-task --help
 	ipa-run-tests --help
 
-	ipa-run-tests ${tests_to_ignore} \
+        PYTHONPATH="$(python3 -m site --user-site)" \
+	ipa-run-tests -ra ${tests_to_ignore} \
             ${tests_to_dedicate} \
             --slices=${SYSTEM_TOTALJOBSINPHASE:-1} \
             --slice-num=${SYSTEM_JOBPOSITIONINPHASE:-1} \
