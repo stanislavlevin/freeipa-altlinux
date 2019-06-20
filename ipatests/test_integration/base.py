@@ -39,10 +39,6 @@ class IntegrationTest:
     domain_level = None
 
     @classmethod
-    def setup_class(cls):
-        pass
-
-    @classmethod
     def host_by_role(cls, role):
         for domain in cls.get_domains():
             try:
@@ -72,10 +68,6 @@ class IntegrationTest:
             tasks.install_topo(cls.topology,
                                cls.master, cls.replicas,
                                cls.clients, domain_level)
-    @classmethod
-    def teardown_class(cls):
-        pass
-
     @classmethod
     def uninstall(cls, mh):
         tasks.uninstall_master(cls.master)

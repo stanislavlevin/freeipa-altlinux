@@ -550,11 +550,9 @@ class ClassChecker:
             'get_subcls()'
         )
 
-    def teardown(self):
-        """
-        nose tear-down fixture.
-        """
-        context.__dict__.clear()
+    @pytest.fixture(autouse=True)
+    def classchecker_setup(self, request):
+        request.addfinalizer(lambda: context.__dict__.clear())
 
 
 def get_api(**kw):
@@ -622,11 +620,9 @@ class PluginTester:
         o = api[namespace][self.plugin.__name__]
         return (o, api, home)
 
-    def teardown(self):
-        """
-        nose tear-down fixture.
-        """
-        context.__dict__.clear()
+    @pytest.fixture(autouse=True)
+    def plugintester_setup(self, request):
+        request.addfinalizer(lambda: context.__dict__.clear())
 
 
 class dummy_ugettext:
