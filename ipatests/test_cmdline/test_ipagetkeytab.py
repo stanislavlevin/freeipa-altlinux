@@ -63,7 +63,7 @@ def test_host(request):
 
 
 @pytest.fixture(scope='class')
-def test_service(request, test_host):
+def test_service(request, test_host, keytab_retrieval_setup):
     service_tracker = service_plugin.ServiceTracker(u'srv', test_host.name)
     test_host.ensure_exists()
     return service_tracker.make_fixture(request)
@@ -77,10 +77,9 @@ class KeytabRetrievalTest(cmdline_test):
     command = "ipa-getkeytab"
     keytabname = None
 
-    @classmethod
-    def setup_class(cls):
-        super(KeytabRetrievalTest, cls).setup_class()
-
+    @pytest.fixture(autouse=True, scope="class")
+    def keytab_retrieval_setup(self, request, cmdline_setup):
+        cls = request.cls
         keytabfd, keytabname = tempfile.mkstemp()
 
         os.close(keytabfd)
@@ -88,14 +87,13 @@ class KeytabRetrievalTest(cmdline_test):
 
         cls.keytabname = keytabname
 
-    @classmethod
-    def teardown_class(cls):
-        super(KeytabRetrievalTest, cls).teardown_class()
+        def fin():
+            try:
+                os.unlink(cls.keytabname)
+            except OSError:
+                pass
 
-        try:
-            os.unlink(cls.keytabname)
-        except OSError:
-            pass
+        request.addfinalizer(fin)
 
     def run_ipagetkeytab(self, service_principal, args=tuple(),
                          raiseonerr=False):
@@ -199,10 +197,9 @@ class TestBindMethods(KeytabRetrievalTest):
     dm_password = None
     ca_cert = None
 
-    @classmethod
-    def setup_class(cls):
-        super(TestBindMethods, cls).setup_class()
-
+    @pytest.fixture(autouse=True, scope="class")
+    def bindmethods_setup(self, request, keytab_retrieval_setup):
+        cls = request.cls
         dmpw_file = os.path.join(api.env.dot_ipa, '.dmpw')
 
         if not os.path.isfile(dmpw_file):
@@ -219,14 +216,12 @@ class TestBindMethods(KeytabRetrievalTest):
 
         cls.ca_cert = temp_ca_cert
 
-    @classmethod
-    def teardown_class(cls):
-        super(TestBindMethods, cls).teardown_class()
-
-        try:
-            os.unlink(cls.ca_cert)
-        except OSError:
-            pass
+        def fin():
+            try:
+                os.unlink(cls.ca_cert)
+            except OSError:
+                pass
+        request.addfinalizer(fin)
 
     def check_ldapi(self):
         if not api.env.ldap_uri.startswith('ldapi://'):

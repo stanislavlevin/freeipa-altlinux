@@ -71,13 +71,13 @@ def update_idfn(update):
 
 
 @pytest.fixture(scope='class')
-def certmap_rule(request):
+def certmap_rule(request, xmlrpc_setup):
     tracker = CertmapruleTracker(**certmaprule_create_params)
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def certmap_config(request):
+def certmap_config(request, xmlrpc_setup):
     tracker = CertmapconfigTracker()
     return tracker.make_fixture(request)
 
@@ -170,7 +170,7 @@ certmapdata_create_params = {
 
 
 @pytest.fixture
-def certmap_user(request):
+def certmap_user(request, xmlrpc_setup):
     user = UserTracker(CERTMAP_USER, u'certmap', u'user')
     return user.make_fixture(request)
 
@@ -297,7 +297,7 @@ def change_permissions_bindtype(perm, bindtype):
 
 
 @pytest.fixture(scope='class')
-def bindtype_permission(request):
+def bindtype_permission(request, xmlrpc_setup):
     orig_bindtype = {}
     # set bindtype to permission to actually test the permission
     for perm_name in certmaprule_permissions.values():
