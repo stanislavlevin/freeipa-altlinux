@@ -1,6 +1,8 @@
 #
 # Copyright (C) 2018  FreeIPA Contributors see COPYING for license
 #
+import pytest
+
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipaplatform.paths import paths
@@ -19,6 +21,17 @@ class TestNTPoptions(IntegrationTest):
     ntp_pool = "pool.ntp.org"
     ntp_server1 = "1.pool.ntp.org"
     ntp_server2 = "2.pool.ntp.org"
+
+    @pytest.fixture(autouse=True)
+    def ntpoptions_setup(self, request):
+        def fin():
+            """
+            Uninstall ipa-server, ipa-replica and ipa-client
+            """
+            tasks.uninstall_client(self.client)
+            tasks.uninstall_master(self.replica)
+            tasks.uninstall_master(self.master)
+        request.addfinalizer(fin)
 
     @classmethod
     def install(cls, mh):
@@ -225,11 +238,3 @@ class TestNTPoptions(IntegrationTest):
 
         cmd = self.replica.run_command(['cat', paths.CHRONY_CONF])
         assert self.ntp_pool in cmd.stdout_text
-
-    def teardown_method(self, method):
-        """
-        Uninstall ipa-server, ipa-replica and ipa-client
-        """
-        tasks.uninstall_client(self.client)
-        tasks.uninstall_master(self.replica)
-        tasks.uninstall_master(self.master)
