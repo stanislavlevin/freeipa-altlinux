@@ -25,6 +25,8 @@ if [ "$install_result" -eq 0 ] ; then
 	echo "Installation complete. Performance of individual steps:"
 	grep 'service duration:' /var/log/ipaserver-install.log | sed -e 's/DEBUG //g'
 
+        export PATH=/root/.local/bin:$PATH
+
 	sed -ri "s/mode = production/mode = development/" /etc/ipa/default.conf
 	systemctl restart httpd.service
 	firewall-cmd --add-service={freeipa-ldap,freeipa-ldaps,dns}
@@ -39,7 +41,7 @@ if [ "$install_result" -eq 0 ] ; then
 	ipa-test-task --help
 	ipa-run-tests --help
 
-	ipa-run-tests ${tests_to_ignore} --verbose --with-xunit '-k not test_dns_soa' ${tests_to_run}
+	ipa-run-tests ${tests_to_ignore} -ra --verbose --with-xunit '-k not test_dns_soa' ${tests_to_run}
 	tests_result=$?
 else
 	echo "ipa-server-install failed with code ${save_result}, skip IPA tests"
