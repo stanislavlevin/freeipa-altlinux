@@ -8,6 +8,9 @@ import time
 import re
 from tempfile import NamedTemporaryFile
 import textwrap
+
+import pytest
+
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.tasks import (
@@ -182,17 +185,20 @@ class TestWrongClientDomain(IntegrationTest):
     def install(cls, mh):
         tasks.install_master(cls.master, domain_level=cls.domain_level)
 
-    def teardown_method(self, method):
-        if len(config.domains) == 0:
-            # No YAML config was set
-            return
-        self.replicas[0].run_command(['ipa-client-install',
-                                     '--uninstall', '-U'],
+    @pytest.fixture(autouse=True)
+    def wrongclientdom_setup(self, request):
+        def fin():
+            if len(config.domains) == 0:
+                # No YAML config was set
+                return
+            self.replicas[0].run_command(['ipa-client-install',
+                                         '--uninstall', '-U'],
+                                         raiseonerr=False)
+            tasks.kinit_admin(self.master)
+            self.master.run_command(['ipa', 'host-del',
+                                     self.replicas[0].hostname],
                                     raiseonerr=False)
-        tasks.kinit_admin(self.master)
-        self.master.run_command(['ipa', 'host-del',
-                                 self.replicas[0].hostname],
-                                raiseonerr=False)
+        request.addfinalizer(fin)
 
     def test_wrong_client_domain(self):
         client = self.replicas[0]

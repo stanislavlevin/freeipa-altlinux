@@ -36,7 +36,7 @@ from ipatests.util import Fuzzy
 from ipatests.data import binary_bytes, utf8_bytes, unicode_str
 from ipalib.frontend import Command
 from ipalib.request import context, Connection
-from ipalib import rpc, errors, api, request
+from ipalib import rpc, errors, api, request as ipa_request
 from ipapython.version import API_VERSION
 
 if six.PY3:
@@ -263,17 +263,15 @@ class test_xmlclient(PluginTester):
 @pytest.mark.skip_ipaclient_unittest
 @pytest.mark.needs_ipaapi
 class test_xml_introspection(object):
-    @classmethod
-    def setup_class(cls):
+    @pytest.fixture(autouse=True, scope="class")
+    def xml_introsp_setup(self, request):
         try:
             api.Backend.xmlclient.connect()
         except (errors.NetworkError, IOError):
             raise unittest.SkipTest('%r: Server not available: %r' %
                                 (__name__, api.env.xmlrpc_uri))
 
-    @classmethod
-    def teardown_class(cls):
-        request.destroy_context()
+        request.addfinalizer(lambda: ipa_request.destroy_context())
 
     def test_list_methods(self):
         result = api.Backend.xmlclient.conn.system.listMethods()
@@ -353,16 +351,18 @@ class test_rpcclient_context(PluginTester):
     """
     Test the context in `ipalib.rpc.rpcclient` plugin.
     """
-    def setup(self):
+    @pytest.fixture(autouse=True)
+    def rpcclient_context_fsetup(self, request):
         try:
             api.Backend.rpcclient.connect(ca_certfile='foo')
         except (errors.NetworkError, IOError):
             raise unittest.SkipTest('%r: Server not available: %r' %
                                 (__name__, api.env.xmlrpc_uri))
 
-    def teardown(self):
-        if api.Backend.rpcclient.isconnected():
-            api.Backend.rpcclient.disconnect()
+        def fin():
+            if api.Backend.rpcclient.isconnected():
+                api.Backend.rpcclient.disconnect()
+        request.addfinalizer(fin)
 
     def test_context_cafile(self):
         """
