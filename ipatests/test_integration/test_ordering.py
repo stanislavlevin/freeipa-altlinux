@@ -25,14 +25,16 @@ in a specific order:
 - Within a class, test methods are ordered according to source line
 """
 
+import pytest
 from pytest_sourceorder import ordered
 
 
 @ordered
 class TestBase:
-    @classmethod
-    def setup_class(cls):
-        cls.value = 'unchanged'
+    value = None
+    @pytest.fixture(autouse=True, scope="class")
+    def testbase_setup(self, request):
+        request.cls.value = 'unchanged'
 
     def test_d_first(self):
         type(self).value = 'changed once'

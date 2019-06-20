@@ -426,10 +426,8 @@ if have_ldap2:
 @pytest.mark.tier1
 class test_dns(Declarative):
 
-    @classmethod
-    def setup_class(cls):
-        super(test_dns, cls).setup_class()
-
+    @pytest.fixture(autouse=True, scope="class")
+    def dns_setup(self, declarative_setup):
         if not api.Backend.rpcclient.isconnected():
             api.Backend.rpcclient.connect()
 
@@ -3205,10 +3203,8 @@ class test_dns(Declarative):
 @pytest.mark.tier1
 class test_root_zone(Declarative):
 
-    @classmethod
-    def setup_class(cls):
-        super(test_root_zone, cls).setup_class()
-
+    @pytest.fixture(autouse=True, scope="class")
+    def root_zone_setup(self, declarative_setup):
         if not api.Backend.rpcclient.isconnected():
             api.Backend.rpcclient.connect()
 
@@ -3291,10 +3287,8 @@ class test_root_zone(Declarative):
 class test_forward_zones(Declarative):
     # https://fedorahosted.org/freeipa/ticket/4750
 
-    @classmethod
-    def setup_class(cls):
-        super(test_forward_zones, cls).setup_class()
-
+    @pytest.fixture(autouse=True, scope="class")
+    def forward_zone_setup(self, declarative_setup):
         if not api.Backend.rpcclient.isconnected():
             api.Backend.rpcclient.connect()
 
@@ -4500,10 +4494,8 @@ class test_forward_zones(Declarative):
 class test_forward_master_zones_mutual_exlusion(Declarative):
     # https://fedorahosted.org/freeipa/ticket/4750
 
-    @classmethod
-    def setup_class(cls):
-        super(test_forward_master_zones_mutual_exlusion, cls).setup_class()
-
+    @pytest.fixture(autouse=True, scope="class")
+    def forward_master_zone_setup(self, declarative_setup):
         if not api.Backend.rpcclient.isconnected():
             api.Backend.rpcclient.connect()
 
@@ -4875,10 +4867,8 @@ class test_forward_master_zones_mutual_exlusion(Declarative):
 @pytest.mark.tier1
 class test_forwardzone_delegation_warnings(Declarative):
 
-    @classmethod
-    def setup_class(cls):
-        super(test_forwardzone_delegation_warnings, cls).setup_class()
-
+    @pytest.fixture(autouse=True, scope="class")
+    def forw_zone_deleg_warn_setup(self, declarative_setup):
         if not api.Backend.rpcclient.isconnected():
             api.Backend.rpcclient.connect()
 
@@ -5386,10 +5376,8 @@ class test_forwardzone_delegation_warnings(Declarative):
 @pytest.mark.tier1
 class test_dns_soa(Declarative):
 
-    @classmethod
-    def setup_class(cls):
-        super(test_dns_soa, cls).setup_class()
-
+    @pytest.fixture(autouse=True, scope="class")
+    def dns_soa_setup(self, declarative_setup):
         if not api.Backend.rpcclient.isconnected():
             api.Backend.rpcclient.connect()
 
@@ -6140,9 +6128,8 @@ class test_dns_soa(Declarative):
 class test_dns_type_uri(test_dns):
     """Test behavior specific for URI RR type."""
 
-    @classmethod
-    def setup_class(cls):
-        super(test_dns_type_uri, cls).setup_class()
+    @pytest.fixture(autouse=True, scope="class")
+    def dns_type_uri_setup(self, dns_setup):
         try:
             api.Command['dnszone_add'](zone1, idnssoarname=zone1_rname)
         except errors.DuplicateEntry:
