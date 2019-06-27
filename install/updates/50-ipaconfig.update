@@ -1,6 +1,6 @@
 dn: cn=ipaConfig,cn=etc,$SUFFIX
-replace: ipaSELinuxUserMapOrder: officer_u:s0-s3:c0.c15$$generic3_u:s3-s3:c0.c15$$generic_u2:s2-s3:c0.c15$$generic_u1:s1-s3:c0.c15$$generic_u:s0-s3:c0.c15::ipaSELinuxUserMapOrder: officer_u:s0-s3:c0.c15$$generic3_u:s3-s3:c0.c15$$generic_u2:s2-s3:c0.c15$$generic_u1:s1-s3:c0.c15$$generic_u:s0-s3:c0.c15
-add:ipaSELinuxUserMapDefault: generic_u:s0-s3:c0.c15
+replace: ipaSELinuxUserMapOrder: ipaSELinuxUserMapOrder: officer_u:s0-s3:c0.c15$$generic3_u:s3-s3:c0.c15$$generic_u2:s2-s3:c0.c15$$generic_u1:s1-s3:c0.c15$$generic_u:s0-s3:c0.c15::officer_u:s0-s3:c0.c15$$generic3_u:s3-s3:c0.c15$$generic_u2:s2-s3:c0.c15$$generic_u1:s1-s3:c0.c15$$generic_u:s0-s3:c0.c15
+add:ipaSELinuxUserMapDefault: $SELINUX_USERMAP_DEFAULT
 add:ipaUserObjectClasses: ipasshuser
 remove:ipaConfigString:AllowLMhash
 add:objectClass: ipaUserAuthTypeClass

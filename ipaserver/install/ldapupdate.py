@@ -40,6 +40,7 @@ from ipapython import ipautil, ipaldap
 from ipalib import errors
 from ipalib import api, create_api
 from ipalib import constants
+from ipaplatform.constants import constants as platformconstants
 from ipaplatform.paths import paths
 from ipapython.dn import DN
 
@@ -307,6 +308,9 @@ class LDAPUpdate(object):
         if not self.sub_dict.get("TOTAL_EXCLUDES"):
             self.sub_dict["TOTAL_EXCLUDES"] = "(objectclass=*) $ EXCLUDE " + \
                 " ".join(constants.REPL_AGMT_TOTAL_EXCLUDES)
+        if not self.sub_dict.get("SELINUX_USERMAP_DEFAULT"):
+            self.sub_dict["SELINUX_USERMAP_DEFAULT"] = \
+                platformconstants.SELINUX_USERMAP_DEFAULT
         self.api = create_api(mode=None)
         self.api.bootstrap(in_server=True,
                            context='updates',
