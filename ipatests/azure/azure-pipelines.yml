@@ -8,7 +8,7 @@ jobs:
   pool:
     vmImage: 'Ubuntu-16.04'
   container:
-    image: stanislavlevin/freeipa-altlinux:sisyphus
+    image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
   steps:
     - template: templates/prepare-build.yml
@@ -34,8 +34,6 @@ jobs:
         cp -v $(builddir)/rpmbuild/SRPMS/freeipa-*.src.rpm $(builddir)/dist/srpms/
         find $(builddir)/rpmbuild/RPMS/ -type f \( -not -name "*-debuginfo-*" \
             -a -name '*.rpm' \) -exec cp {} $(builddir)/dist/rpms/ \;
-        user="$(id -un)"
-        sudo usermod "$user" -aG docker
       displayName: Build packages
     - script: |
         set -e
@@ -52,7 +50,7 @@ jobs:
   pool:
     vmImage: 'Ubuntu-16.04'
   container:
-    image: stanislavlevin/freeipa-altlinux:sisyphus
+    image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
   steps:
     - template: templates/prepare-build.yml
@@ -71,7 +69,7 @@ jobs:
   pool:
     vmImage: 'Ubuntu-16.04'
   container:
-    image: stanislavlevin/freeipa-altlinux:sisyphus
+    image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
   steps:
     - template: templates/prepare-build.yml
@@ -102,7 +100,7 @@ jobs:
   pool:
     vmImage: 'Ubuntu-16.04'
   container:
-    image: stanislavlevin/freeipa-altlinux:sisyphus
+    image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
   steps:
     - template: templates/prepare-build.yml

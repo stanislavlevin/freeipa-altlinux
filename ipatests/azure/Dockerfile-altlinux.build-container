@@ -1,4 +1,4 @@
-FROM stanislavlevin/freeipa-altlinux:sisyphus
+FROM stanislavlevin/freeipa-tests-altlinux:sisyphus
 ENV container=docker LANG=en_US.utf8 LANGUAGE=en_US.utf8 LC_ALL=en_US.utf8
 
 COPY dist /root
@@ -9,5 +9,5 @@ RUN \
     && find /var/lib/apt/lists/ -type f -exec rm "{}" \; \
     && rm -rf /var/cache/apt/*.bin \
     && rm -rf /root/rpms /root/srpms
-
+VOLUME ["/freeipa"]
 ENTRYPOINT [ "/sbin/init" ]
