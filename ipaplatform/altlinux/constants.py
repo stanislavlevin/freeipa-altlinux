@@ -32,6 +32,17 @@ class ALTLinuxConstantsNamespace(BaseConstantsNamespace):
     HTTPD_IPA_CONFL_MODULES = [
         "nss",
     ]
+    SELINUX_MCS_MAX = 15
+    SELINUX_MLS_MAX = 3
+    SELINUX_USER_REGEX = r"^[a-zA-Z][a-zA-Z0-9_\.]*$"
+    SELINUX_USERMAP_DEFAULT = "generic_u:s0-s3:c0.c15"
+    SELINUX_USERMAP_ORDER = (
+        "generic_u3:s3-s3:c0.c15"
+        "$generic_u2:s2-s3:c0.c15"
+        "$generic_u1:s1-s3:c0.c15"
+        "$officer_u:s0-s3:c0.c15"
+        "$generic_u:s0-s3:c0.c15"
+    )
 
 
 constants = ALTLinuxConstantsNamespace()
