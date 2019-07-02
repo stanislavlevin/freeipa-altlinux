@@ -11,6 +11,7 @@ from ipaplatform.base.constants import BaseConstantsNamespace
 
 
 class ALTLinuxConstantsNamespace(BaseConstantsNamespace):
+    DEFAULT_SHELL = "/bin/bash"
     GSSPROXY_USER = "_gssproxy"
     HTTPD_USER = "apache2"
     HTTPD_GROUP = "apache2"
