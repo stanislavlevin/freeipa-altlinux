@@ -1,12 +1,16 @@
 steps:
 - script: |
     set -e
-    sudo rm -rf /var/cache/dnf/*
-    echo 'Disable modular repositories'
-    sudo dnf config-manager '*modular*' --set-disabled
-    sudo dnf makecache || :
+    sudo apt-get update
     echo "Installing base development environment"
-    sudo dnf install -y gdb make autoconf rpm-build gettext-devel automake libtool 'nodejs(abi) < 11' docker python3-paramiko || :
-    echo "Installing FreeIPA development dependencies"
-    sudo dnf builddep -y --skip-broken -D "with_wheels 1" -D "with_lint 1" --spec freeipa.spec.in --best --allowerasing --setopt=install_weak_deps=False || :
+    sudo apt-get install -y gear rpm-build rpm-build-python3
+    gear-rpm -bs --nodeps \
+        --define '_allow_undefined_macros 1' \
+        --define "_srcrpmdir $(pwd)" \
+        --with "wheels" \
+      && rpm -qp freeipa-*.src.rpm --requires | \
+        grep -v '^rpmlib(' | \
+        tr -d [[:blank:]] | \
+        tr '\n' ' ' | \
+        xargs sudo apt-get install -y
   displayName: Prepare build environment

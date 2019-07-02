@@ -7,10 +7,10 @@ import shutil
 import re
 import sys
 
-# pylint: disable=import-error,ipa-forbidden-import
+# pylint: disable=import-error,no-name-in-module,ipa-forbidden-import
 from ipaclient.install import ipadiscovery
 from ipalib import api
-# pylint: enable=import-error,ipa-forbidden-import
+# pylint: enable=import-error,no-name-in-module,ipa-forbidden-import
 from ipaplatform import services
 from ipapython import ipautil
 

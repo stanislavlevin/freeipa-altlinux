@@ -32,7 +32,7 @@
 %define pki_version 10.6.7
 %define python_ldap_version 3.2.0
 %define samba_version 4.7.6
-%define slapi_nis_version 0.56.1
+%define slapi_nis_version 0.56.3
 %define sssd_version 1.16.3
 %define openldap_version 2.4.47-alt2
 
@@ -94,6 +94,15 @@ BuildRequires: python3-module-sss_nss_idmap
 
 %if_with fasttest
 BuildRequires: keyutils
+%endif
+
+#
+# Build dependencies for wheel packaging and PyPI upload
+#
+%if_with wheels
+BuildRequires: python3(tox)
+BuildRequires: python3(twine)
+BuildRequires: python3(wheel)
 %endif
 
 #
@@ -183,6 +192,7 @@ Requires: python3-module-ipaserver = %EVR
 Requires: python3-module-ldap >= %python_ldap_version
 Requires: python3-module-gssapi
 Requires: python3-module-systemd
+Requires: slapi-nis >= %slapi_nis_version
 
 # upgrade path from monolithic -server to -server + -server-dns
 Obsoletes: %name-server <= 4.2.0
@@ -378,7 +388,8 @@ Summary: Python3 libraries used by IPA
 Group: System/Libraries
 Requires: %name-common = %EVR
 Requires: gnupg2
-Requires: libkeyutils
+Requires: keyutils
+Requires: less
 Requires: python3-module-cffi
 Requires: python3-module-ipa_hbac
 Requires: python3-module-ldap >= %python_ldap_version
