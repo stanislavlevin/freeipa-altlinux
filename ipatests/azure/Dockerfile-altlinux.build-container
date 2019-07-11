@@ -3,7 +3,8 @@ ENV container=docker LANG=en_US.utf8 LANGUAGE=en_US.utf8 LC_ALL=en_US.utf8
 
 COPY dist /root
 RUN \
-    apt-get update \
+    apt-repo add task 234267 \
+    && apt-get update \
     && apt-get install -y /root/rpms/*.rpm \
     && apt-get clean \
     && find /var/lib/apt/lists/ -type f -exec rm "{}" \; \
