@@ -32,7 +32,7 @@
 %define pki_version 10.6.7
 %define python_ldap_version 3.2.0
 %define samba_version 4.7.6
-%define slapi_nis_version 0.56.1
+%define slapi_nis_version 0.56.3
 %define sssd_version 1.16.3
 %define openldap_version 2.4.47-alt2
 
@@ -183,6 +183,7 @@ Requires: python3-module-ipaserver = %EVR
 Requires: python3-module-ldap >= %python_ldap_version
 Requires: python3-module-gssapi
 Requires: python3-module-systemd
+Requires: slapi-nis >= %slapi_nis_version
 
 # upgrade path from monolithic -server to -server + -server-dns
 Obsoletes: %name-server <= 4.2.0
