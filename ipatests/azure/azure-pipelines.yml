@@ -11,7 +11,7 @@ jobs:
   pool:
     vmImage: 'Ubuntu-16.04'
   container:
-    image: registry.fedoraproject.org/f30/fedora-toolbox
+    image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
   steps:
     - template: templates/prepare-build.yml
@@ -28,14 +28,22 @@ jobs:
       condition: eq(variables['Build.Reason'], 'PullRequest')
     - script: |
         set -e
-        echo "Running make target 'rpms'"
-        make V=0 rpms LOG_COMPILE='gdb -return-child-result -ex run -ex "thread apply all bt" -ex "quit" --args'
+        echo "Build rpms"
+        gear-rpm -ba -v \
+            --define '_topdir $(builddir)/rpmbuild' \
+            --without 'lint' \
+            --without 'fasttest' \
+            --without 'fastlint'
+        mkdir -p $(builddir)/dist/{,s}rpms
+        cp -v $(builddir)/rpmbuild/SRPMS/freeipa-*.src.rpm $(builddir)/dist/srpms/
+        find $(builddir)/rpmbuild/RPMS/ -type f \( -not -name "*-debuginfo-*" \
+            -a -name '*.rpm' \) -exec cp {} $(builddir)/dist/rpms/ \;
       displayName: Build packages
     - script: |
         set -e
         mkdir container
         cp -pr dist container/
-        cp ipatests/azure/Dockerfile.build-container container/Dockerfile
+        cp ipatests/azure/Dockerfile-altlinux.build-container container/Dockerfile
         cd container
         docker build -t freeipa-fedora-builder .
         docker save freeipa-fedora-builder | gzip > '$(builddir)/freeipa-fedora-builder-container.tar.gz'
@@ -46,7 +54,7 @@ jobs:
   pool:
     vmImage: 'Ubuntu-16.04'
   container:
-    image: registry.fedoraproject.org/f30/fedora-toolbox
+    image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
   steps:
     - template: templates/prepare-build.yml
@@ -65,7 +73,7 @@ jobs:
   pool:
     vmImage: 'Ubuntu-16.04'
   container:
-    image: registry.fedoraproject.org/f30/fedora-toolbox
+    image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
   steps:
     - template: templates/prepare-build.yml
@@ -75,8 +83,8 @@ jobs:
         architecture: x64
     - script: |
         set -e
-        sudo dnf -y install nss-tools
-        python3 -m pip install --upgrade pip setuptools pycodestyle
+        sudo apt-get install -y nss-tools
+        python3 -m pip install --upgrade pip setuptools pycodestyle tox
       displayName: 'Install prerequisites'
     - script: |
         set -e
@@ -84,7 +92,7 @@ jobs:
         export LANG=en_US.utf8
         export LC_CTYPE=en_US.utf8
         locale
-        tox -e py36,pypi,pylint3
+        tox.py3 -e py36,pypi,pylint3
       displayName: Tox
     - task: PublishTestResults@2
       inputs:
@@ -96,7 +104,7 @@ jobs:
   pool:
     vmImage: 'Ubuntu-16.04'
   container:
-    image: registry.fedoraproject.org/f30/fedora-toolbox
+    image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
   steps:
     - template: templates/prepare-build.yml
@@ -106,7 +114,7 @@ jobs:
         architecture: x64
     - script: |
         set -e
-        sudo dnf -y install npm fontconfig
+        sudo apt-get -y install npm fontconfig
       displayName: 'Install prerequisites'
     - script: |
         set -e

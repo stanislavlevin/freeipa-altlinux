@@ -7,7 +7,7 @@ server_password=Secret123
 tests_to_run=$(eval "echo {$(echo $TESTS_TO_RUN | sed -e 's/[ \t]+*/,/g')}" | tr -d '{}')
 tests_to_ignore=$(eval "echo --ignore\ {$(echo $TESTS_TO_IGNORE | sed -e 's/[ \t]+*/,/g')}" | tr -d '{}')
 
-systemctl --now enable firewalld
+systemctl --now enable firewalld || :
 echo "Installing FreeIPA master for the domain ${server_domain} and realm ${server_realm}"
 ipa-server-install -U --domain ${server_domain} --realm ${server_realm} \
                    -p ${server_password} -a ${server_password} \
@@ -26,7 +26,7 @@ if [ "$install_result" -eq 0 ] ; then
 	grep 'service duration:' /var/log/ipaserver-install.log | sed -e 's/DEBUG //g'
 
 	sed -ri "s/mode = production/mode = development/" /etc/ipa/default.conf
-	systemctl restart httpd.service
+	systemctl restart httpd2.service
 	firewall-cmd --add-service={freeipa-ldap,freeipa-ldaps,dns}
 
 	echo ${server_password} | kinit admin && ipa ping
@@ -46,10 +46,10 @@ else
 fi
 
 echo "Potential Python 3 incompatibilities in the IPA framework:"
-grep -n -C5 BytesWarning /var/log/httpd/error_log || echo "Good, none detected"
+grep -n -C5 BytesWarning /var/log/httpd2/error_log || echo "Good, none detected"
 
 echo "State of the directory server instance, httpd databases, PKI CA database:"
-ls -laZ /etc/dirsrv/slapd-*/ /etc/httpd/alias/ /var/lib/ /etc/pki/pki-tomcat/alias/ || true
+ls -laZ /etc/dirsrv/slapd-*/ /etc/httpd2/alias/ /var/lib/ /etc/pki/pki-tomcat/alias/ || true
 ls -laZ /var/lib/ipa/certs/ /var/lib/ipa/passwds/ /var/lib/ipa/private/ || true
 
 echo "Uninstall the server"
@@ -59,19 +59,19 @@ ipa-server-install --uninstall -U
 
 
 if [ "$install_result" -eq 0 ] ; then
-	firewall-cmd --remove-service={freeipa-ldap,freeipa-ldaps,dns}
+	firewall-cmd --remove-service={freeipa-ldap,freeipa-ldaps,dns} || :
 fi
 
 echo "Collect the logs"
 journalctl -b --no-pager > systemd_journal.log
 tar --ignore-failed-read -cvf var_log.tar \
     /var/log/dirsrv \
-    /var/log/httpd \
+    /var/log/httpd2 \
     /var/log/ipa* \
     /var/log/krb5kdc.log \
     /var/log/pki \
     /var/log/samba \
-    /var/named/data \
+    /var/lib/bind/data \
     systemd_journal.log
 
 # Final result depends on the exit code of the ipa-run-tests
