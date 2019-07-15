@@ -388,7 +388,8 @@ Summary: Python3 libraries used by IPA
 Group: System/Libraries
 Requires: %name-common = %EVR
 Requires: gnupg2
-Requires: libkeyutils
+Requires: keyutils
+Requires: less
 Requires: python3-module-cffi
 Requires: python3-module-ipa_hbac
 Requires: python3-module-ldap >= %python_ldap_version
