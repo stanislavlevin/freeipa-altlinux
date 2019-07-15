@@ -40,7 +40,6 @@ SIZE_1024 = 'abcdefgh' * 128
 
 @pytest.mark.xfail(
     os.environ.get('RPM_BUILD_DIR') is not None,
-    strict=True,
     reason='these tests depend on the host Linux key retention service',
 )
 class test_keyring(object):
