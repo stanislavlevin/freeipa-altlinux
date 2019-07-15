@@ -8,6 +8,7 @@
 %def_without only_client
 %endif
 
+%def_with fastlint
 %def_with fasttest
 %if_with lint
     %define linter_options --enable-pylint --with-jslint
@@ -609,7 +610,7 @@ mkdir -p %buildroot%_sharedstatedir/ipa-client/sysrestore
 
 %check
 # run tests in upstream PR manner
-%{?_with_lint:make "GIT_BRANCH=master" fastlint}
+%{?_with_fastlint:make "GIT_BRANCH=master" fastlint}
 %{?_with_fasttest:make fasttest}
 %{?_with_lint:make lint}
 %make check VERBOSE=yes LIBDIR=%_libdir
