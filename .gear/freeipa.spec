@@ -97,6 +97,15 @@ BuildRequires: keyutils
 %endif
 
 #
+# Build dependencies for wheel packaging and PyPI upload
+#
+%if_with wheels
+BuildRequires: python3(tox)
+BuildRequires: python3(twine)
+BuildRequires: python3(wheel)
+%endif
+
+#
 # Build dependencies for lint and fastcheck
 #
 %if_with lint
