@@ -1,3 +1,11 @@
+schedules:
+- cron: "0 6 * * *"
+  displayName: Daily tests
+  branches:
+    include:
+    - sisyphus-ci
+  always: true
+
 variables:
   CI_RUNNER_LOGS_DIR: logs
   localsdir: $(Build.Repository.LocalPath)
