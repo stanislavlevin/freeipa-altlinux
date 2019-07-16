@@ -11,17 +11,6 @@ from ipaplatform.redhat.tasks import RedHatTaskNamespace
 
 class ALTLinuxTaskNamespace(RedHatTaskNamespace):
 
-    # TODO: insert, reload, remove ca cert update
-    def reload_systemwide_ca_store(self):
-        return True
-
-    def insert_ca_certs_into_systemwide_ca_store(self, ca_certs):
-        return True
-
-    def remove_ca_certs_from_systemwide_ca_store(self):
-        return True
-    # END of TODO: insert, reload, remove ca cert update
-
     # TODO: use Alt tool like authconfig
     def restore_pre_ipa_client_configuration(self, fstore, statestore,
                                              was_sssd_installed,
