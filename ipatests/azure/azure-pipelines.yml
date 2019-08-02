@@ -1,9 +1,9 @@
 schedules:
-- cron: "0 6 * * *"
+- cron: '0,30,50 * * * *'
   displayName: Daily tests
   branches:
     include:
-    - sisyphus-ci
+    - sisyphusci
   always: true
 
 variables:
