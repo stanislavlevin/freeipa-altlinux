@@ -93,7 +93,7 @@ jobs:
         export LANG=en_US.utf8
         export LC_CTYPE=en_US.utf8
         locale
-        tox.py3 -e py36,pypi,pylint3
+        tox.py3 -e py37,pypi,pylint3
       displayName: Tox
     - task: PublishTestResults@2
       inputs:
