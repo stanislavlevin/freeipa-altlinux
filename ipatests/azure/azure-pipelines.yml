@@ -82,14 +82,10 @@ jobs:
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
   steps:
     - template: templates/prepare-build.yml
-    - task: UsePythonVersion@0
-      inputs:
-        versionSpec: 3.6
-        architecture: x64
     - script: |
         set -e
-        sudo apt-get install -y nss-tools
-        python3 -m pip install --upgrade pip setuptools pycodestyle tox
+        sudo apt-get install -y nss-tools python3-module-pip
+        python3 -m pip install --user --upgrade pip setuptools pycodestyle tox
       displayName: 'Install prerequisites'
     - script: |
         set -e
@@ -113,10 +109,6 @@ jobs:
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
   steps:
     - template: templates/prepare-build.yml
-    - task: UsePythonVersion@0
-      inputs:
-        versionSpec: 3.6
-        architecture: x64
     - script: |
         set -e
         sudo apt-get -y install npm fontconfig
