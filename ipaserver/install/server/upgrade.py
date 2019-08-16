@@ -1485,25 +1485,14 @@ def upgrade_bind(fstore):
         bind.setup_resolv_conf()
         logger.info("Updated systemd-resolved configuration")
 
-    if bind.is_configured() and not bind.is_running():
-        # some upgrade steps may require bind running
-        bind_started = True
-        bind.start()
-    else:
-        bind_started = False
-
+    changed = bind.setup_named_conf(backup=True)
+    if changed:
+        logger.info("named.conf has been modified, restarting named")
     try:
-        changed = bind.setup_named_conf(backup=True)
-        if changed:
-            logger.info("named.conf has been modified, restarting named")
-        try:
-            if bind.is_running():
-                bind.restart()
-        except ipautil.CalledProcessError as e:
-            logger.error("Failed to restart %s: %s", bind.service_name, e)
-    finally:
-        if bind_started:
-            bind.stop()
+        if bind.is_configured():
+            bind.restart()
+    except ipautil.CalledProcessError as e:
+        logger.error("Failed to restart %s: %s", bind.service_name, e)
 
     return changed
 
