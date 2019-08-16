@@ -1820,6 +1820,13 @@ def upgrade_configuration():
         upgrade_file(sub_dict, paths.HTTPD_IPA_CONF,
                      os.path.join(paths.USR_SHARE_IPA_DIR,
                                   "ipa.conf.template"))
+        # move old config
+        if not os.path.exists(paths.HTTPD_IPA_REWRITE_CONF):
+            try:
+                shutil.move("/etc/httpd2/conf/ipa-rewrite.conf",
+                            paths.HTTPD_IPA_REWRITE_CONF)
+            except OSError:
+                pass
         upgrade_file(sub_dict, paths.HTTPD_IPA_REWRITE_CONF,
                      os.path.join(paths.USR_SHARE_IPA_DIR,
                                   "ipa-rewrite.conf.template"))

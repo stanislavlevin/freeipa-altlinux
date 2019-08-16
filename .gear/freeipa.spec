@@ -631,15 +631,6 @@ if [ $1 = 0 ]; then
     /bin/systemctl reload-or-try-restart oddjobd ||:
 fi
 
-%triggerpostun server-common -- freeipa-server-common <= 4.6.1
-if python3 -c "import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);" > /dev/null 2>&1; then
-        a2dismod ipa-nss >/dev/null 2>&1 ||:
-
-        if systemctl is-enabled httpd2.service >/dev/null 2>&1; then
-                systemctl try-restart httpd2.service >/dev/null 2>&1 ||:
-        fi
-fi
-
 %pre server
 # Stop ipa_kpasswd if it exists before upgrading so we don't have a
 # zombie process when we're done.
