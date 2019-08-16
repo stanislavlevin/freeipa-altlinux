@@ -1530,6 +1530,45 @@ def add_default_caacl(ca):
     sysupgrade.set_upgrade_state('caacl', 'add_default_caacl', True)
 
 
+def setup_krb_paths(krb):
+    logger.info("[Setup KRB5 paths]")
+
+    aug = Augeas(flags=Augeas.NO_LOAD | Augeas.NO_MODL_AUTOLOAD,
+                 loadpath=paths.USR_SHARE_IPA_DIR)
+    try:
+        NEW_KRB_HOME = "/var/lib/kerberos"
+        OLD_KRB_HOME = "/var/kerberos"
+        aug.transform("IPAKrb5", paths.KRB5KDC_KDC_CONF)
+        aug.load()
+
+        path = '/files{}/realms/{}'.format(paths.KRB5KDC_KDC_CONF, krb.realm)
+        modified = False
+
+        expr = '{}/*[.=~regexp("{}")]'.format(
+            path, ".*{}.*".format(OLD_KRB_HOME))
+        matches = aug.match(expr)
+        for m in matches:
+            old_value = aug.get(m)
+            new_value = old_value.replace(OLD_KRB_HOME, NEW_KRB_HOME)
+            aug.set(m, new_value)
+            modified = True
+
+        if modified:
+            try:
+                aug.save()
+            except IOError:
+                for error_path in aug.match('/augeas//error'):
+                    logger.error('augeas: %s', aug.get(error_path))
+                    raise
+
+            kadmin = service.SimpleServiceInstance("kadmin")
+            if kadmin.is_configured():
+                kadmin.restart()
+
+    finally:
+        aug.close()
+
+
 def setup_pkinit(krb):
     logger.info("[Setup PKINIT]")
 
@@ -2012,6 +2051,7 @@ def upgrade_configuration():
                         CACERT_PEM=paths.CACERT_PEM,
                         KDC_CA_BUNDLE_PEM=paths.KDC_CA_BUNDLE_PEM,
                         CA_BUNDLE_PEM=paths.CA_BUNDLE_PEM)
+    setup_krb_paths(krb)
     krb.add_anonymous_principal()
     setup_spake(krb)
     setup_pkinit(krb)
