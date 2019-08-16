@@ -1956,14 +1956,6 @@ def upgrade_configuration():
     cleanup_dogtag()
     upgrade_adtrust_config()
 
-    bind = bindinstance.BindInstance(fstore)
-    if bind.is_configured() and not bind.is_running():
-        # some upgrade steps may require bind running
-        bind_started = True
-        bind.start()
-    else:
-        bind_started = False
-
     add_ca_dns_records()
 
     # Any of the following functions returns True iff the named.conf file
@@ -1990,13 +1982,10 @@ def upgrade_configuration():
         logger.info('Changes to named.conf have been made, restart named')
         bind = bindinstance.BindInstance(fstore)
         try:
-            if bind.is_running():
+            if bind.is_configured():
                 bind.restart()
         except ipautil.CalledProcessError as e:
             logger.error("Failed to restart %s: %s", bind.service_name, e)
-
-    if bind_started:
-        bind.stop()
 
     custodia = custodiainstance.CustodiaInstance(api.env.host, api.env.realm)
     custodia.upgrade_instance()
