@@ -40,7 +40,6 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     HTTPD_NSS_CONF = "/etc/httpd2/conf/mods-available/nss.conf"
     HTTPD_SSL_CONF = "/etc/httpd2/conf/sites-available/default_https.conf"
     HTTPD_SSL_SITE_CONF = "/etc/httpd2/conf/sites-available/default_https.conf"
-    HTTPD_HTTPS_PORT_ENABLE_CONF = "/etc/httpd2/conf/ports-enabled/https.conf"
     OLD_IPA_KEYTAB = "/etc/httpd2/conf/ipa.keytab"
     HTTPD_PASSWORD_CONF = "/etc/httpd2/conf/password.conf"
     SYSTEMD_SYSTEM_HTTPD_D_DIR = "/etc/systemd/system/httpd2.service.d"
