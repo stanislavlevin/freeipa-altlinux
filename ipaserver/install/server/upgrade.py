@@ -931,6 +931,39 @@ def named_add_crypto_policy():
     return True
 
 
+def named_fix_data_dirs():
+    """Correct data directory
+    """
+    if not bindinstance.named_conf_exists():
+        logger.info('DNS is not configured')
+        return False
+
+    if sysupgrade.get_upgrade_state('named.conf', 'fix_data_paths'):
+        # upgrade was done already
+        return False
+
+    logger.info('[Setting paths for data directory in named.conf]')
+    try:
+        bindinstance.named_conf_set_directive(
+            'dump-file',
+            constants.NAMED_DATA_DIR + 'cache_dump.db',
+            bindinstance.NAMED_SECTION_OPTIONS)
+        bindinstance.named_conf_set_directive(
+            'statistics-file',
+            constants.NAMED_DATA_DIR + 'named_stats.txt',
+            bindinstance.NAMED_SECTION_OPTIONS)
+        bindinstance.named_conf_set_directive(
+            'memstatistics-file',
+            constants.NAMED_DATA_DIR + 'named_mem_stats.txt',
+            bindinstance.NAMED_SECTION_OPTIONS)
+    except IOError as e:
+        logger.error('Cannot update data directories configuration in '
+                     '%s: %s',
+                     paths.NAMED_CONF, e)
+    sysupgrade.set_upgrade_state('named.conf', 'fix_data_paths', True)
+    return True
+
+
 def certificate_renewal_update(ca, ds, http):
     """
     Update certmonger certificate renewal configuration.
@@ -1976,6 +2009,7 @@ def upgrade_configuration():
                           fix_dyndb_ldap_workdir_permissions(),
                           named_add_server_id(),
                           named_add_crypto_policy(),
+                          named_fix_data_dirs(),
                          )
 
     if any(named_conf_changes):
