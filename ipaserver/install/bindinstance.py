@@ -751,8 +751,6 @@ class BindInstance(service.Service):
         self.step("configuring named to start on boot", self.__enable)
         self.step("changing resolv.conf to point to ourselves",
                   self.__setup_resolv_conf)
-        self.step("adjust paths in bind configuration files",
-                  self.__adjust_config_paths)
         self.step("disable chroot for bind", self.__disable_chroot)
         self.start_creation()
 
@@ -1090,28 +1088,6 @@ class BindInstance(service.Service):
             self.__setup_resolvconf()
         else:
             self.__setup_resolv_conf_direct()
-
-    def __adjust_config_paths(self):
-        ipautil.run(
-            ['sed', '-i', '-r',
-             '-e', (r's|^include[[:blank:]]+"/etc/rfc1912\.conf";'
-                    '|include "/etc/bind/rfc1912.conf";|'),
-             '-e', (r's|include[[:blank:]]+"/etc/rfc1918\.conf";'
-                    '|include "/etc/bind/rfc1918.conf";|'),
-             '-e', (r's|^include[[:blank:]]+"/etc/resolvconf-zones\.conf";'
-                    '|include "/etc/bind/resolvconf-zones.conf";|'),
-             '/var/lib/bind/etc/local.conf'], raiseonerr=False)
-        ipautil.run(
-            ['sed', '-i', '-r',
-             '-e', r's|directory "/zone";|directory "/etc/bind/zone";|',
-             '-e', (r's|include[[:blank:]]+"/etc/resolvconf-options\.conf";'
-                    '|include "/etc/bind/resolvconf-options.conf";|'),
-             '/var/lib/bind/etc/options.conf'], raiseonerr=False)
-        ipautil.run(
-            ['sed', '-i', '-r',
-             (r's|^include[[:blank:]]+"/etc/rndc\.key";'
-              '|include "/etc/bind/rndc.key";|'),
-             '/var/lib/bind/etc/rndc.conf'], raiseonerr=False)
 
     def __disable_chroot(self):
         result = ipautil.run(['control', 'bind-chroot'], capture_output=True)
