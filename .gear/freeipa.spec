@@ -42,7 +42,7 @@
 
 Name: freeipa
 Version: 4.7.2
-Release: alt3
+Release: alt4
 
 Summary: The Identity, Policy and Audit system
 License: GPLv3+
@@ -991,6 +991,9 @@ fi
 %python3_sitelibdir/ipaplatform-*-nspkg.pth
 
 %changelog
+* Mon Aug 26 2019 Stanislav Levin <slev@altlinux.org> 4.7.2-alt4
+- ALT: Fixed upgrade 4.3.3 -> 4.7.2.
+
 * Mon Jul 15 2019 Stanislav Levin <slev@altlinux.org> 4.7.2-alt3
 - Added support for CI testing (ALT).
 
