@@ -918,11 +918,14 @@ class ADTRUSTInstance(service.Service):
         # Remove samba's configuration file
         installutils.remove_file(self.smb_conf)
 
-        # Remove samba's persistent and temporary tdb files
-        tdb_files = [tdb_file for tdb_file in os.listdir(paths.SAMBA_DIR)
-                                           if tdb_file.endswith(".tdb")]
-        for tdb_file in tdb_files:
-            installutils.remove_file(tdb_file)
+        try:
+            # Remove samba's persistent and temporary tdb files
+            tdb_files = [tdb_file for tdb_file in os.listdir(paths.SAMBA_DIR)
+                         if tdb_file.endswith(".tdb")]
+            for tdb_file in tdb_files:
+                installutils.remove_file(tdb_file)
+        except FileNotFoundError:
+            pass
 
         # Remove our keys from samba's keytab
         self.clean_samba_keytab()
