@@ -1277,7 +1277,10 @@ class BindInstance(service.Service):
 
         installutils.rmtree(paths.BIND_LDAP_DNS_IPA_WORKDIR)
 
-        ipautil.run(['resolvconf', '-u'])
+        try:
+            ipautil.run(['resolvconf', '-u'])
+        except FileNotFoundError:
+            pass
 
         # disabled by default, by ldap_configure()
         if enabled:
