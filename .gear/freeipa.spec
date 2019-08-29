@@ -1,6 +1,5 @@
 # build defines
 %define _unpackaged_files_terminate_build 1
-%def_with lint
 
 %ifarch %ix86
 %def_with only_client
@@ -8,8 +7,12 @@
 %def_without only_client
 %endif
 
+%if_without only_client
 %def_with fastlint
 %def_with fasttest
+%def_with lint
+%endif
+
 %if_with lint
     %define linter_options --enable-pylint --with-jslint
 %else
