@@ -285,16 +285,33 @@ polint:
 rpmlint: freeipa.spec
 	rpmlint ./$<
 
-YAML_FILES = \
-	$(top_srcdir)/.travis.yml \
-	$(wildcard $(top_srcdir)/.*.yaml) \
-	$(wildcard $(top_srcdir)/ipatests/prci_definitions/*.yaml)
-
+# Try to load yml/yaml files via safe_load, which recognizes only standard
+# YAML tags and cannot construct an arbitrary Python object.
+# There are Jinja yaml templates, which differ from reqular ones. These
+# files should be placed on skip list (YAML_TEMPL_FILES), otherwise
+# safe_load fails.
 .PHONY: yamllint
-yamllint: $(YAML_FILES)
-	@for YAML in $^; do \
+yamllint:
+	YAML_TEMPL_FILES="\
+		$(top_srcdir)/ipatests/azure/templates/ipa-test-config-template.yaml \
+	"; \
+	echo "jinja template files:"; \
+	for YAML in $${YAML_TEMPL_FILES}; do \
+		echo $${YAML}; \
+		$(PYTHON) -c "import yaml; f = open('$${YAML}'); yaml.safe_load(f); f.close()" >/dev/null 2>&1 \
+		&& { echo Unexpected PASS of parsing yaml: $${YAML}. This file is a regular yaml.; exit 1; }; \
+	done; \
+	YAML_FILES=`find $(top_srcdir) \
+		\( -name '*.yaml' -o \
+		-name '*.yml' \) \
+		$$(printf '! -path %s ' $${YAML_TEMPL_FILES})`; \
+	echo -e "\nlint yaml files"; \
+	echo "-----------"; \
+	for YAML in $${YAML_FILES}; do \
+		echo $${YAML}; \
 		$(PYTHON) -c "import yaml; f = open('$${YAML}'); yaml.safe_load(f); f.close()" || exit 1; \
-	done
+	done; \
+	echo "-----------"
 
 # Run pylint for all python files. Finds all python files/packages, skips
 # folders rpmbuild, freeipa-* and dist. Skip (match, but don't print) .*,
