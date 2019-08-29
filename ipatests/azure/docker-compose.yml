@@ -1,0 +1,35 @@
+version: '2.1'
+services:
+  master:
+    privileged: true
+    image: ${IPA_DOCKER_IMAGE}
+    build: .
+    volumes:
+    - ./ipa-test-config.yaml:/root/.ipa/ipa-test-config.yaml:ro
+    - ${BUILD_REPOSITORY_LOCALPATH}:/freeipa
+
+    networks:
+    - ${IPA_NETWORK}
+
+  replica:
+    privileged: true
+    image: ${IPA_DOCKER_IMAGE}
+    build: .
+    networks:
+    - ${IPA_NETWORK}
+
+  client:
+    privileged: true
+    image: ${IPA_DOCKER_IMAGE}
+    build: .
+    networks:
+    - ${IPA_NETWORK}
+
+networks:
+  ipanet:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      driver: default
+      config:
+      - subnet: "2001:db8:1::/64"

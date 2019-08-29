@@ -124,6 +124,7 @@ BuildRequires: python3-module-custodia
 BuildRequires: python3-module-dateutil
 BuildRequires: python3-module-dbus
 BuildRequires: python3-module-dns
+BuildRequires: python3-module-docker
 BuildRequires: python3-module-gssapi
 BuildRequires: python3-module-ipa_hbac
 BuildRequires: python3-module-jinja2
@@ -150,7 +151,6 @@ BuildRequires: python3-module-sss-murmur
 BuildRequires: python3-module-sssdconfig >= %sssd_version
 BuildRequires: python3-module-systemd
 BuildRequires: python3-module-yubico
-
 %endif
 
 %description

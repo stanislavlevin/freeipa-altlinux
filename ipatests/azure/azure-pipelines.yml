@@ -133,6 +133,156 @@ jobs:
 
 - template: templates/test-jobs.yml
   parameters:
+    jobName: GATING_test_installation_TestInstallMaster
+    jobTitle: GATING test_installation_TestInstallMaster
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallMaster
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_kerberos_flags
+    jobTitle: GATING test_kerberos_flags
+    testsToRun:
+    - test_integration/test_kerberos_flags.py
+    taskToRun: run-integration-tests
+    topology:
+      client: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_dnssec_TestInstallDNSSECFirst
+    jobTitle: GATING test_dnssec_TestInstallDNSSECFirst
+    testsToRun:
+    - test_integration/test_dnssec.py::TestInstallDNSSECFirst
+    taskToRun: run-integration-tests
+    topology:
+      replica: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_simple_replication
+    jobTitle: GATING test_simple_replication
+    testsToRun:
+    - test_integration/test_simple_replication.py
+    taskToRun: run-integration-tests
+    topology:
+      replica: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_caless_TestServerReplicaCALessToCAFull
+    jobTitle: GATING test_caless_TestServerReplicaCALessToCAFull
+    testsToRun:
+    - test_integration/test_caless.py::TestServerReplicaCALessToCAFull
+    taskToRun: run-integration-tests
+    topology:
+      replica: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_dnssec_TestMigrateDNSSECMaster
+    jobTitle: GATING test_dnssec_TestMigrateDNSSECMaster
+    testsToRun:
+    - test_integration/test_dnssec.py::TestMigrateDNSSECMaster
+    taskToRun: run-integration-tests
+    topology:
+      replica: 2
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_external_ca_TestExternalCA
+    jobTitle: GATING test_external_ca_TestExternalCA
+    testsToRun:
+    - test_integration/test_external_ca.py::TestExternalCA
+    taskToRun: run-integration-tests
+    topology:
+      replica: 1
+      client: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_external_ca_TestSelfExternalSelf
+    jobTitle: GATING test_external_ca_TestSelfExternalSelf
+    testsToRun:
+    - test_integration/test_external_ca.py::TestSelfExternalSelf
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_external_ca_TestExternalCAInstall
+    jobTitle: GATING test_external_ca_TestExternalCAInstall
+    testsToRun:
+    - test_integration/test_external_ca.py::TestExternalCAInstall
+    taskToRun: run-integration-tests
+
+# requires nothing, don't install anything
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_topologies_and_testconfig
+    jobTitle: GATING test_topologies_and_testconfig
+    testsToRun:
+    - test_integration/test_topologies.py
+    - test_integration/test_testconfig.py
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_commands
+    jobTitle: GATING test_commands
+    testsToRun:
+    - test_integration/test_commands.py
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_sudo
+    jobTitle: GATING test_sudo
+    testsToRun:
+    - test_integration/test_sudo.py
+    taskToRun: run-integration-tests
+    topology:
+      client: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_forced_client_reenrollment
+    jobTitle: GATING test_forced_client_reenrollment
+    testsToRun:
+    - test_integration/test_forced_client_reenrollment.py
+    taskToRun: run-integration-tests
+    topology:
+      replica: 1
+      client: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_service_permissions
+    jobTitle: GATING test_service_permissions
+    testsToRun:
+    - test_integration/test_service_permissions.py
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_netgroup
+    jobTitle: GATING test_netgroup
+    testsToRun:
+    - test_integration/test_netgroup.py
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: GATING_test_replica_promotion_TestSubCAkeyReplication
+    jobTitle: GATING test_replica_promotion_TestSubCAkeyReplication
+    testsToRun:
+    - test_integration/test_replica_promotion.py::TestSubCAkeyReplication
+    taskToRun: run-integration-tests
+    topology:
+      replica: 1
+
+- template: templates/test-jobs.yml
+  parameters:
     jobName: BASE_XMLRPC
     jobTitle: BASE and XMLRPC tests
     testsToRun:

@@ -6,6 +6,9 @@ parameters:
   testsToDedicate: []
   taskToRun: ''
   tasksParallel: 1
+  topology:
+    replica: 0
+    client: 0
 
 jobs:
 - job: ${{ parameters.jobName }}
@@ -17,10 +20,18 @@ jobs:
   strategy:
     parallel: ${{ parameters.tasksParallel }}
   steps:
+    - script: |
+        set -e
+        cat /proc/sys/kernel/random/entropy_avail
+        sudo apt-get install -y rng-tools
+        sudo service rng-tools start
+        cat /proc/sys/kernel/random/entropy_avail
     - template: setup-test-environment.yml
-    - template: run-test.yml
       parameters:
         containerName: 'freeipa-fedora-builder:latest'
+        topology: ${{ parameters.topology }}
+    - template: run-test.yml
+      parameters:
         logsPath: $(CI_RUNNER_LOGS_DIR)
         taskToRun: ${{ parameters.taskToRun}}
         testsToRun: ${{ join(' ', parameters.testsToRun ) }}

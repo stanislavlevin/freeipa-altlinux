@@ -4,10 +4,13 @@ ENV container=docker LANG=en_US.utf8 LANGUAGE=en_US.utf8 LC_ALL=en_US.utf8
 COPY dist /root
 RUN \
     apt-get update \
-    && apt-get install -y /root/rpms/*.rpm \
+    && apt-get install -y /root/rpms/*.rpm openssh \
     && apt-get clean \
     && find /var/lib/apt/lists/ -type f -exec rm "{}" \; \
     && rm -rf /var/cache/apt/*.bin \
-    && rm -rf /root/rpms /root/srpms
+    && rm -rf /root/rpms /root/srpms \
+    && sed -i 's/.*PermitRootLogin .*/#&/g' /etc/openssh/sshd_config \
+    && echo 'PermitRootLogin yes' >> /etc/openssh/sshd_config \
+    && systemctl enable sshd
 VOLUME ["/freeipa"]
 ENTRYPOINT [ "/sbin/init" ]

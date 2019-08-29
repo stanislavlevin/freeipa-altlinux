@@ -1,3 +1,9 @@
+parameters:
+  imageName: 'freeipa-fedora-builder:latest'
+  topology:
+    replica: 0
+    client: 0
+
 steps:
 - script: |
     set -e
@@ -7,6 +13,7 @@ steps:
     sudo chown root:root /etc/docker/daemon.json
     sudo systemctl restart docker
     sudo modprobe ip6_tables || :
+    python3 -m pip install docker --user
   displayName: Configure containerization to allow IPv6 network
 - task: DownloadPipelineArtifact@0
   displayName: Download prebuilt packages
@@ -24,3 +31,25 @@ steps:
     docker images
     docker inspect freeipa-fedora-builder:latest
   displayName: Import pre-built container to the engine
+- script: |
+    set -e
+    mkdir container
+    cp ipatests/azure/docker-compose.yml container/
+    touch ipatests/azure/ipa-test-config.yaml
+    ln -sfr ipatests/azure/ipa-test-config.yaml container/ipa-test-config.yaml
+    cd container
+    export IPA_DOCKER_IMAGE=${{ parameters.imageName }}
+    export IPA_NETWORK=ipanet
+    docker-compose -p $(Build.BuildId) up -d \
+        --scale replica=${{ coalesce(parameters.topology.replica, 0) }} \
+        --scale client=${{ coalesce(parameters.topology.client, 0) }} \
+        --force-recreate --remove-orphans
+  displayName: Create and start container(s) for running tests
+- script: |
+    set -e
+    cd ./ipatests/azure
+    export IPA_CONT_PREFIX=$(Build.BuildId)
+    export IPA_CLIENT_NUM=${{ coalesce(parameters.topology.client, 0) }}
+    export IPA_REPLICA_NUM=${{ coalesce(parameters.topology.replica, 0) }}
+    python3 setup_containers.py
+  displayName: Setup container(s) for running tests

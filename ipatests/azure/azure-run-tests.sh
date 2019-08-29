@@ -1,6 +1,6 @@
 #!/bin/bash -ex
-server_realm=EXAMPLE.TEST
-server_domain=example.test
+server_realm=IPA.TEST
+server_domain=ipa.test
 server_password=Secret123
 
 # Normalize spacing and expand the list afterwards. Remove {} for the single list element case
@@ -74,7 +74,7 @@ fi
 
 echo "Collect the logs"
 journalctl -b --no-pager > systemd_journal.log
-tar --ignore-failed-read -cvf var_log.tar \
+tar --ignore-failed-read -czf var_log.tar.gz \
     /var/log/dirsrv \
     /var/log/httpd2 \
     /var/log/ipa* \

@@ -1,6 +1,4 @@
 parameters:
-  imageName: 'freeipa-fedora-builder:latest'
-  containerName: 'container'
   logsPath: 'logs'
   taskToRun: 'run-tests'
   testsToRun: ''
@@ -10,17 +8,6 @@ parameters:
 steps:
 - script: |
     set -e
-    cnt=`docker create --hostname ipa.example.test --privileged -v $(Build.Repository.LocalPath):/freeipa -t  ${{parameters.imageName}} /sbin/init`
-    echo "##vso[task.setvariable variable=containerName;isOutput=true]$cnt"
-  name: createContainer
-  displayName: Create container for running a test
-- script: |
-    set -e
-    docker start $(createContainer.containerName)
-    docker inspect $(createContainer.containerName)
-  displayName: Start container for running a test
-- script: |
-    set -e
     docker exec --env TESTS_TO_RUN="${{ parameters.testsToRun }}" \
                 --env TESTS_TO_IGNORE="${{ parameters.testsToIgnore }}" \
                 --env TESTS_TO_DEDICATE="${{ parameters.testsToDedicate }}" \
@@ -28,6 +15,6 @@ steps:
                 --env SYSTEM_TOTALJOBSINPHASE=$(System.TotalJobsInPhase) \
                 --env SYSTEM_JOBPOSITIONINPHASE=$(System.JobPositionInPhase) \
                 --privileged -t \
-                $(createContainer.containerName) \
+                $(Build.BuildId)_master_1 \
                 /bin/bash --noprofile --norc -x /freeipa/ipatests/azure/azure-${{parameters.taskToRun}}.sh
   displayName: Run test
