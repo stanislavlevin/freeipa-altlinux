@@ -85,7 +85,7 @@ jobs:
     - script: |
         set -e
         sudo apt-get install -y nss-tools python3-module-pip
-        python3 -m pip install --user --upgrade pip setuptools pycodestyle tox
+        python3 -m pip install --user --upgrade pip setuptools pycodestyle
       displayName: 'Install prerequisites'
     - script: |
         set -e
