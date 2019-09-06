@@ -14,7 +14,8 @@ altlinux_system_units = redhat_services.redhat_system_units.copy()
 
 altlinux_system_units['named'] = 'bind.service'
 altlinux_system_units['httpd'] = 'httpd2.service'
-altlinux_system_units['nfs_client'] = 'nfs-client.target'
+altlinux_system_units['rpcgssd'] = 'rpc-gssd.service'
+altlinux_system_units['rpcidmapd'] = 'nfs-idmapd.service'
 
 
 # Service classes that implement ALT Linux specific behaviour
@@ -41,7 +42,7 @@ class ALTLinuxNoService(base_services.PlatformService):
 
 
 def altlinux_service_class_factory(name, api=None):
-    if name in ('named', 'httpd', 'nfs_client'):
+    if name in ('named', 'httpd', 'rpcgssd', 'rpcidmapd'):
         return ALTLinuxService(name, api)
     if name in ('domainname', 'named-pkcs11', 'named-regular', 'rpcgssd',
                 'rpcidmapd'):
