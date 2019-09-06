@@ -57,6 +57,7 @@ from ipapython import ipautil, admintool, version
 from ipapython.admintool import ScriptError, SERVER_NOT_CONFIGURED  # noqa: E402
 from ipapython.certdb import EXTERNAL_CA_TRUST_FLAGS
 from ipapython.ipaldap import DIRMAN_DN, LDAPClient
+from ipalib.constants import MAXHOSTNAMELEN
 from ipalib.util import validate_hostname
 from ipalib import api, errors, x509
 from ipapython.dn import DN
@@ -161,7 +162,7 @@ def verify_fqdn(host_name, no_host_dns=False, local_hostname=True):
 
     try:
         # make sure that the host name meets the requirements in ipalib
-        validate_hostname(host_name)
+        validate_hostname(host_name, maxlen=MAXHOSTNAMELEN)
     except ValueError as e:
         raise BadHostError("Invalid hostname '%s', %s" % (host_name, unicode(e)))
 
@@ -900,9 +901,12 @@ def load_pkcs12(cert_files, key_password, key_nickname, ca_cert_files,
                 "The full certificate chain is not present in %s" %
                 (", ".join(cert_files)))
 
-        for nickname in trust_chain[1:]:
+        # verify CA validity and pathlen. The trust_chain list is in reverse
+        # order. trust_chain[1] is the first intermediate CA cert and must
+        # have pathlen >= 0.
+        for minpathlen, nickname in enumerate(trust_chain[1:], start=0):
             try:
-                nssdb.verify_ca_cert_validity(nickname)
+                nssdb.verify_ca_cert_validity(nickname, minpathlen)
             except ValueError as e:
                 raise ScriptError(
                     "CA certificate %s in %s is not valid: %s" %
@@ -1045,9 +1049,12 @@ def load_external_cert(files, ca_subject):
                 "missing certificate with subject '%s'" %
                 (", ".join(files), issuer))
 
-        for nickname in trust_chain:
+        # verify CA validity and pathlen. The trust_chain list is in reverse
+        # order. The first entry is the signed IPA-CA and must have a
+        # pathlen of >= 0.
+        for minpathlen, nickname in enumerate(trust_chain, start=0):
             try:
-                nssdb.verify_ca_cert_validity(nickname)
+                nssdb.verify_ca_cert_validity(nickname, minpathlen)
             except ValueError as e:
                 cert, subject, issuer = cache[nickname]
                 raise ScriptError(
@@ -1387,3 +1394,14 @@ def default_subject_base(realm_name):
 
 def default_ca_subject_dn(subject_base):
     return DN(('CN', 'Certificate Authority'), subject_base)
+
+
+def validate_mask():
+    try:
+        mask = os.umask(0)
+    finally:
+        os.umask(mask)
+    mask_str = None
+    if mask & 0b111101101 > 0:
+        mask_str = "{:04o}".format(mask)
+    return mask_str

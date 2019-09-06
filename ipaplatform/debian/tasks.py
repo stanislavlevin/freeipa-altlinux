@@ -10,7 +10,9 @@ from __future__ import absolute_import
 
 from ipaplatform.base.tasks import BaseTaskNamespace
 from ipaplatform.redhat.tasks import RedHatTaskNamespace
+from ipaplatform.paths import paths
 
+from ipapython import directivesetter
 from ipapython import ipautil
 
 class DebianTaskNamespace(RedHatTaskNamespace):
@@ -57,6 +59,10 @@ class DebianTaskNamespace(RedHatTaskNamespace):
         # Debian doesn't use authconfig, nothing to restore
         return True
 
+    def migrate_auth_configuration(self, statestore):
+        # Debian doesn't have authselect
+        return True
+
     @staticmethod
     def parse_ipa_version(version):
         return BaseTaskNamespace.parse_ipa_version(version)
@@ -65,9 +71,21 @@ class DebianTaskNamespace(RedHatTaskNamespace):
         # Debian doesn't require special mod_wsgi configuration
         pass
 
+    def configure_httpd_protocol(self):
+        # TLS 1.3 is not yet supported
+        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
+                                      'SSLProtocol',
+                                      'TLSv1.2', False)
+
     def setup_httpd_logging(self):
         # Debian handles httpd logging differently
         pass
 
+    def configure_pkcs11_modules(self, fstore):
+        # Debian doesn't use p11-kit
+        pass
+
+    def restore_pkcs11_modules(self, fstore):
+        pass
 
 tasks = DebianTaskNamespace()

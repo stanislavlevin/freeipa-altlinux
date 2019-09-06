@@ -44,6 +44,7 @@ from ipapython.dogtag import KDC_PROFILE
 
 from ipaserver.install import replication
 from ipaserver.install import ldapupdate
+from ipaserver.masters import find_providing_servers
 
 from ipaserver.install import certs
 from ipaplatform.constants import constants
@@ -78,7 +79,7 @@ def is_pkinit_enabled():
     if os.path.exists(paths.KDC_CERT):
         pkinit_request_ca = get_pkinit_request_ca()
 
-        if pkinit_request_ca != "SelfSign":
+        if pkinit_request_ca and pkinit_request_ca != "SelfSign":
             return True
 
     return False
@@ -425,10 +426,14 @@ class KrbInstance(service.Service):
             prev_helper = None
             # on the first CA-ful master without '--no-pkinit', we issue the
             # certificate by contacting Dogtag directly
+            ca_instances = find_providing_servers(
+                'CA', conn=self.api.Backend.ldap2, api=self.api)
+
             use_dogtag_submit = all(
                 [self.master_fqdn is None,
                  self.pkcs12_info is None,
-                 self.config_pkinit])
+                 self.config_pkinit,
+                 len(ca_instances) == 0])
 
             if use_dogtag_submit:
                 ca_args = [
@@ -478,11 +483,7 @@ class KrbInstance(service.Service):
         unadvertise enabled PKINIT feature in master's KDC entry in LDAP
         """
         ldap = api.Backend.ldap2
-        dn = DN(('cn', 'KDC'),
-                ('cn', self.fqdn),
-                ('cn', 'masters'),
-                ('cn', 'ipa'),
-                ('cn', 'etc'),
+        dn = DN(('cn', 'KDC'), ('cn', self.fqdn), api.env.container_masters,
                 self.suffix)
 
         entry = ldap.get_entry(dn, ['ipaConfigString'])
@@ -599,6 +600,10 @@ class KrbInstance(service.Service):
     def stop_tracking_certs(self):
         certmonger.stop_tracking(certfile=paths.KDC_CERT)
 
+    def delete_pkinit_cert(self):
+        installutils.remove_file(paths.KDC_CERT)
+        installutils.remove_file(paths.KDC_KEY)
+
     def uninstall(self):
         if self.is_configured():
             self.print_msg("Unconfiguring %s" % self.service_name)
@@ -624,8 +629,7 @@ class KrbInstance(service.Service):
         # stop tracking and remove certificates
         self.stop_tracking_certs()
         installutils.remove_file(paths.CACERT_PEM)
-        installutils.remove_file(paths.KDC_CERT)
-        installutils.remove_file(paths.KDC_KEY)
+        self.delete_pkinit_cert()
 
         if running:
             self.restart()

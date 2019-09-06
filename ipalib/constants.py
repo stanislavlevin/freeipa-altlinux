@@ -35,6 +35,24 @@ except Exception:
     except Exception:
         FQDN = None
 
+# TLS related constants
+# * SSL2 and SSL3 are broken.
+# * TLS1.0 and TLS1.1 are no longer state of the art.
+# * TLS1.3 support is not yet stable, e.g. issues with PHA.
+# Therefore only TLS 1.2 is enabled by default.
+
+TLS_VERSIONS = [
+    "ssl2",
+    "ssl3",
+    "tls1.0",
+    "tls1.1",
+    "tls1.2",
+    "tls1.3",
+]
+TLS_VERSION_MINIMAL = "tls1.0"
+TLS_VERSION_DEFAULT_MIN = "tls1.2"
+TLS_VERSION_DEFAULT_MAX = "tls1.2"
+
 # regular expression NameSpace member names must match:
 NAME_REGEX = r'^[a-z][_a-z0-9]*[a-z0-9]$|^[a-z]$'
 
@@ -129,6 +147,8 @@ DEFAULT_CONFIG = (
     ('container_sysaccounts', DN(('cn', 'sysaccounts'), ('cn', 'etc'))),
     ('container_certmap', DN(('cn', 'certmap'))),
     ('container_certmaprules', DN(('cn', 'certmaprules'), ('cn', 'certmap'))),
+    ('container_ca_renewal',
+        DN(('cn', 'ca_renewal'), ('cn', 'ipa'), ('cn', 'etc'))),
 
     # Ports, hosts, and URIs:
     # Following values do not have any reasonable default.
@@ -142,11 +162,13 @@ DEFAULT_CONFIG = (
     ('rpc_protocol', 'jsonrpc'),
 
     # Define an inclusive range of SSL/TLS version support
-    ('tls_version_min', 'tls1.0'),
-    ('tls_version_max', 'tls1.2'),
+    ('tls_version_min', TLS_VERSION_DEFAULT_MIN),
+    ('tls_version_max', TLS_VERSION_DEFAULT_MAX),
 
-    # Time to wait for a service to start, in seconds
-    ('startup_timeout', 300),
+    # Time to wait for a service to start, in seconds.
+    # Note that systemd has a DefaultTimeoutStartSec of 90 seconds. Higher
+    # values are not effective unless systemd is reconfigured, too.
+    ('startup_timeout', 120),
     # How long http connection should wait for reply [seconds].
     ('http_timeout', 30),
     # How long to wait for an entry to appear on a replica
@@ -225,7 +247,7 @@ DEFAULT_CONFIG = (
     ('site_packages', object),  # The directory contaning ipalib
     ('script', object),  # sys.argv[0]
     ('bin', object),  # The directory containing the script
-    ('home', object),  # $HOME
+    ('home', object),  # os.path.expanduser('~')
 
     # Vars set in Env._bootstrap():
     ('in_tree', object),  # Whether or not running in-tree (bool)
@@ -287,6 +309,9 @@ RENEWAL_REUSE_CA_NAME = 'dogtag-ipa-ca-renew-agent-reuse'
 # How long dbus clients should wait for CA certificate RPCs [seconds]
 CA_DBUS_TIMEOUT = 120
 
+# Maximum hostname length in Linux
+MAXHOSTNAMELEN = 64
+
 # regexp definitions
 PATTERN_GROUPUSER_NAME = (
     '(?!^[0-9]+$)^[a-zA-Z0-9_.][a-zA-Z0-9_.-]*[a-zA-Z0-9_.$-]?$'
@@ -299,27 +324,10 @@ ANON_USER = 'WELLKNOWN/ANONYMOUS'
 IPAAPI_USER = 'ipaapi'
 IPAAPI_GROUP = 'ipaapi'
 
-# TLS related constants
-TLS_VERSIONS = [
-    "ssl2",
-    "ssl3",
-    "tls1.0",
-    "tls1.1",
-    "tls1.2"
-]
-TLS_VERSION_MINIMAL = "tls1.0"
-
-
 # Use cache path
 USER_CACHE_PATH = (
     os.environ.get('XDG_CACHE_HOME') or
-    os.path.join(
-        os.environ.get(
-            'HOME',
-            os.path.expanduser('~')
-        ),
-        '.cache'
-    )
+    os.path.expanduser('~/.cache')
 )
 
 SOFTHSM_DNSSEC_TOKEN_LABEL = u'ipaDNSSEC'

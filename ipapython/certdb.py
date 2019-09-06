@@ -536,11 +536,16 @@ class NSSDatabase(object):
     def get_trust_chain(self, nickname):
         """Return names of certs in a given cert's trust chain
 
+        The list starts with root ca, then first intermediate CA, second
+        intermediate, and so on.
+
         :param nickname: Name of the cert
         :return: List of certificate names
         """
         root_nicknames = []
-        result = self.run_certutil(["-O", "-n", nickname], capture_output=True)
+        result = self.run_certutil(
+            ["-O", "--simple-self-signed", "-n", nickname],
+            capture_output=True)
         chain = result.output.splitlines()
 
         for c in chain:
@@ -880,6 +885,32 @@ class NSSDatabase(object):
     def delete_cert(self, nick):
         self.run_certutil(["-D", "-n", nick])
 
+    def delete_key_only(self, nick):
+        """Delete the key with provided nick
+
+        This commands removes the key but leaves the cert in the DB.
+        """
+        keys = self.list_keys()
+        # keys is a list of tuple(slot, algo, keyid, nickname)
+        for (_slot, _algo, keyid, nickname) in keys:
+            if nickname == nick:
+                # Key is present in the DB, delete the key
+                self.run_certutil(["-F", "-k", keyid])
+                break
+
+    def delete_key_and_cert(self, nick):
+        """Delete a cert and its key from the DB"""
+        try:
+            self.run_certutil(["-F", "-n", nick])
+        except ipautil.CalledProcessError:
+            # Using -F -k instead of -F -n because the latter fails if
+            # the DB contains only the key
+            self.delete_key_only(nick)
+        # Check that cert was deleted
+        for (certname, _flags) in self.list_certs():
+            if certname == nick:
+                self.delete_cert(nick)
+
     def verify_server_cert_validity(self, nickname, hostname):
         """Verify a certificate is valid for a SSL server with given hostname
 
@@ -907,7 +938,7 @@ class NSSDatabase(object):
         except ValueError:
             raise ValueError('invalid for server %s' % hostname)
 
-    def verify_ca_cert_validity(self, nickname):
+    def verify_ca_cert_validity(self, nickname, minpathlen=None):
         cert = self.get_cert(nickname)
 
         if not cert.subject:
@@ -921,6 +952,15 @@ class NSSDatabase(object):
 
         if not bc.value.ca:
             raise ValueError("not a CA certificate")
+        if minpathlen is not None:
+            # path_length is None means no limitation
+            pl = bc.value.path_length
+            if pl is not None and pl < minpathlen:
+                raise ValueError(
+                    "basic contraint pathlen {}, must be at least {}".format(
+                        pl, minpathlen
+                    )
+                )
 
         try:
             ski = cert.extensions.get_extension_for_class(

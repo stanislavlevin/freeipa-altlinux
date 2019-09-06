@@ -1,4 +1,4 @@
-@PYTHONSHEBANG@
+#!/usr/bin/python3
 #
 # Authors:
 #   Rob Crittenden <rcritten@redhat.com>
@@ -26,22 +26,19 @@ from __future__ import print_function
 import logging
 import sys
 import os
+import shutil
 import time
 import tempfile
 import gssapi
-
 try:
     from xml.etree import cElementTree as etree
 except ImportError:
     from xml.etree import ElementTree as etree
-
 import SSSDConfig
 # pylint: disable=import-error
 from six.moves.urllib.parse import urlsplit
 # pylint: enable=import-error
-
 from optparse import OptionParser  # pylint: disable=deprecated-module
-
 from ipaclient.install import ipachangeconf, ipadiscovery
 from ipaclient.install.client import (CLIENT_NOT_CONFIGURED,
     CLIENT_ALREADY_CONFIGURED)
@@ -52,6 +49,7 @@ from ipalib.util import check_client_configuration
 from ipapython import ipautil
 from ipapython.ipa_log_manager import standard_logging_setup
 from ipapython.dn import DN
+from ipaplatform.constants import constants
 from ipaplatform.tasks import tasks
 from ipaplatform import services
 from ipaplatform.paths import paths
@@ -64,19 +62,34 @@ logger = logging.getLogger(os.path.basename(__file__))
 def parse_options():
     usage = "%prog [options]\n"
     parser = OptionParser(usage=usage)
-    parser.add_option("--server", dest="server", help="FQDN of IPA server")
-    parser.add_option("--location", dest="location", help="Automount location",
-        default="default")
-    parser.add_option("-S", "--no-sssd", dest="sssd",
-                      action="store_false", default=True,
-                      help="Do not configure the client to use SSSD for automount")
-    parser.add_option("--debug", dest="debug", action="store_true",
-        default=False, help="enable debugging")
-    parser.add_option("-U", "--unattended", dest="unattended",
-        action="store_true", default=False,
-        help="unattended installation never prompts the user")
-    parser.add_option("--uninstall", dest="uninstall", action="store_true",
-        default=False, help="Unconfigure automount")
+    parser.add_option(
+        "--server", dest="server", help="FQDN of IPA server"
+    )
+    parser.add_option(
+        "--location", dest="location", default="default",
+        help="Automount location"
+    )
+    parser.add_option(
+        "-S", "--no-sssd", dest="sssd", action="store_false", default=True,
+        help="Do not configure the client to use SSSD for automount"
+    )
+    parser.add_option(
+        "--idmap-domain", dest="idmapdomain", default=None,
+        help="nfs domain for idmap.conf"
+    )
+    parser.add_option(
+        "--debug", dest="debug", action="store_true", default=False,
+        help="enable debugging"
+    )
+    parser.add_option(
+        "-U", "--unattended", dest="unattended", action="store_true",
+        default=False,
+        help="unattended installation never prompts the user"
+    )
+    parser.add_option(
+        "--uninstall", dest="uninstall", action="store_true", default=False,
+        help="Unconfigure automount"
+    )
 
     options, args = parser.parse_args()
     return options, args
@@ -313,39 +326,39 @@ def uninstall(fstore, statestore):
                 wait_for_sssd()
             except Exception as e:
                 print('Unable to restore SSSD configuration: %s' % str(e))
-                logger.debug('Unable to restore SSSD configuration: %s',
-                             str(e))
-    if statestore.has_state('rpcidmapd'):
-        enabled = statestore.restore_state('rpcidmapd', 'enabled')
-        running = statestore.restore_state('rpcidmapd', 'running')
-        rpcidmapd = services.knownservices.rpcidmapd
-        if not enabled:
-            rpcidmapd.disable()
-        if not running:
-            rpcidmapd.stop()
-    if statestore.has_state('rpcgssd'):
-        enabled = statestore.restore_state('rpcgssd', 'enabled')
-        running = statestore.restore_state('rpcgssd', 'running')
-        rpcgssd = services.knownservices.rpcgssd
-        if not enabled:
-            rpcgssd.disable()
-        if not running:
-            rpcgssd.stop()
+                logger.debug(
+                    'Unable to restore SSSD configuration: %s', str(e))
 
+    # rpcidmapd and rpcgssd are static units now
+    if statestore.has_state('rpcidmapd'):
+        statestore.delete_state('rpcidmapd','enabled')
+        statestore.delete_state('rpcidmapd','running')
+    if statestore.has_state('rpcgssd'):
+        statestore.delete_state('rpcgssd','enabled')
+        statestore.delete_state('rpcgssd','running')
+
+    nfsutils = services.knownservices['nfs-utils']
+    try:
+        nfsutils.restart()
+    except Exception as e:
+        logger.error("Failed to restart nfs client services (%s)", str(e))
+        return 1
     return 0
 
-def configure_nfs(fstore, statestore):
+def configure_nfs(fstore, statestore, options):
     """
     Configure secure NFS
     """
-    replacevars = {
-        constants.SECURE_NFS_VAR: 'yes',
-    }
-    ipautil.backup_config_and_replace_variables(fstore,
-        paths.SYSCONFIG_NFS, replacevars=replacevars)
-    tasks.restore_context(paths.SYSCONFIG_NFS)
-
-    print("Configured %s" % paths.SYSCONFIG_NFS)
+    # Newer Fedora releases ship /etc/nfs.conf instead of /etc/sysconfig/nfs
+    # and do not require changes there. On these, SECURE_NFS_VAR == None
+    if constants.SECURE_NFS_VAR:
+        replacevars = {
+            constants.SECURE_NFS_VAR: 'yes',
+        }
+        ipautil.backup_config_and_replace_variables(fstore,
+            paths.SYSCONFIG_NFS, replacevars=replacevars)
+        tasks.restore_context(paths.SYSCONFIG_NFS)
+        print("Configured %s" % paths.SYSCONFIG_NFS)
 
     # Prepare the changes
     # We need to use IPAChangeConf as simple regexp substitution
@@ -355,46 +368,34 @@ def configure_nfs(fstore, statestore):
     conf.setOptionAssignment(" = ")
     conf.setSectionNameDelimiters(("[", "]"))
 
-    changes = [conf.setOption('Domain', api.env.domain)]
-    section_with_changes = [conf.setSection('General', changes)]
+    if options.idmapdomain is None:
+        # Set NFSv4 domain to the IPA domain
+        changes = [conf.setOption('Domain', api.env.domain)]
+    elif options.idmapdomain == 'DNS':
+        # Rely on idmapd auto-detection (DNS)
+        changes = [conf.rmOption('Domain')]
+    else:
+        # Set NFSv4 domain to what was provided
+        changes = [conf.setOption('Domain', options.idmapdomain)]
 
-    # Backup the file and apply the changes
-    fstore.backup_file(paths.IDMAPD_CONF)
-    conf.changeConf(paths.IDMAPD_CONF, section_with_changes)
-
-    tasks.restore_context(paths.IDMAPD_CONF)
-
-    print("Configured %s" % paths.IDMAPD_CONF)
-
-    rpcidmapd = services.knownservices.rpcidmapd
-    statestore.backup_state('rpcidmapd', 'enabled', rpcidmapd.is_enabled())
-    statestore.backup_state('rpcidmapd', 'running', rpcidmapd.is_running())
-    try:
-        rpcidmapd.restart()
-        print("Started %s" % rpcidmapd.service_name)
-    except Exception as e:
-        logger.error("%s failed to restart: %s", rpcidmapd.service_name, e)
-    try:
-        rpcidmapd.enable()
-    except Exception as e:
-        print("Failed to configure automatic startup of the %s daemon" % (rpcidmapd.service_name))
-        logger.error("Failed to enable automatic startup of the %s daemon: %s",
-                     rpcidmapd.service_name, str(e))
+    if changes is not None:
+        section_with_changes = [conf.setSection('General', changes)]
+        # Backup the file and apply the changes
+        fstore.backup_file(paths.IDMAPD_CONF)
+        conf.changeConf(paths.IDMAPD_CONF, section_with_changes)
+        tasks.restore_context(paths.IDMAPD_CONF)
+        print("Configured %s" % paths.IDMAPD_CONF)
 
     rpcgssd = services.knownservices.rpcgssd
-    statestore.backup_state('rpcgssd', 'enabled', rpcgssd.is_enabled())
-    statestore.backup_state('rpcgssd', 'running', rpcgssd.is_running())
     try:
         rpcgssd.restart()
-        print("Started %s" % rpcgssd.service_name)
     except Exception as e:
-        logger.error("%s failed to restart: %s", rpcgssd.service_name, e)
+        logger.error("Failed to restart rpc-gssd (%s)", str(e))
+    nfsutils = services.knownservices['nfs-utils']
     try:
-        rpcgssd.enable()
+        nfsutils.restart()
     except Exception as e:
-        print("Failed to configure automatic startup of the %s daemon" % (rpcgssd.service_name))
-        logger.error("Failed to enable automatic startup of the %s daemon: %s",
-                     rpcgssd.service_name, str(e))
+        logger.error("Failed to restart nfs client services (%s)", str(e))
 
 def main():
     try:
@@ -507,15 +508,14 @@ def main():
         except errors.PublicError as e:
             sys.exit("Cannot connect to the server due to generic error: %s" % str(e))
     finally:
-        os.remove(ccache_name)
-        os.rmdir(ccache_dir)
+        shutil.rmtree(ccache_dir)
 
     if not options.unattended and not ipautil.user_input("Continue to configure the system with these values?", False):
         sys.exit("Installation aborted")
 
     try:
         configure_nsswitch(fstore, options)
-        configure_nfs(fstore, statestore)
+        configure_nfs(fstore, statestore, options)
         if options.sssd:
             configure_autofs_sssd(fstore, statestore, autodiscover, options)
         else:

@@ -40,6 +40,7 @@ from ipaserver.dns_data_management import (
 from ipaserver.install import installutils
 from ipaserver.install import service
 from ipaserver.install import sysupgrade
+from ipaserver.masters import get_masters
 from ipapython import ipautil
 from ipapython import dnsutil
 from ipapython.dnsutil import DNSName
@@ -49,6 +50,7 @@ import ipalib
 from ipalib import api, errors
 from ipalib.constants import IPA_CA_RECORD
 from ipaplatform import services
+from ipaplatform.tasks import tasks
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 from ipalib.util import (validate_zonemgr_str, normalize_zonemgr,
@@ -325,9 +327,10 @@ def get_auto_reverse_zones(ip_addresses, allow_zone_overlap=False):
         if not allow_zone_overlap:
             try:
                 dnsutil.check_zone_overlap(default_reverse)
-            except ValueError:
+            except ValueError as e:
                 logger.info("Reverse zone %s for IP address %s already exists",
                             default_reverse, ip)
+                logger.debug('%s', e)
                 continue
         auto_zones.append((ip, default_reverse))
     return auto_zones
@@ -890,10 +893,13 @@ class BindInstance(service.Service):
 
         # Add forward and reverse records to self
         for addr in addrs:
-            try:
+            # Check first if the zone is a master zone
+            # (if it is a forward zone, dns_zone_exists will return False)
+            if dns_zone_exists(zone, api=self.api):
                 add_fwd_rr(zone, host, addr, self.api)
-            except errors.NotFound:
-                pass
+            else:
+                logger.debug("Skip adding record %s to a zone %s "
+                             "not managed by IPA", addr, zone)
 
             reverse_zone = find_reverse_zone(addr, self.api)
             if reverse_zone:
@@ -904,8 +910,7 @@ class BindInstance(service.Service):
 
     def __add_others(self):
         entries = api.Backend.ldap2.get_entries(
-            DN(('cn', 'masters'), ('cn', 'ipa'), ('cn', 'etc'),
-               self.suffix),
+            DN(api.env.container_masters, self.suffix),
             api.Backend.ldap2.SCOPE_ONELEVEL, None, ['dn'])
 
         for entry in entries:
@@ -1012,82 +1017,26 @@ class BindInstance(service.Service):
 
         sysupgrade.set_upgrade_state('dns', 'server_config_to_ldap', True)
 
-    def __setup_resolv_conf_direct(self):
-        if not self.fstore.has_file(paths.RESOLV_CONF):
-            self.fstore.backup_file(paths.RESOLV_CONF)
-
-        resolv_txt = "search "+self.domain+"\n"
-
-        for ip_address in self.ip_addresses:
-            if ip_address.version == 4:
-                resolv_txt += "nameserver 127.0.0.1\n"
-                break
-
-        for ip_address in self.ip_addresses:
-            if ip_address.version == 6:
-                resolv_txt += "nameserver ::1\n"
-                break
-        try:
-            resolv_fd = open(paths.RESOLV_CONF, 'w')
-            resolv_fd.seek(0)
-            resolv_fd.truncate(0)
-            resolv_fd.write(resolv_txt)
-            resolv_fd.close()
-        except IOError as e:
-            logger.error('Could not write to resolv.conf: %s', e)
-        else:
-            # python DNS might have global resolver cached in this variable
-            # we have to re-initialize it because resolv.conf has changed
-            dns.resolver.default_resolver = None
-
-    def __setup_resolvconf(self):
-        if not self.fstore.has_file(paths.RESOLVCONF_CONF):
-            self.fstore.backup_file(paths.RESOLVCONF_CONF)
-
-        # Drop existing values
-        # TODO: save them
-        ipautil.run(['sed', '-i', '-r',
-                     '/^(name_servers|search_domains)=/d',
-                     paths.RESOLVCONF_CONF], raiseonerr=False)
-
-        resolv_txt = (
-            "\n# Added by FreeIPA server installer\nsearch_domains=" +
-            self.domain + "\n"
-        )
-
-        resolv_txt += "name_servers='"
-        ss = ''
-
-        for ip_address in self.ip_addresses:
-            if ip_address.version == 4:
-                resolv_txt += "127.0.0.1"
-                ss = ' '
-                break
-
-        for ip_address in self.ip_addresses:
-            if ip_address.version == 6:
-                resolv_txt += ss + "::1"
-                break
-
-        resolv_txt += "'\n"
-        try:
-            resolv_fd = open(paths.RESOLVCONF_CONF, 'a')
-            resolv_fd.write(resolv_txt)
-            resolv_fd.close()
-        except IOError as e:
-            logger.error('Could not write to resolvconf.conf: %s', e)
-        else:
-            # python DNS might have global resolver cached in this variable
-            # we have to re-initialize it because resolv.conf has changed
-            dns.resolver.default_resolver = None
-
-        ipautil.run(['resolvconf', '-u'])
-
     def __setup_resolv_conf(self):
-        if os.path.exists(paths.RESOLVCONF_CONF):
-            self.__setup_resolvconf()
+        searchdomains = [self.domain]
+        nameservers = []
+
+        for ip_address in self.ip_addresses:
+            if ip_address.version == 4:
+                nameservers.append("127.0.0.1")
+            elif ip_address.version == 6:
+                nameservers.append("::1")
+
+        try:
+            tasks.configure_dns_resolver(
+                nameservers, searchdomains, fstore=self.fstore
+            )
+        except IOError as e:
+            logger.error('Could not update DNS config: %s', e)
         else:
-            self.__setup_resolv_conf_direct()
+            # python DNS might have global resolver cached in this variable
+            # we have to re-initialize it because resolv.conf has changed
+            dns.resolver.reset_default_resolver()
 
     def __disable_chroot(self):
         result = ipautil.run(['control', 'bind-chroot'], capture_output=True)
@@ -1130,13 +1079,8 @@ class BindInstance(service.Service):
             cname_fqdn[cname] = fqdn
 
         # get FQDNs of all IPA masters
-        ldap = self.api.Backend.ldap2
         try:
-            entries = ldap.get_entries(
-                DN(('cn', 'masters'), ('cn', 'ipa'), ('cn', 'etc'),
-                   self.api.env.basedn),
-                ldap.SCOPE_ONELEVEL, None, ['cn'])
-            masters = set(e['cn'][0] for e in entries)
+            masters = set(get_masters(self.api.Backend.ldap2))
         except errors.NotFound:
             masters = set()
 
@@ -1158,6 +1102,10 @@ class BindInstance(service.Service):
         self.host = host
         self.fqdn = fqdn
         self.domain = domain_name
+
+        if not dns_zone_exists(zone, api=self.api):
+            # Zone may be a forward zone, skip update
+            return
 
         areclist = get_fwd_rr(zone, host, api=self.api)
         for rdata in areclist:
@@ -1269,18 +1217,17 @@ class BindInstance(service.Service):
 
         self.dns_backup.clear_records(self.api.Backend.ldap2.isconnected())
 
-        for f in [paths.NAMED_CONF, paths.RESOLV_CONF, paths.RESOLVCONF_CONF]:
-            try:
-                self.fstore.restore_file(f)
-            except ValueError as error:
-                logger.debug('%s', error)
-
-        installutils.rmtree(paths.BIND_LDAP_DNS_IPA_WORKDIR)
+        try:
+            self.fstore.restore_file(paths.NAMED_CONF)
+        except ValueError as error:
+            logger.debug('%s', error)
 
         try:
-            ipautil.run(['resolvconf', '-u'])
-        except FileNotFoundError:
-            pass
+            tasks.unconfigure_dns_resolver(fstore=self.fstore)
+        except Exception:
+            logger.exception("Failed to unconfigure DNS resolver")
+
+        installutils.rmtree(paths.BIND_LDAP_DNS_IPA_WORKDIR)
 
         # disabled by default, by ldap_configure()
         if enabled:

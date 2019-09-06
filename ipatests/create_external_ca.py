@@ -34,18 +34,19 @@ class ExternalCA(object):
     """
     Provide external CA for testing
     """
-    def __init__(self, days=365):
+    def __init__(self, days=365, key_size=None):
         self.now = datetime.datetime.utcnow()
         self.delta = datetime.timedelta(days=days)
+        self.key_size = key_size or 2048
 
-    def create_ca(self, cn=ISSUER_CN):
+    def create_ca(self, cn=ISSUER_CN, path_length=None):
         """Create root CA.
 
         :returns: bytes -- Root CA in PEM format.
         """
         self.ca_key = rsa.generate_private_key(
             public_exponent=65537,
-            key_size=2048,
+            key_size=self.key_size,
             backend=default_backend(),
         )
 
@@ -79,7 +80,7 @@ class ExternalCA(object):
         )
 
         builder = builder.add_extension(
-            x509.BasicConstraints(ca=True, path_length=None),
+            x509.BasicConstraints(ca=True, path_length=path_length),
             critical=True,
         )
 

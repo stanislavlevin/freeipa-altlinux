@@ -3,6 +3,7 @@
 #
 from __future__ import absolute_import
 
+import logging
 import shutil
 import re
 import sys
@@ -13,6 +14,39 @@ from ipalib import api
 # pylint: enable=import-error,no-name-in-module,ipa-forbidden-import
 from ipaplatform import services
 from ipapython import ipautil
+from ipapython.ipautil import user_input
+
+logger = logging.getLogger(__name__)
+
+
+def get_time_source():
+    """
+    While in interactive installation user has to specify NTP server or pool
+    to be used in chrony configuration. This method asks user input on these
+    values in case that they were not specified before installation start.
+    """
+    ntp_servers = []
+    ntp_pool = ""
+
+    if ipautil.user_input("Do you want to configure chrony "
+                          "with NTP server or pool address?", False):
+        servers = user_input("Enter NTP source server addresses separated by "
+                             "comma, or press Enter to skip", allow_empty=True)
+        if servers:  # if user input is not '' (empty)
+            logger.debug("User provided NTP server(s):")
+            # cut possible multiple servers separated by comma into list
+            for server in servers.split(","):
+                # users tend to separate servers by ", " so strip() whitespaces
+                server = server.strip()
+                ntp_servers.append(server)
+                logger.debug("\t%s", server)
+
+        ntp_pool = user_input("Enter a NTP source pool address, "
+                              "or press Enter to skip", allow_empty=True)
+        if ntp_pool:  # if user input is not '' (empty)
+            logger.debug("User provided NTP pool:\n\t%s", ntp_pool)
+
+    return ntp_servers, ntp_pool
 
 
 def service_command():

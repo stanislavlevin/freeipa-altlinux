@@ -17,8 +17,13 @@ import os
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipaplatform.paths import paths
-from ipaserver.install import dsinstance
-from ipaserver.install.installutils import realm_to_serverid
+
+# from ipaserver.install.dsinstance
+DS_INSTANCE_PREFIX = 'slapd-'
+
+
+def realm_to_serverid(realm_name):
+    return "-".join(realm_name.split("."))
 
 
 class TestUninstallBase(IntegrationTest):
@@ -65,14 +70,14 @@ class TestUninstallBase(IntegrationTest):
         self.master.run_command(['ipactl', 'stop'])
 
         serverid = realm_to_serverid(self.master.domain.realm)
-        instance_name = ''.join([dsinstance.DS_INSTANCE_PREFIX, serverid])
+        instance_name = ''.join([DS_INSTANCE_PREFIX, serverid])
 
         try:
             # Moving the DS instance out of the way will cause the
             # uninstaller to raise an exception and return with a
             # non-zero return code.
             self.master.run_command([
-                '/usr/bin/mv',
+                '/bin/mv',
                 '%s/%s' % (paths.ETC_DIRSRV, instance_name),
                 '%s/%s.test' % (paths.ETC_DIRSRV, instance_name)
             ])
@@ -95,7 +100,7 @@ class TestUninstallBase(IntegrationTest):
             # Moving it back should allow the uninstall to finish
             # successfully.
             self.master.run_command([
-                '/usr/bin/mv',
+                '/bin/mv',
                 '%s/%s.test' % (paths.ETC_DIRSRV, instance_name),
                 '%s/%s' % (paths.ETC_DIRSRV, instance_name)
             ])

@@ -653,6 +653,15 @@ class host_add(LDAPCreate):
 
     def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys, **options):
         assert isinstance(dn, DN)
+        config = ldap.get_ipa_config()
+        if 'ipamaxhostnamelength' in config:
+            maxlen = int(config.get('ipamaxhostnamelength')[0])
+            if len(keys[-1]) > maxlen:
+                raise errors.ValidationError(
+                    name=self.obj.primary_key.cli_name,
+                    error=_('can be at most %(len)d characters' %
+                            dict(len=maxlen))
+                )
         if options.get('ip_address') and dns_container_exists(ldap):
             parts = keys[-1].split('.')
             host = parts[0]
@@ -762,7 +771,9 @@ class host_del(LDAPDelete):
     def pre_callback(self, ldap, dn, *keys, **options):
         assert isinstance(dn, DN)
         # If we aren't given a fqdn, find it
-        if hostname_validator(None, keys[-1]) is not None:
+        config = ldap.get_ipa_config()
+        maxlen = int(config.get('ipamaxhostnamelength')[0])
+        if hostname_validator(None, keys[-1], maxlen=maxlen) is not None:
             hostentry = api.Command['host_show'](keys[-1])['result']
             fqdn = hostentry['fqdn'][0]
         else:
@@ -899,7 +910,9 @@ class host_mod(LDAPUpdate):
             old_certs = entry_attrs_old.get('usercertificate', [])
             removed_certs = set(old_certs) - set(certs)
             for cert in removed_certs:
-                rm_certs = api.Command.cert_find(certificate=cert)['result']
+                rm_certs = api.Command.cert_find(
+                    certificate=cert,
+                    host=keys)['result']
                 revoke_certs(rm_certs)
 
         if certs:
@@ -1335,7 +1348,9 @@ class host_remove_cert(LDAPRemoveAttributeViaOption):
         assert isinstance(dn, DN)
 
         for cert in options.get('usercertificate', []):
-            revoke_certs(api.Command.cert_find(certificate=cert)['result'])
+            revoke_certs(api.Command.cert_find(
+                certificate=cert,
+                host=keys)['result'])
 
         return dn
 

@@ -17,8 +17,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import absolute_import
+
 import pytest
 
+from ipaplatform.osinfo import osinfo
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration.tasks import (
     clear_sssd_cache, get_host_ip_with_hostmask, modify_sssd_conf)
@@ -156,8 +159,8 @@ class TestSudo(IntegrationTest):
 
     def test_add_sudo_commands(self):
         # Group: Readers
-        self.master.run_command(['ipa', 'sudocmd-add', '/usr/bin/cat'])
-        self.master.run_command(['ipa', 'sudocmd-add', '/usr/bin/tail'])
+        self.master.run_command(['ipa', 'sudocmd-add', '/bin/cat'])
+        self.master.run_command(['ipa', 'sudocmd-add', '/bin/tail'])
 
         # No group
         self.master.run_command(['ipa', 'sudocmd-add', '/usr/bin/yum'])
@@ -167,10 +170,10 @@ class TestSudo(IntegrationTest):
                                  '--desc', '"Applications that read"'])
 
         self.master.run_command(['ipa', 'sudocmdgroup-add-member', 'readers',
-                                 '--sudocmds', '/usr/bin/cat'])
+                                 '--sudocmds', '/bin/cat'])
 
         self.master.run_command(['ipa', 'sudocmdgroup-add-member', 'readers',
-                                 '--sudocmds', '/usr/bin/tail'])
+                                 '--sudocmds', '/bin/tail'])
 
     def test_create_allow_all_rule(self):
         # Create rule that allows everything
@@ -441,8 +444,8 @@ class TestSudo(IntegrationTest):
         result1 = self.list_sudo_commands("testuser1")
         assert "(ALL : ALL) NOPASSWD:" in result1.stdout_text
         assert "/usr/bin/yum" in result1.stdout_text
-        assert "/usr/bin/tail" in result1.stdout_text
-        assert "/usr/bin/cat" in result1.stdout_text
+        assert "/bin/tail" in result1.stdout_text
+        assert "/bin/cat" in result1.stdout_text
 
     def test_setting_category_to_all_with_valid_entries_command(self):
         result = self.reset_rule_categories(safe_delete=False)
@@ -713,3 +716,43 @@ class TestSudo(IntegrationTest):
                                           '--groups', 'testgroup2'],
                                           raiseonerr=False)
         assert result.returncode != 0
+
+    @pytest.mark.xfail(
+        osinfo.id == 'fedora' and osinfo.version_number < (30,),
+        reason="https://pagure.io/SSSD/sssd/issue/3957", strict=True)
+    def test_domain_resolution_order(self):
+        """Test sudo with runAsUser and domain resolution order.
+
+        Regression test for bug https://pagure.io/SSSD/sssd/issue/3957.
+        Running commands with sudo as specific user should succeed
+        when sudo rule has ipasudorunas field defined with value of that user
+        and domain-resolution-order is defined in ipa config.
+        """
+        self.master.run_command(
+            ['ipa', 'config-mod', '--domain-resolution-order',
+             self.domain.name])  # pylint: disable=no-member
+        try:
+            # prepare the sudo rule: set only one user for ipasudorunas
+            self.reset_rule_categories()
+            self.master.run_command(
+                ['ipa', 'sudorule-mod', 'testrule',
+                 '--runasgroupcat=', '--runasusercat='],
+                raiseonerr=False
+            )
+            self.master.run_command(
+                ['ipa', 'sudorule-add-runasuser', 'testrule',
+                 '--users', 'testuser2'])
+
+            # check that testuser1 is allowed to run commands as testuser2
+            # according to listing of allowed commands
+            result = self.list_sudo_commands('testuser1')
+            expected_rule = ('(testuser2@%s) NOPASSWD: ALL'
+                             % self.domain.name)  # pylint: disable=no-member
+            assert expected_rule in result.stdout_text
+
+            # check that testuser1 can actually run commands as testuser2
+            self.client.run_command(
+                ['su', 'testuser1', '-c', 'sudo -u testuser2 true'])
+        finally:
+            self.master.run_command(
+                ['ipa', 'config-mod', '--domain-resolution-order='])

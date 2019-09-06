@@ -56,7 +56,8 @@ except ImportError:
 from ipalib import errors, messages
 from ipalib.constants import (
     DOMAIN_LEVEL_0,
-    TLS_VERSIONS, TLS_VERSION_MINIMAL
+    TLS_VERSIONS, TLS_VERSION_MINIMAL, TLS_VERSION_DEFAULT_MIN,
+    TLS_VERSION_DEFAULT_MAX,
 )
 from ipalib.text import _
 from ipaplatform.constants import constants
@@ -74,6 +75,39 @@ else:
 
 if six.PY3:
     unicode = str
+
+    from shutil import which  # pylint: disable=no-name-in-module
+else:
+    def which(cmd):
+        """ Port of `which` function to python 2, it is a simplifed version
+        of `shutil.which` from python 3.3+
+
+        :param cmd: shell command
+        :type cmd: str
+        :return: path to the executable if it exists otherwise None
+        :rtype: str or None
+        """
+        def _check_path(fpath):
+            return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+        # if cmd is actually a path to the executable, check it
+        if os.path.dirname(cmd):
+            if _check_path(cmd):
+                return cmd
+            return None
+
+        path = os.environ.get('PATH', os.defpath)
+        path = path.split(os.pathsep)
+
+        seen = set()
+        for _dir in path:
+            if _dir not in seen:
+                seen.add(_dir)
+                fpath = os.path.join(_dir, cmd)
+                if _check_path(fpath):
+                    return fpath
+
+        return None
 
 _IPA_CLIENT_SYSRESTORE = "/var/lib/ipa-client/sysrestore"
 _IPA_DEFAULT_CONF = "/etc/ipa/default.conf"
@@ -281,8 +315,8 @@ def create_https_connection(
     cafile=None,
     client_certfile=None, client_keyfile=None,
     keyfile_passwd=None,
-    tls_version_min="tls1.1",
-    tls_version_max="tls1.2",
+    tls_version_min=TLS_VERSION_DEFAULT_MIN,
+    tls_version_max=TLS_VERSION_DEFAULT_MAX,
     **kwargs
 ):
     """
@@ -312,6 +346,7 @@ def create_https_connection(
         "tls1.0": ssl.OP_NO_TLSv1,
         "tls1.1": ssl.OP_NO_TLSv1_1,
         "tls1.2": ssl.OP_NO_TLSv1_2,
+        "tls1.3": getattr(ssl, "OP_NO_TLSv1_3", 0),
     }
     # pylint: enable=no-member
 
@@ -433,14 +468,28 @@ def validate_zonemgr_str(zonemgr):
     zonemgr = DNSName(zonemgr)
     return validate_zonemgr(zonemgr)
 
-def validate_hostname(hostname, check_fqdn=True, allow_underscore=False, allow_slash=False):
+
+def validate_hostname(hostname, check_fqdn=True, allow_underscore=False,
+                      allow_slash=False, maxlen=255):
     """ See RFC 952, 1123
+
+    Length limit of 64 imposed by MAXHOSTNAMELEN on Linux.
+
+    DNS and other operating systems has a max length of 255. Default to
+    the theoretical max unless explicitly told to limit. The cases
+    where a limit would be set might include:
+     * *-install --hostname
+     * ipa host-add
+
+    The *-install commands by definition are executed on Linux hosts so
+    the maximum length needs to be limited.
 
     :param hostname Checked value
     :param check_fqdn Check if hostname is fully qualified
     """
-    if len(hostname) > 255:
-        raise ValueError(_('cannot be longer that 255 characters'))
+    if len(hostname) > maxlen:
+        raise ValueError(_('cannot be longer that {} characters'.format(
+                         maxlen)))
 
     if hostname.endswith('.'):
         hostname = hostname[:-1]
@@ -1028,9 +1077,16 @@ def normalize_hostname(hostname):
     return hostname
 
 
-def hostname_validator(ugettext, value):
+def hostname_validator(ugettext, value, maxlen=255):
+    """Validator used by plugins to ensure hostname compliance.
+
+       In Linux the maximum hostname length is 64. In DNS and
+       other operaring systems (Solaris) it is 255. If not explicitly
+       checking a Linux hostname (e.g. the server) use the DNS
+       default.
+    """
     try:
-        validate_hostname(value)
+        validate_hostname(value, maxlen=maxlen)
     except ValueError as e:
         return _('invalid domain-name: %s') % unicode(e)
 
@@ -1204,17 +1260,27 @@ def get_terminal_height(fd=1):
         return os.environ.get("LINES", 25)
 
 
-def open_in_pager(data):
+def get_pager():
+    """ Get path to a pager
+
+    :return: path to the file if it exists otherwise None
+    :rtype: str or None
+    """
+    pager = os.environ.get('PAGER', 'less')
+    return which(pager)
+
+
+def open_in_pager(data, pager):
     """
     Open text data in pager
 
     Args:
         data (bytes): data to view in pager
+        pager (str): path to the pager
 
     Returns:
         None
     """
-    pager = os.environ.get("PAGER", "less")
     pager_process = subprocess.Popen([pager], stdin=subprocess.PIPE)
 
     try:

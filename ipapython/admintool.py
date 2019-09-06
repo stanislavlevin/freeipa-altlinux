@@ -93,7 +93,6 @@ class AdminTool(object):
     log_file_name = None
     usage = None
     description = None
-    ignore_return_codes = ()
 
     _option_parsers = dict()
 
@@ -162,6 +161,7 @@ class AdminTool(object):
     def __init__(self, options, args):
         self.options = options
         self.args = args
+        self.log_file_initialized = False
         self.safe_options = self.option_parser.get_safe_opts(options)
 
     def execute(self):
@@ -184,7 +184,7 @@ class AdminTool(object):
                     return_value = exception.rval  # pylint: disable=no-member
             traceback = sys.exc_info()[2]
             error_message, return_value = self.handle_error(exception)
-            if return_value and return_value not in self.ignore_return_codes:
+            if return_value:
                 self.log_failure(error_message, return_value, exception,
                     traceback)
                 return return_value
@@ -248,12 +248,15 @@ class AdminTool(object):
                 break
 
         self._setup_logging(log_file_mode=log_file_mode)
+        if self.log_file_name:
+            self.log_file_initialized = True
 
     def _setup_logging(self, log_file_mode='w', no_file=False):
         if no_file:
             log_file_name = None
         elif self.options.log_file:
             log_file_name = self.options.log_file
+            self.log_file_name = log_file_name
         else:
             log_file_name = self.log_file_name
         if self.options.verbose:
@@ -280,7 +283,7 @@ class AdminTool(object):
         """Given an exception, return a message (or None) and process exit code
         """
         if isinstance(exception, ScriptError):
-            return exception.msg, exception.rval or 1
+            return exception.msg, exception.rval
         elif isinstance(exception, SystemExit):
             if isinstance(exception.code, int):
                 return None, exception.code
@@ -308,8 +311,13 @@ class AdminTool(object):
                      self.command_name, type(exception).__name__, exception)
         if error_message:
             logger.error('%s', error_message)
+        if return_value == 0:
+            # A script may raise an exception but still want quit gracefully,
+            # like the case of ipa-client-install called from
+            # ipa-server-install.
+            return
         message = "The %s command failed." % self.command_name
-        if self.log_file_name and return_value != 2:
+        if self.log_file_initialized and return_value != 2:
             # magic value because this is common between server and client
             # but imports are not straigthforward
             message += " See %s for more information" % self.log_file_name

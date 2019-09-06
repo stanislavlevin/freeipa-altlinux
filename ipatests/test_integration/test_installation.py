@@ -7,19 +7,26 @@ Module provides tests which testing ability of various subsystems to be
 installed.
 """
 
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function
 
 import os
-import pwd
-import stat
+import re
+from datetime import datetime, timedelta
+import sys
+import textwrap
+import time
 import pytest
 from ipalib.constants import DOMAIN_LEVEL_0
+from ipalib.constants import PKI_GSSAPI_SERVICE_NAME
 from ipaplatform.constants import constants
+from ipaplatform.osinfo import osinfo
 from ipaplatform.paths import paths
+from ipaplatform.tasks import tasks as platformtasks
 from ipatests.pytest_ipa.integration.env_config import get_global_config
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.test_caless import CALessBase, ipa_certs_cleanup
+from ipalib import x509
 
 config = get_global_config()
 
@@ -28,7 +35,7 @@ def create_broken_resolv_conf(master):
     # Force a broken resolv.conf to simulate a bad response to
     # reverse zone lookups
     master.run_command([
-        '/usr/bin/mv',
+        '/bin/mv',
         paths.RESOLV_CONF,
         '%s.sav' % paths.RESOLV_CONF
     ])
@@ -40,7 +47,7 @@ def create_broken_resolv_conf(master):
 def restore_resolv_conf(master):
     if os.path.exists('%s.sav' % paths.RESOLV_CONF):
         master.run_command([
-            '/usr/bin/mv',
+            '/bin/mv',
             '%s.sav' % paths.RESOLV_CONF,
             paths.RESOLV_CONF
         ])
@@ -57,66 +64,6 @@ def server_install_setup(func):
             restore_resolv_conf(master)
             ipa_certs_cleanup(master)
     return wrapped
-
-
-def assert_mod(actual_mod, expected_mod):
-    """
-    Compare the given permission sets
-    """
-    assert oct(actual_mod) == oct(expected_mod)
-
-
-def assert_in_mod(mod, expected_bit):
-    """
-    Check whether an expected permission bit is within the given set
-    """
-    if not mod & expected_bit:
-        raise AssertionError(
-            "Permission set {0} doesn't contain expected {1}".format(
-                oct(stat.S_IMODE(mod)), "{0:#06o}".format(expected_bit)
-            )
-        )
-
-
-def assert_path(path, username):
-    """
-    Check whether the given user owns the given path
-    """
-    print("check for {}".format(path))
-    user_pw = pwd.getpwnam(username)
-
-    # check for symlink
-    stats = os.lstat(path)
-    mode = stats.st_mode
-    if stat.S_ISLNK(mode):
-        assert stats.st_uid == 0 or stats.st_uid == user_pw.pw_uid
-        path = os.readlink(path)
-        print("symlink found {}".format(path))
-        if not path == "/":
-            assert_path(path, username)
-        return
-
-    assert stat.S_ISDIR(mode)
-
-    # path should be owned by either root or gssproxy user
-    assert stats.st_uid == 0 or stats.st_uid == user_pw.pw_uid
-
-    if stats.st_uid == user_pw.pw_uid:
-        assert_in_mod(mode, stat.S_IXUSR)
-        if not path == "/":
-            assert_path(os.path.dirname(path), username)
-        return
-
-    if stats.st_gid == user_pw.pw_gid:
-        assert_in_mod(mode, stat.S_IXGRP)
-        if not path == "/":
-            assert_path(os.path.dirname(path), username)
-        return
-
-    assert_in_mod(mode, stat.S_IXOTH)
-
-    if not path == "/":
-        assert_path(os.path.dirname(path), username)
 
 
 class InstallTestBase1(IntegrationTest):
@@ -165,10 +112,6 @@ class InstallTestBase2(IntegrationTest):
     @classmethod
     def install(cls, mh):
         tasks.install_master(cls.master, setup_dns=False)
-
-    def test_replica0_with_ca_kra_dns_install(self):
-        tasks.install_replica(self.master, self.replicas[0], setup_ca=True,
-                              setup_kra=True, setup_dns=True)
 
     def test_replica1_with_ca_dns_install(self):
         tasks.install_replica(self.master, self.replicas[1], setup_ca=True,
@@ -226,13 +169,11 @@ class TestInstallWithCA1(InstallTestBase1):
     def test_replica1_ipa_kra_install(self):
         super(TestInstallWithCA1, self).test_replica1_ipa_kra_install()
 
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
     def test_replica2_with_ca_kra_install(self):
         super(TestInstallWithCA1, self).test_replica2_with_ca_kra_install()
 
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
     def test_replica2_ipa_dns_install(self):
@@ -271,12 +212,6 @@ class TestInstallWithCA2(InstallTestBase2):
     @classmethod
     def install(cls, mh):
         tasks.install_master(cls.master, setup_dns=False)
-
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
-    @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
-                        reason='does not work on DOMAIN_LEVEL_0 by design')
-    def test_replica0_with_ca_kra_dns_install(self):
-        super(TestInstallWithCA2, self).test_replica0_with_ca_kra_dns_install()
 
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
@@ -317,13 +252,11 @@ class TestInstallWithCA_DNS1(InstallTestBase1):
     def test_replica1_ipa_kra_install(self):
         super(TestInstallWithCA_DNS1, self).test_replica1_ipa_kra_install()
 
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
     def test_replica2_with_ca_kra_install(self):
         super(TestInstallWithCA_DNS1, self).test_replica2_with_ca_kra_install()
 
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
     def test_replica2_ipa_dns_install(self):
@@ -335,14 +268,6 @@ class TestInstallWithCA_DNS2(InstallTestBase2):
     @classmethod
     def install(cls, mh):
         tasks.install_master(cls.master, setup_dns=True)
-
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
-    @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
-                        reason='does not work on DOMAIN_LEVEL_0 by design')
-    def test_replica0_with_ca_kra_dns_install(self):
-        super(
-            TestInstallWithCA_DNS2, self
-        ).test_replica0_with_ca_kra_dns_install()
 
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
@@ -455,6 +380,16 @@ class TestADTrustInstallWithDNS_KRA_ADTrust(ADTrustInstallTestBase):
         self.install_replica(self.replicas[1], setup_ca=True, setup_kra=True)
 
 
+def get_pki_tomcatd_pid(host):
+    pid = ''
+    cmd = host.run_command(['systemctl', 'status', 'pki-tomcatd@pki-tomcat'])
+    for line in cmd.stdout_text.split('\n'):
+        if "Main PID" in line:
+            pid = line.split()[2]
+            break
+    return(pid)
+
+
 ##
 # Rest of master installation tests
 ##
@@ -474,7 +409,38 @@ class TestInstallMaster(IntegrationTest):
         tasks.install_kra(self.master, first_instance=True)
 
     def test_install_dns(self):
-        tasks.install_dns(self.master)
+        tasks.install_dns(
+            self.master,
+            extra_args=['--dnssec-master', '--no-dnssec-validation']
+        )
+
+    def test_ipactl_restart_pki_tomcat(self):
+        """ Test if ipactl restart restarts the pki-tomcatd
+
+        Wrong logic was triggering the start instead of restart
+        for pki-tomcatd. This test validates that restart
+        called on pki-tomcat properly.
+
+        related ticket : https://pagure.io/freeipa/issue/7927
+        """
+        # get process id of pki-tomcatd
+        pki_pid = get_pki_tomcatd_pid(self.master)
+
+        # check if pki-tomcad restarted
+        cmd = self.master.run_command(['ipactl', 'restart'])
+        assert "Restarting pki-tomcatd Service" in cmd.stdout_text
+
+        # check if pid for pki-tomcad changed
+        pki_pid_after_restart = get_pki_tomcatd_pid(self.master)
+        assert pki_pid != pki_pid_after_restart
+
+        # check if pki-tomcad restarted
+        cmd = self.master.run_command(['ipactl', 'restart'])
+        assert "Restarting pki-tomcatd Service" in cmd.stdout_text
+
+        # check if pid for pki-tomcad changed
+        pki_pid_after_restart_2 = get_pki_tomcatd_pid(self.master)
+        assert pki_pid_after_restart != pki_pid_after_restart_2
 
     def test_WSGI_worker_process(self):
         """ Test if WSGI worker process count is set to 4
@@ -491,50 +457,192 @@ class TestInstallMaster(IntegrationTest):
         wsgi_count = cmd.stdout_text.count('wsgi:ipa')
         assert constants.WSGI_PROCESSES == wsgi_count
 
-    def test_service_keytab_permissions(self):
-        # HTTP service keytab
-        username = constants.GSSPROXY_USER
-        assert username
-        http_keytab = paths.HTTP_KEYTAB
-        assert http_keytab
-        user_pw = pwd.getpwnam(username)
+    def test_error_for_yubikey(self):
+        """ Test error when yubikey hardware not present
 
-        stats = os.lstat(http_keytab)
-        mode = stats.st_mode
+        In order to work with IPA and Yubikey, libyubikey is required.
+        Before the fix, if yubikey added without having packages, it used to
+        result in traceback. Now it the exception is handeled properly.
+        It needs Yubikey hardware to make command successfull. This test
+        just check of proper error thrown when hardware is not attached.
 
-        while stat.S_ISLNK(mode):
-            assert stats.st_uid == 0 or stats.st_uid == user_pw.pw_uid
-            http_keytab = os.readlink(http_keytab)
-            print("httpd.keytab is symlink to {}".format(http_keytab))
-            stats = os.lstat(http_keytab)
-            mode = stats.st_mode
+        related ticket : https://pagure.io/freeipa/issue/6979
+        """
+        # try to add yubikey to the user
+        args = ['ipa', 'otptoken-add-yubikey', '--owner=admin']
+        cmd = self.master.run_command(args, raiseonerr=False)
+        assert cmd.returncode != 0
+        exp_str = ("ipa: ERROR: No YubiKey found")
+        assert exp_str in cmd.stderr_text
 
-        assert stats.st_uid == user_pw.pw_uid
-        assert stats.st_gid == user_pw.pw_gid
+    def test_p11_kit_softhsm2(self):
+        # check that p11-kit-proxy does not inject SoftHSM2
+        result = self.master.run_command([
+            "modutil", "-dbdir", paths.PKI_TOMCAT_ALIAS_DIR, "-list"
+        ])
+        assert "softhsm" not in result.stdout_text.lower()
+        assert "opendnssec" not in result.stdout_text.lower()
 
-        assert stat.S_ISREG(mode)
-        assert_mod(stat.S_IMODE(mode), 0o600)
+    @pytest.mark.skipif(
+        not platformtasks.is_selinux_enabled(),
+        reason="Test needs SELinux enabled")
+    def test_selinux_avcs(self):
+        # Use journalctl instead of ausearch. The ausearch command is not
+        # installed by default and journalctl gives us all AVCs.
+        result = self.master.run_command([
+            "journalctl", "--full", "--grep=AVC", "--since=yesterday"
+        ])
+        avcs = list(
+            line.strip() for line in result.stdout_text.split('\n')
+            if "AVC avc:" in line
+        )
+        if avcs:
+            print('\n'.join(avcs))
+            # Use expected failure until all SELinux violations are fixed
+            pytest.xfail("{} AVCs found".format(len(avcs)))
 
-        # each subdir of the full path should be accessible
-        # as well as owned by root or gssproxy user
-        assert_path(os.path.dirname(http_keytab), username)
+    def test_file_permissions(self):
+        args = [
+            "rpm", "-V",
+            "python3-ipaclient",
+            "python3-ipalib",
+            "python3-ipaserver",
+            "python2-ipaclient",
+            "python2-ipalib",
+            "python2-ipaserver"
+        ]
 
-        # a parent dir of keytab should be writable by our user
-        stats = os.stat(os.path.dirname(http_keytab))
-        mode = stats.st_mode
-
-        assert stats.st_uid == 0
-        assert stats.st_gid == user_pw.pw_gid
-
-        assert stat.S_ISDIR(mode)
-
-        if user_pw.pw_uid == 0:
-            # by default gssproxy user is root
-            expected_mod = 0o700
+        if osinfo.id == 'fedora':
+            args.extend([
+                "freeipa-client",
+                "freeipa-client-common",
+                "freeipa-common",
+                "freeipa-server",
+                "freeipa-server-common",
+                "freeipa-server-dns",
+                "freeipa-server-trust-ad"
+            ])
         else:
-            # gssproxy user is non-privileged
-            expected_mod = 0o770
-        assert_mod(stat.S_IMODE(mode), expected_mod)
+            args.extend([
+                "ipa-client",
+                "ipa-client-common",
+                "ipa-common",
+                "ipa-server",
+                "ipa-server-common",
+                "ipa-server-dns"
+            ])
+
+        result = self.master.run_command(args, raiseonerr=False)
+        if result.returncode != 0:
+            # Check the mode errors
+            mode_warnings = re.findall(
+                r"^.M.......  [cdglr ]+ (?P<filename>.*)$",
+                result.stdout_text, re.MULTILINE)
+            msg = "rpm -V found mode issues for the following files: {}"
+            assert mode_warnings == [], msg.format(mode_warnings)
+            # Check the owner errors
+            user_warnings = re.findall(
+                r"^.....U...  [cdglr ]+ (?P<filename>.*)$",
+                result.stdout_text, re.MULTILINE)
+            msg = "rpm -V found ownership issues for the following files: {}"
+            assert user_warnings == [], msg.format(user_warnings)
+            # Check the group errors
+            group_warnings = re.findall(
+                r"^......G..  [cdglr ]+ (?P<filename>.*)$",
+                result.stdout_text, re.MULTILINE)
+            msg = "rpm -V found group issues for the following files: {}"
+            assert group_warnings == [], msg.format(group_warnings)
+
+    @pytest.mark.parametrize(
+        "keytab, owner, mod",
+        [
+            (os.path.join(
+                paths.PKI_TOMCAT, PKI_GSSAPI_SERVICE_NAME + '.keytab'),
+             constants.PKI_USER, oct(0o600)),
+            (paths.DS_KEYTAB, constants.DS_USER, oct(0o600)),
+            (paths.HTTP_KEYTAB, constants.GSSPROXY_USER, oct(0o600)),
+            (paths.IPA_DNSKEYSYNCD_KEYTAB, constants.ODS_USER, oct(0o440)),
+            (paths.NAMED_KEYTAB, constants.NAMED_USER, oct(0o400)),
+        ])
+    def test_service_keytab_permissions(self, keytab, owner, mod):
+        assert owner
+        assert keytab
+        test_source = textwrap.dedent(r"""
+        import os, pwd, stat
+
+        def assert_equal(act, exp):
+            assert act == exp, \
+            '\\n  Actual: {{}}\\nExpected: {{}}'.format(act, exp)
+
+        def assert_in(val, vals):
+            assert val in vals, \
+            '\\n Value: {{}}\\nNot in: {{}}'.format(val, vals)
+        pw = pwd.getpwnam('{owner}')
+        uid = pw.pw_uid
+        gid = pw.pw_gid
+        # drop root privs if it needs
+        if uid > 0:
+            # need to read traceback
+            os.chmod(__file__, 0o644)
+            os.setgroups([])
+            os.setresgid(gid, gid, gid)
+            os.setresuid(uid, uid, uid)
+            assert_equal(os.getresgid(), (gid, gid, gid))
+            assert_equal(os.getresuid(), (uid, uid, uid))
+        # keytab should be at least readable
+        assert os.access('{path}', os.R_OK)
+        # keytab belongs either to root or our user
+        stats = os.stat('{path}')
+        mode = stats.st_mode
+        assert_in(stats.st_uid, [0, uid])
+        assert_in(stats.st_gid, [0, gid])
+        # keytab has permissions
+        assert stat.S_ISREG(mode)
+        assert_equal(oct(stat.S_IMODE(mode)), oct({mod}))
+
+        # parent dir
+        dir_stats = os.stat(os.path.dirname('{path}'))
+        mode = dir_stats.st_mode
+
+        # belongs either to root or our user
+        assert_in(dir_stats.st_uid, [0, uid])
+        assert_in(dir_stats.st_gid, [0, gid])
+
+        # at least parent directory is not world writable
+        assert not dir_stats.st_mode & stat.S_IWOTH
+        """).format(
+            owner=owner,
+            path=keytab,
+            mod=mod,
+        )
+        exec_source = textwrap.dedent("""
+        import os
+        import subprocess
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(
+                mode="w", dir="/tmp", prefix="test_", suffix=".py") as f:
+            code = \"\"\"{code}\"\"\"
+            f.write(code)
+            f.flush()
+            os.fsync(f.fileno())
+            args = [
+                "{python}",
+                "-c",
+                "import runpy;runpy.run_path('{{}}')".format(f.name),
+            ]
+            subprocess.check_call(args)
+        """).format(
+            python=sys.executable,
+            code=test_source,
+        )
+
+        args = [
+            sys.executable,
+            '-c',
+            exec_source,
+        ]
+        self.master.run_command(args)
 
 
 class TestInstallMasterKRA(IntegrationTest):
@@ -615,3 +723,109 @@ class TestInstallMasterReservedIPasForwarder(IntegrationTest):
         exp_str = ("Invalid IP Address 0.0.0.0: cannot use IANA reserved "
                    "IP address 0.0.0.0")
         assert exp_str in cmd.stdout_text
+
+
+class TestKRAinstallAfterCertRenew(IntegrationTest):
+    """ Test KRA installtion after ca agent cert renewal
+
+    KRA installation was failing after ca-agent cert gets renewed.
+    This test checks if the symptoms no longer exist.
+
+    related ticket: https://pagure.io/freeipa/issue/7288
+    """
+
+    def test_KRA_install_after_cert_renew(self):
+
+        tasks.install_master(self.master)
+
+        # get ca-agent cert and load as pem
+        dm_pass = self.master.config.dirman_password
+        admin_pass = self.master.config.admin_password
+        args = [paths.OPENSSL, "pkcs12", "-in",
+                paths.DOGTAG_ADMIN_P12, "-nodes",
+                "-passin", "pass:{}".format(dm_pass)]
+        cmd = self.master.run_command(args)
+
+        certs = x509.load_certificate_list(cmd.stdout_text.encode('utf-8'))
+
+        # get expiry date of agent cert
+        cert_expiry = certs[0].not_valid_after
+
+        # move date to grace period so that certs get renewed
+        self.master.run_command(['systemctl', 'stop', 'chronyd'])
+        grace_date = cert_expiry - timedelta(days=10)
+        grace_date = datetime.strftime(grace_date, "%Y-%m-%d %H:%M:%S")
+        self.master.run_command(['date', '-s', grace_date])
+
+        # get the count of certs track by certmonger
+        cmd = self.master.run_command(['getcert', 'list'])
+        cert_count = cmd.stdout_text.count('Request ID')
+        timeout = 600
+        count = 0
+        start = time.time()
+        # wait sometime for cert renewal
+        while time.time() - start < timeout:
+            cmd = self.master.run_command(['getcert', 'list'])
+            count = cmd.stdout_text.count('status: MONITORING')
+            if count == cert_count:
+                break
+            time.sleep(100)
+        else:
+            # timeout
+            raise AssertionError('TimeOut: Failed to renew all the certs')
+
+        # move date after 3 days of actual expiry
+        cert_expiry = cert_expiry + timedelta(days=3)
+        cert_expiry = datetime.strftime(cert_expiry, "%Y-%m-%d %H:%M:%S")
+        self.master.run_command(['date', '-s', cert_expiry])
+
+        passwd = "{passwd}\n{passwd}\n{passwd}".format(passwd=admin_pass)
+        self.master.run_command(['kinit', 'admin'], stdin_text=passwd)
+        cmd = self.master.run_command(['ipa-kra-install', '-p', dm_pass, '-U'])
+        self.master.run_command(['systemctl', 'start', 'chronyd'])
+
+
+class TestMaskInstall(IntegrationTest):
+    """ Test master and replica installation with wrong mask
+
+    This test checks that master/replica installation fails (expectedly) if
+    mask > 022.
+
+    related ticket: https://pagure.io/freeipa/issue/7193
+    """
+
+    num_replicas = 0
+
+    @classmethod
+    def install(cls, mh):
+        super(TestMaskInstall, cls).install(mh)
+        cls.bashrc_file = cls.master.get_file_contents('/root/.bashrc')
+
+    def test_install_master(self):
+        self.master.run_command('echo "umask 0027" >> /root/.bashrc')
+        result = self.master.run_command(['umask'])
+        assert '0027' in result.stdout_text
+
+        cmd = tasks.install_master(
+            self.master, setup_dns=False, raiseonerr=False
+        )
+        exp_str = ("Unexpected system mask")
+        assert (exp_str in cmd.stderr_text and cmd.returncode != 0)
+
+    def test_install_replica(self):
+        result = self.master.run_command(['umask'])
+        assert '0027' in result.stdout_text
+
+        cmd = self.master.run_command([
+            'ipa-replica-install', '-w', self.master.config.admin_password,
+            '-n', self.master.domain.name, '-r', self.master.domain.realm,
+            '--server', 'dummy_master.%s' % self.master.domain.name,
+            '-U'], raiseonerr=False
+        )
+        exp_str = ("Unexpected system mask")
+        assert (exp_str in cmd.stderr_text and cmd.returncode != 0)
+
+    def test_files_ownership_and_permission_teardown(self):
+        """ Method to restore the default bashrc contents"""
+        if self.bashrc_file is not None:
+            self.master.put_file_contents('/root/.bashrc', self.bashrc_file)

@@ -48,7 +48,7 @@ import six
 from six.moves import input
 
 from ipalib.util import (
-    check_client_configuration, get_terminal_height, open_in_pager
+    check_client_configuration, get_pager, get_terminal_height, open_in_pager
 )
 
 if six.PY3:
@@ -723,9 +723,11 @@ class help(frontend.Local):
             self.buffer.append(unicode(string))
 
         def write(self):
-            if self.buffer_length > get_terminal_height():
+            pager = get_pager()
+
+            if pager and self.buffer_length > get_terminal_height():
                 data = "\n".join(self.buffer).encode("utf-8")
-                open_in_pager(data)
+                open_in_pager(data, pager)
             else:
                 try:
                     for line in self.buffer:
@@ -969,7 +971,7 @@ class console(frontend.Command):
         history = os.path.join(api.env.dot_ipa, "console.history")
         try:
             readline.read_history_file(history)
-        except OSError:
+        except IOError:
             pass
 
         def save_history():
@@ -979,7 +981,7 @@ class console(frontend.Command):
             readline.set_history_length(50)
             try:
                 readline.write_history_file(history)
-            except OSError:
+            except IOError:
                 logger.exception("Unable to store history %s", history)
 
         atexit.register(save_history)

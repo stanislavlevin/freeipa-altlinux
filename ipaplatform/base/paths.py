@@ -20,14 +20,18 @@
 '''
 This base platform module exports default filesystem paths.
 '''
+from __future__ import print_function
+
+import os
 
 
 class BasePathNamespace(object):
     BIN_HOSTNAMECTL = "/bin/hostnamectl"
     ECHO = "/bin/echo"
-    GZIP = "/usr/bin/gzip"
+    GZIP = "/bin/gzip"
     LS = "/bin/ls"
     SYSTEMCTL = "/bin/systemctl"
+    SYSTEMD_DETECT_VIRT = "/usr/bin/systemd-detect-virt"
     TAR = "/bin/tar"
     AUTOFS_LDAP_AUTH_CONF = "/etc/autofs_ldap_auth.conf"
     ETC_DIRSRV = "/etc/dirsrv"
@@ -38,7 +42,6 @@ class BasePathNamespace(object):
     ETC_HOSTNAME = "/etc/hostname"
     HOSTS = "/etc/hosts"
     ETC_HTTPD_DIR = "/etc/httpd"
-    FONTS_AWESOME_DIR = None
     HTTPD_ALIAS_DIR = "/etc/httpd/alias"
     GSSAPI_SESSION_KEY = "/etc/httpd/alias/ipasession.key"
     OLD_KRA_AGENT_PEM = "/etc/httpd/alias/kra-agent.pem"
@@ -111,7 +114,6 @@ class BasePathNamespace(object):
     PKI_TOMCAT_PASSWORD_CONF = "/etc/pki/pki-tomcat/password.conf"
     ETC_REDHAT_RELEASE = "/etc/redhat-release"
     RESOLV_CONF = "/etc/resolv.conf"
-    RESOLVCONF_CONF = None
     SAMBA_KEYTAB = "/etc/samba/samba.keytab"
     SMB_CONF = "/etc/samba/smb.conf"
     LIMITS_CONF = "/etc/security/limits.conf"
@@ -145,6 +147,8 @@ class BasePathNamespace(object):
     SYSTEMD_IPA_SERVICE = "/etc/systemd/system/multi-user.target.wants/ipa.service"
     SYSTEMD_SSSD_SERVICE = "/etc/systemd/system/multi-user.target.wants/sssd.service"
     SYSTEMD_PKI_TOMCAT_SERVICE = "/etc/systemd/system/pki-tomcatd.target.wants/pki-tomcatd@pki-tomcat.service"
+    SYSTEMD_PKI_TOMCAT_IPA_CONF = \
+        "/etc/systemd/system/pki-tomcatd@pki-tomcat.service.d/ipa.conf"
     ETC_TMPFILESD_DIRSRV = "/etc/tmpfiles.d/dirsrv-%s.conf"
     DNSSEC_TRUSTED_KEY = "/etc/trusted-key.key"
     HOME_DIR = "/home"
@@ -188,6 +192,8 @@ class BasePathNamespace(object):
     NSUPDATE = "/usr/bin/nsupdate"
     ODS_KSMUTIL = "/usr/bin/ods-ksmutil"
     ODS_SIGNER = "/usr/sbin/ods-signer"
+    ODS_ENFORCER = None
+    ODS_ENFORCER_DB_SETUP = None
     OPENSSL = "/usr/bin/openssl"
     PK12UTIL = "/usr/bin/pk12util"
     SOFTHSM2_UTIL = "/usr/bin/softhsm2-util"
@@ -210,16 +216,20 @@ class BasePathNamespace(object):
     LIB64_FIREFOX = "/usr/lib64/firefox"
     LIBSOFTHSM2_SO_64 = "/usr/lib64/pkcs11/libsofthsm2.so"
     PAM_KRB5_SO_64 = "/usr/lib64/security/pam_krb5.so"
+    LIBEXEC_CERTMONGER_DIR = "/usr/libexec/certmonger"
     DOGTAG_IPA_CA_RENEW_AGENT_SUBMIT = "/usr/libexec/certmonger/dogtag-ipa-ca-renew-agent-submit"
     DOGTAG_IPA_RENEW_AGENT_SUBMIT = "/usr/libexec/certmonger/dogtag-ipa-renew-agent-submit"
     CERTMONGER_DOGTAG_SUBMIT = "/usr/libexec/certmonger/dogtag-submit"
     IPA_SERVER_GUARD = "/usr/libexec/certmonger/ipa-server-guard"
     GENERATE_RNDC_KEY = "/usr/libexec/generate-rndc-key.sh"
+    LIBEXEC_IPA_DIR = "/usr/libexec/ipa"
     IPA_DNSKEYSYNCD_REPLICA = "/usr/libexec/ipa/ipa-dnskeysync-replica"
     IPA_DNSKEYSYNCD = "/usr/libexec/ipa/ipa-dnskeysyncd"
     IPA_HTTPD_KDCPROXY = "/usr/libexec/ipa/ipa-httpd-kdcproxy"
     IPA_ODS_EXPORTER = "/usr/libexec/ipa/ipa-ods-exporter"
+    IPA_PKI_RETRIEVE_KEY = "/usr/libexec/ipa/ipa-pki-retrieve-key"
     IPA_HTTPD_PASSWD_READER = "/usr/libexec/ipa/ipa-httpd-pwdreader"
+    IPA_PKI_WAIT_RUNNING = "/usr/libexec/ipa/ipa-pki-wait-running"
     DNSSEC_KEYFROMLABEL = "/usr/sbin/dnssec-keyfromlabel-pkcs11"
     GETSEBOOL = "/usr/sbin/getsebool"
     GROUPADD = "/usr/sbin/groupadd"
@@ -248,6 +258,8 @@ class BasePathNamespace(object):
     SMBD = "/usr/sbin/smbd"
     USERADD = "/usr/sbin/useradd"
     FONTS_DIR = "/usr/share/fonts"
+    FONTS_OPENSANS_DIR = "/usr/share/fonts/open-sans"
+    FONTS_FONTAWESOME_DIR = "/usr/share/fonts/fontawesome"
     USR_SHARE_IPA_DIR = "/usr/share/ipa/"
     USR_SHARE_IPA_CLIENT_DIR = "/usr/share/ipa/client"
     CA_TOPOLOGY_ULDIF = "/usr/share/ipa/ca-topology.uldif"
@@ -316,6 +328,7 @@ class BasePathNamespace(object):
     SSSD_DB = "/var/lib/sss/db"
     SSSD_MC_GROUP = "/var/lib/sss/mc/group"
     SSSD_MC_PASSWD = "/var/lib/sss/mc/passwd"
+    SSSD_PUBCONF_DIR = "/var/lib/sss/pubconf"
     SSSD_PUBCONF_KNOWN_HOSTS = "/var/lib/sss/pubconf/known_hosts"
     SSSD_PUBCONF_KRB5_INCLUDE_D_DIR = "/var/lib/sss/pubconf/krb5.include.d/"
     VAR_LOG_AUDIT = "/var/log/audit/audit.log"
@@ -372,6 +385,7 @@ class BasePathNamespace(object):
     KDCPROXY_CONFIG = '/etc/ipa/kdcproxy/kdcproxy.conf'
     CERTMONGER = '/usr/sbin/certmonger'
     NETWORK_MANAGER_CONFIG_DIR = '/etc/NetworkManager/conf.d'
+    NETWORK_MANAGER_IPA_CONF = '/etc/NetworkManager/conf.d/zzz-ipa.conf'
     IPA_CUSTODIA_CONF_DIR = '/etc/ipa/custodia'
     IPA_CUSTODIA_CONF = '/etc/ipa/custodia/custodia.conf'
     IPA_CUSTODIA_KEYS = '/etc/ipa/custodia/server.keys'
@@ -386,14 +400,40 @@ class BasePathNamespace(object):
     AUTHCONFIG = None
     AUTHSELECT = None
     SYSCONF_NETWORK = None
+    ETC_PKCS11_MODULES_DIR = "/etc/pkcs11/modules"
     SLAPD_INSTANCE_SYSTEMD_IPA_ENV_TEMPLATE = \
         "/etc/systemd/system/dirsrv@%s.service.d/ipa-env.conf"
     IPA_SERVER_UPGRADE = '/usr/sbin/ipa-server-upgrade'
-    KEYCTL = '/usr/bin/keyctl'
+    KEYCTL = '/bin/keyctl'
     GETENT = '/usr/bin/getent'
     SSHD = '/usr/sbin/sshd'
     SSSCTL = '/usr/sbin/sssctl'
     LIBARCH = "64"
+
+    def check_paths(self):
+        """Check paths for missing files
+
+        python3 -c 'from ipaplatform.paths import paths; paths.check_paths()'
+        """
+        executables = (
+            "/bin", "/sbin", "/usr/bin", "/usr/sbin",
+            self.LIBEXEC_IPA_DIR, self.LIBEXEC_CERTMONGER_DIR
+        )
+        for name in sorted(dir(self)):
+            if not name[0].isupper():
+                continue
+
+            value = getattr(self, name)
+            if not value or not isinstance(value, str):
+                # skip empty values
+                continue
+            if "%" in value or "{" in value:
+                # skip templates
+                continue
+
+            if value.startswith(executables) and value not in executables:
+                if not os.path.isfile(value):
+                    print("Missing executable {}={}".format(name, value))
 
 
 paths = BasePathNamespace()

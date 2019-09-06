@@ -6,3 +6,4 @@ add:ipaUserObjectClasses: ipasshuser
 remove:ipaConfigString:AllowLMhash
 add:objectClass: ipaUserAuthTypeClass
 add:objectClass: ipaNameResolutionData
+addifnew:ipamaxhostnamelength: 64

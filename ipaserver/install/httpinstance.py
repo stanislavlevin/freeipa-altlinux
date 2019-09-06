@@ -105,7 +105,8 @@ class HTTPInstance(service.Service):
             AUTOREDIR='' if auto_redirect else '#',
             CRL_PUBLISH_PATH=paths.PKI_CA_PUBLISH_DIR,
             FONTS_DIR=paths.FONTS_DIR,
-            FONTS_AWESOME_DIR=paths.FONTS_AWESOME_DIR,
+            FONTS_OPENSANS_DIR=paths.FONTS_OPENSANS_DIR,
+            FONTS_FONTAWESOME_DIR=paths.FONTS_FONTAWESOME_DIR,
             GSSAPI_SESSION_KEY=paths.GSSAPI_SESSION_KEY,
             IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET,
             IPA_CCACHES=paths.IPA_CCACHES,
@@ -123,7 +124,7 @@ class HTTPInstance(service.Service):
         self.step("disabling nss.conf", self.disable_nss_conf)
         self.step("configuring mod_ssl certificate paths",
                   self.configure_mod_ssl_certs)
-        self.step("setting mod_ssl protocol list to TLSv1.0 - TLSv1.2",
+        self.step("setting mod_ssl protocol list",
                   self.set_mod_ssl_protocol)
         self.step("configuring mod_ssl log directory",
                   self.set_mod_ssl_logdir)
@@ -275,7 +276,9 @@ class HTTPInstance(service.Service):
 
     def disable_nss_conf(self):
         """
-        Backs up and removes the original nss.conf file.
+        Backs up the original nss.conf file and replace it with the empty one.
+        Empty file avoids recreation of nss.conf in case the package is
+        reinstalled.
 
         There is no safe way to co-exist since there is no safe port
         to make mod_nss use, disable it completely.
@@ -285,12 +288,11 @@ class HTTPInstance(service.Service):
             # (mod_nss -> mod_ssl upgrade scenario)
             if not self.fstore.has_file(paths.HTTPD_NSS_CONF):
                 self.fstore.backup_file(paths.HTTPD_NSS_CONF)
-            installutils.remove_file(paths.HTTPD_NSS_CONF)
+
+        open(paths.HTTPD_NSS_CONF, 'w').close()
 
     def set_mod_ssl_protocol(self):
-        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
-                                   'SSLProtocol',
-                                   '+TLSv1 +TLSv1.1 +TLSv1.2', False)
+        tasks.configure_httpd_protocol()
 
     def set_mod_ssl_logdir(self):
         tasks.setup_httpd_logging()

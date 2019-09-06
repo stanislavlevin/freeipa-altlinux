@@ -35,7 +35,7 @@ from six.moves.urllib.parse import urlparse, urlunparse
 # pylint: enable=import-error
 
 from ipalib import api, errors, x509, createntp
-from ipalib.constants import IPAAPI_USER
+from ipalib.constants import IPAAPI_USER, MAXHOSTNAMELEN
 from ipalib.install import certmonger, certstore, service, sysrestore
 from ipalib.install import hostname as hostname_
 from ipalib.install.kinit import kinit_keytab, kinit_password
@@ -44,13 +44,16 @@ from ipalib.rpc import delete_persistent_client_session_data
 from ipalib.util import (
     normalize_hostname,
     no_matching_interface_for_ip_address_warning,
+    validate_hostname,
     verify_host_resolvable,
 )
 from ipaplatform import services
+from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
 from ipapython import certdb, kernel_keyring, ipaldap, ipautil, ntpmethods
 from ipapython.ntpmethods import detect_time_server
+from ipapython.ntpmethods import get_time_source
 from ipapython.admintool import ScriptError
 from ipapython.dn import DN
 from ipapython.install import typing
@@ -1039,8 +1042,13 @@ def sssd_enable_service(sssdconfig, name):
     return sssdconfig.get_service(name)
 
 
-def sssd_enable_ifp(sssdconfig):
+def sssd_enable_ifp(sssdconfig, allow_httpd=False):
     """Enable and configure libsss_simpleifp plugin
+
+    Allow the ``ipaapi`` user to access IFP. In case allow_httpd is true,
+    the Apache HTTPd user is also allowed to access IFP. For smart card
+    authentication, mod_lookup_identity must be allowed to access user
+    information.
     """
     service = sssd_enable_service(sssdconfig, 'ifp')
     if service is None:
@@ -1059,6 +1067,8 @@ def sssd_enable_ifp(sssdconfig):
         uids.add('root')
     # allow IPA API to access IFP
     uids.add(IPAAPI_USER)
+    if allow_httpd:
+        uids.add(constants.HTTPD_USER)
     service.set_option('allowed_uids', ', '.join(sorted(uids)))
     sssdconfig.save_service(service)
 
@@ -1555,12 +1565,13 @@ def update_ssh_keys(hostname, ssh_dir, create_sshfp):
             continue
 
         for line in f:
-            line = line[:-1].lstrip()
+            line = line.strip()
             if not line or line.startswith('#'):
                 continue
             try:
                 pubkey = SSHPublicKey(line)
-            except (ValueError, UnicodeDecodeError):
+            except (ValueError, UnicodeDecodeError) as e:
+                logger.debug("Decoding line '%s' failed: %s", line, e)
                 continue
             logger.info("Adding SSH public key from %s", filename)
             pubkeys.append(pubkey)
@@ -2079,10 +2090,12 @@ def install_check(options):
         try:
             ntpmethods.check_timedate_services()
         except ntpmethods.NTPConflictingService as e:
-            print("WARNING: conflicting time&date synchronization service '{}'"
-                  " will be disabled".format(e.conflicting_service))
-            print("in favor of {}".format(detect_time_server()))
-            print("")
+            print(
+                "WARNING: conflicting time&date synchronization service "
+                "'{}' will be disabled in favor of {}\n".format(
+                    e.conflicting_service, detect_time_server()
+                )
+            )
         except ntpmethods.NTPConfigurationError:
             pass
 
@@ -2112,6 +2125,13 @@ def install_check(options):
     if hostname in ('localhost', 'localhost.localdomain'):
         raise ScriptError(
             "Invalid hostname, '{}' must not be used.".format(hostname),
+            rval=CLIENT_INSTALL_ERROR)
+
+    try:
+        validate_hostname(hostname, maxlen=MAXHOSTNAMELEN)
+    except ValueError as e:
+        raise ScriptError(
+            'invalid hostname: {}'.format(e),
             rval=CLIENT_INSTALL_ERROR)
 
     # --no-sssd is not supported any more for rhel-based distros
@@ -2361,6 +2381,11 @@ def install_check(options):
                 "Proceed with fixed values and no DNS discovery?", False):
             raise ScriptError(rval=CLIENT_INSTALL_ERROR)
 
+    if options.conf_ntp:
+        if not options.on_master and not options.unattended and not (
+                options.ntp_servers or options.ntp_pool):
+            options.ntp_servers, options.ntp_pool = get_time_source()
+
     cli_realm = ds.realm
     cli_realm_source = ds.realm_source
     logger.debug("will use discovered realm: %s", cli_realm)
@@ -2387,6 +2412,14 @@ def install_check(options):
     logger.debug("IPA Server source: %s", cli_server_source)
     logger.info("BaseDN: %s", cli_basedn)
     logger.debug("BaseDN source: %s", cli_basedn_source)
+
+    if not options.on_master:
+        if options.ntp_servers:
+            for server in options.ntp_servers:
+                logger.info("NTP server: %s", server)
+
+        if options.ntp_pool:
+            logger.info("NTP pool: %s", options.ntp_pool)
 
     # ipa-join would fail with IP address instead of a FQDN
     for srv in cli_server:
@@ -3102,9 +3135,13 @@ def uninstall_check(options):
     fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
 
     if not is_ipa_client_installed(fstore):
+        if options.on_master:
+            rval = SUCCESS
+        else:
+            rval = CLIENT_NOT_CONFIGURED
         raise ScriptError(
             "IPA client is not configured on this system.",
-            rval=CLIENT_NOT_CONFIGURED)
+            rval=rval)
 
     server_fstore = sysrestore.FileStore()
     if server_fstore.has_files() and not options.on_master:
@@ -3651,6 +3688,7 @@ class ClientInstallInterface(hostname_.HostNameInstallInterface,
 
     request_cert = knob(
         None,
+        deprecated=True,
         description="request certificate for the machine",
     )
     request_cert = prepare_only(request_cert)
@@ -3663,7 +3701,10 @@ class ClientInstallInterface(hostname_.HostNameInstallInterface,
                 "--server cannot be used without providing --domain")
 
         if self.force_ntpd:
-            logger.warning("Option --force-ntpd has been deprecated")
+            logger.warning(
+                "Option --force-ntpd has been deprecated and will be "
+                "removed in a future release."
+            )
 
         if self.ntp_servers and self.no_ntp:
             raise RuntimeError(
@@ -3672,6 +3713,12 @@ class ClientInstallInterface(hostname_.HostNameInstallInterface,
         if self.ntp_pool and self.no_ntp:
             raise RuntimeError(
                 "--ntp-pool cannot be used together with --no-ntp")
+
+        if self.request_cert:
+            logger.warning(
+                "Option --request-cert has been deprecated and will be "
+                "removed in a future release."
+            )
 
         if self.no_nisdomain and self.nisdomain:
             raise RuntimeError(

@@ -23,7 +23,8 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     ETC_ALTLINUX_RELEASE = "/etc/altlinux-release"
     ETC_HOSTNAME = "/etc/hostname"
     ETC_HTTPD_DIR = "/etc/httpd2"
-    FONTS_AWESOME_DIR = "/usr/share/fonts-font-awesome"
+    FONTS_OPENSANS_DIR = "/usr/share/fonts/ttf/open-sans"
+    FONTS_FONTAWESOME_DIR = "/usr/share/fonts-font-awesome/fonts"
     HTTPD_DEFAULT_STARTED_SITE_CONF = (
         "/etc/httpd2/conf/sites-start.d/000-default.conf"
     )
@@ -76,7 +77,6 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     NTPDATE = "/usr/sbin/ntpdate"
     IPA_CUSTODIA_SOCKET = "/run/httpd2/ipa-custodia.sock"
     OLD_KRA_AGENT_PEM = "/etc/httpd2/conf/nss/kra-agent.pem"
-    RESOLVCONF_CONF = "/etc/resolvconf.conf"
     VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/kerberos/krb5kdc/"
     VAR_KRB5KDC_K5_REALM = "/var/lib/kerberos/krb5kdc/.k5."
     CACERT_PEM = "/var/lib/kerberos/krb5kdc/cacert.pem"
