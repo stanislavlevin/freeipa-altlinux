@@ -492,6 +492,7 @@ git checkout -b "patch"
 grep -rl 8080 | xargs sed -i 's/\(\W\|^\)8080\(\W\|$\)/\18090\2/g'
 
 %if_with lint
+git add .
 git commit -am 'with our changes'
 %endif
 
