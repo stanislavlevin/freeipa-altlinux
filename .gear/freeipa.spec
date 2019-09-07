@@ -98,6 +98,7 @@ BuildRequires: python3-module-sss_nss_idmap
 
 %if_with fasttest
 BuildRequires: keyutils
+BuildRequires: systemd
 %endif
 
 #
