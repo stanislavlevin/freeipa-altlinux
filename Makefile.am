@@ -224,11 +224,15 @@ endif
 fasttest: $(GENERATED_PYTHON_FILES) ipasetup.py
 	@ # --ignore doubles speed of total test run compared to pytest.skip()
 	@ # on module.
+	@ # __init__.py breaks import of existing namespace packages:
+	@ # there could be installed python ipa on system
+	mv -f ipaplatform/__init__.py ipaplatform/__init__.py.backup ||: ; \
 	PATH=$(abspath ipatests):$$PATH PYTHONPATH=$(abspath $(top_srcdir)) \
 	    $(PYTHON3) ipatests/ipa-run-tests \
 	    --skip-ipaapi \
 	    --ignore $(abspath $(top_srcdir))/ipatests/test_integration \
 	    --ignore $(abspath $(top_srcdir))/ipatests/test_xmlrpc
+	mv -f ipaplatform/__init__.py.backup ipaplatform/__init__.py ||:
 
 fastlint: $(GENERATED_PYTHON_FILES) ipasetup.py
 if ! WITH_PYLINT
