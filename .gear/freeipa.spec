@@ -864,20 +864,20 @@ fi
 %dir %_sysconfdir/ipa/html
 %config(noreplace) %_sysconfdir/ipa/html/ssbrowser.html
 %config(noreplace) %_sysconfdir/ipa/html/unauthorized.html
-%ghost %attr(0644,root,apache2) %config(noreplace) %apache2_sites_available/ipa.conf
-%ghost %attr(0644,root,apache2) %config(noreplace) %apache2_extra_enabled/ipa-rewrite.conf
-%ghost %attr(0644,root,apache2) %config(noreplace) %apache2_extra_enabled/ipa-kdc-proxy.conf
-%ghost %attr(0644,root,apache2) %config(noreplace) %apache2_extra_enabled/ipa-pki-proxy.conf
-%ghost %attr(0644,root,apache2) %config(noreplace) %_sysconfdir/ipa/kdcproxy/ipa-kdc-proxy.conf
-%ghost %attr(0644,root,apache2) %config(noreplace) %_datadir/ipa/html/ca.crt
-%ghost %attr(0644,root,apache2) %_datadir/ipa/html/krb.con
-%ghost %attr(0644,root,apache2) %_datadir/ipa/html/krb5.ini
-%ghost %attr(0644,root,apache2) %_datadir/ipa/html/krbrealm.con
+%ghost %attr(0644,root,root) %config(noreplace) %apache2_sites_available/ipa.conf
+%ghost %attr(0644,root,root) %config(noreplace) %apache2_extra_enabled/ipa-rewrite.conf
+%ghost %attr(0644,root,root) %config(noreplace) %apache2_extra_enabled/ipa-kdc-proxy.conf
+%ghost %attr(0644,root,root) %config(noreplace) %apache2_extra_enabled/ipa-pki-proxy.conf
+%ghost %attr(0644,root,root) %config(noreplace) %_sysconfdir/ipa/kdcproxy/ipa-kdc-proxy.conf
+%ghost %attr(0644,root,root) %config(noreplace) %_datadir/ipa/html/ca.crt
+%ghost %attr(0644,root,root) %_datadir/ipa/html/krb.con
+%ghost %attr(0644,root,root) %_datadir/ipa/html/krb5.ini
+%ghost %attr(0644,root,root) %_datadir/ipa/html/krbrealm.con
 %dir %_datadir/ipa/updates/
 %_datadir/ipa/updates/*
 %dir %_sharedstatedir/ipa
 %attr(700,root,root) %dir %_sharedstatedir/ipa/backup
-%ghost %dir %_sharedstatedir/ipa/gssproxy
+%ghost %attr(770,root,_gssproxy) %dir %_sharedstatedir/ipa/gssproxy
 %attr(711,root,root) %dir %_sharedstatedir/ipa/sysrestore
 %attr(700,root,root) %dir %_sharedstatedir/ipa/sysupgrade
 %attr(755,root,root) %dir %_sharedstatedir/ipa/pki-ca
@@ -886,8 +886,8 @@ fi
 %attr(700,root,root) %dir %_sharedstatedir/ipa/passwds
 %attr(770,root,named) %dir %_sharedstatedir/bind/data
 %attr(770,root,named) %dir %_sharedstatedir/bind/dynamic
-%ghost %_sharedstatedir/ipa/pki-ca/publish
-%ghost %_sharedstatedir/bind/zone/dyndb-ldap/ipa
+%ghost %attr(775,root,pkiuser) %_sharedstatedir/ipa/pki-ca/publish
+%ghost %attr(770,named,named) %_sharedstatedir/bind/zone/dyndb-ldap/ipa
 
 %dir %attr(0700,root,root) %_sysconfdir/ipa/custodia
 %dir %_datadir/ipa/schema.d
@@ -962,19 +962,19 @@ fi
 
 %files client-common
 %dir %attr(0755,root,root) %_sysconfdir/ipa/
-%ghost %attr(0644,root,apache2) %config(noreplace) %_sysconfdir/ipa/default.conf
-%ghost %attr(0644,root,apache2) %config(noreplace) %_sysconfdir/ipa/ca.crt
+%ghost %attr(0644,root,root) %config(noreplace) %_sysconfdir/ipa/default.conf
+%ghost %attr(0644,root,root) %config(noreplace) %_sysconfdir/ipa/ca.crt
 %dir %attr(0755,root,root) %_sysconfdir/ipa/nssdb
 # old dbm format
-%ghost %config(noreplace) %_sysconfdir/ipa/nssdb/cert8.db
-%ghost %config(noreplace) %_sysconfdir/ipa/nssdb/key3.db
-%ghost %config(noreplace) %_sysconfdir/ipa/nssdb/secmod.db
+%ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/cert8.db
+%ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/key3.db
+%ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/secmod.db
 # new sql format
-%ghost %config(noreplace) %_sysconfdir/ipa/nssdb/cert9.db
-%ghost %config(noreplace) %_sysconfdir/ipa/nssdb/key4.db
-%ghost %config(noreplace) %_sysconfdir/ipa/nssdb/pkcs11.txt
-%ghost %config(noreplace) %_sysconfdir/ipa/nssdb/pwdfile.txt
-%ghost %config(noreplace) %_sysconfdir/pki/ca-trust/source/ipa.p11-kit
+%ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/cert9.db
+%ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/key4.db
+%ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/pkcs11.txt
+%ghost %attr(600,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/pwdfile.txt
+%ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/pki/ca-trust/source/ipa.p11-kit
 %dir %_sharedstatedir/ipa-client
 %dir %_sharedstatedir/ipa-client/pki
 %dir %_sharedstatedir/ipa-client/sysrestore
