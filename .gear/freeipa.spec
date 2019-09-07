@@ -766,6 +766,7 @@ fi
 %_sbindir/ipa-winsync-migrate
 %_sbindir/ipa-pkinit-manage
 %_sbindir/ipa-crlgen-manage
+%_sbindir/ipa-cert-fix
 %_libexecdir/certmonger/dogtag-ipa-ca-renew-agent-submit
 %_libexecdir/certmonger/ipa-server-guard
 %dir %_libexecdir/ipa
@@ -825,6 +826,7 @@ fi
 %_man1dir/ipa-winsync-migrate.1*
 %_man1dir/ipa-pkinit-manage.1*
 %_man1dir/ipa-crlgen-manage.1*
+%_man1dir/ipa-cert-fix.1*
 %_man8dir/ipactl.8*
 
 %_rpmlibdir/freeipa-server.filetrigger
