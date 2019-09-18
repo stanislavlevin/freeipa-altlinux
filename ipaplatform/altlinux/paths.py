@@ -60,6 +60,7 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     NAMED_ROOT_KEY = "/etc/bind.keys"
     NAMED_BINDKEYS_FILE = "/etc/bind.keys"
     NAMED_MANAGED_KEYS_DIR = "/var/lib/bind/dynamic"
+    NAMED_RNDC_CONF = "/etc/bind/rndc.conf"
     NAMED_PID = "/var/run/named.pid"
     SYSCONFIG_NAMED = "/etc/sysconfig/bind"
     BIND_LDAP_DNS_IPA_WORKDIR = "/var/lib/bind/zone/dyndb-ldap/ipa/"

@@ -805,12 +805,14 @@ class BindInstance(service.Service):
             logger.debug("Unable to mask named (%s)", e)
 
     def __setup_sub_dict(self):
-        if paths.NAMED_CRYPTO_POLICY_FILE is not None:
-            crypto_policy = 'include "{}";'.format(
-                paths.NAMED_CRYPTO_POLICY_FILE
-            )
-        else:
-            crypto_policy = "// not available"
+        named_includes = {
+            'crypto_policy': paths.NAMED_CRYPTO_POLICY_FILE,
+            'rndc_conf': paths.NAMED_RNDC_CONF,
+        }
+        com = "// not available"
+        inc = 'include "{}";'
+        named_includes = {x: inc.format(y) if y is not None else com
+                          for x, y in named_includes.items()}
 
         self.sub_dict = dict(
             FQDN=self.fqdn,
@@ -824,7 +826,8 @@ class BindInstance(service.Service):
             NAMED_PID=paths.NAMED_PID,
             NAMED_VAR_DIR=paths.NAMED_VAR_DIR,
             BIND_LDAP_SO=paths.BIND_LDAP_SO,
-            INCLUDE_CRYPTO_POLICY=crypto_policy,
+            INCLUDE_CRYPTO_POLICY=named_includes['crypto_policy'],
+            INCLUDE_RNDC_CONF=named_includes['rndc_conf'],
             NAMED_DATA_DIR=constants.NAMED_DATA_DIR,
             NAMED_ZONE_COMMENT=constants.NAMED_ZONE_COMMENT,
         )

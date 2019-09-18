@@ -45,6 +45,7 @@ ${NAMED_ZONE_COMMENT}};
 
 include "$RFC1912_ZONES";
 include "$ROOT_KEY";
+$INCLUDE_RNDC_CONF
 
 /* WARNING: This part of the config file is IPA-managed.
  * Modifications may break IPA setup or upgrades.
