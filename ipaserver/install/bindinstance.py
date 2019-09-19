@@ -726,6 +726,9 @@ class BindInstance(service.Service):
                     None):
                 installutils.add_record_to_hosts(str(ip_address), self.fqdn)
 
+        # Make sure generate-rndc-key.sh runs before named restart
+        self.step("generating rndc key file", self.__generate_rndc_key)
+
         if self.first_instance:
             self.step("adding DNS container", self.__setup_dns_container)
 
@@ -1043,8 +1046,12 @@ class BindInstance(service.Service):
         self.sstore.backup_state('control', 'bind-chroot', result.output)
         ipautil.run(['control', 'bind-chroot', 'disabled'])
 
-    def add_master_dns_records(self, fqdn, ip_addresses, realm_name,
-                               domain_name, reverse_zones):
+    def __generate_rndc_key(self):
+        installutils.check_entropy()
+        ipautil.run([paths.GENERATE_RNDC_KEY])
+
+    def add_master_dns_records(self, fqdn, ip_addresses, realm_name, domain_name,
+                               reverse_zones):
         self.fqdn = fqdn
         self.ip_addresses = ip_addresses
         self.realm = realm_name
