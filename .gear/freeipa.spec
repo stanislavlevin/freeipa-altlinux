@@ -27,16 +27,19 @@
 %define etc_systemd_dir %_sysconfdir/systemd/system
 
 # versions defines
-%define bind_version 9.11
+%define bind_version 9.11.10-alt2
 %define bind_dyndb_ldap_version 11.1-alt7
 %define certmonger_version 0.79.7
 %define ds_version 1.4.1.6
 %define gssproxy_version 0.8.0-alt2
 %define krb5_version 1.16.3
+%define libp11_version 0.4.10-alt2
+%define opendnssec_version 1.4.14-alt4
 %define pki_version 10.7.3
 %define python_ldap_version 3.2.0
 %define samba_version 4.7.6
 %define slapi_nis_version 0.56.3
+%define softhsm_version 2.5.0-alt2
 %define sssd_version 1.16.3
 %define openldap_version 2.4.47-alt2
 
@@ -115,7 +118,7 @@ BuildRequires: python3(wheel)
 #
 %if_with lint
 BuildRequires: git-core
-BuildRequires: softhsm
+BuildRequires: softhsm >= %softhsm_version
 BuildRequires: jsl
 
 BuildRequires: python3-module-augeas
@@ -177,7 +180,7 @@ Requires: certmonger >= %certmonger_version
 Requires: 389-ds-base >= %ds_version
 Requires: 389-ds-base-legacy-tools >= %ds_version
 Requires: openssl
-Requires: softhsm
+Requires: softhsm >= %softhsm_version
 Requires: libp11-kit
 Requires: gzip
 Requires: oddjob
@@ -266,7 +269,8 @@ Requires: %name-server = %EVR
 Requires: bind-dyndb-ldap >= %bind_dyndb_ldap_version
 Requires: bind >= %bind_version
 Requires: bind-utils >= %bind_version
-Requires: opendnssec
+Requires: opendnssec >= %opendnssec_version
+Requires: libp11 >= %libp11_version
 
 # upgrade path from monolithic -server to -server + -server-dns
 Obsoletes: %name-server <= 4.2.0
