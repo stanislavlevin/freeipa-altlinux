@@ -494,7 +494,7 @@ class DsInstance(service.Service):
                 ('cn', 'config')),
             objectclass=["top", "nsSaslMapping"],
             cn=["Full Principal"],
-            nsSaslMapRegexString=['\(.*\)@\(.*\)'],
+            nsSaslMapRegexString=[r'\(.*\)@\(.*\)'],
             nsSaslMapBaseDNTemplate=[self.suffix],
             nsSaslMapFilterTemplate=['(krbPrincipalName=\\1@\\2)'],
             nsSaslMapPriority=['10'],

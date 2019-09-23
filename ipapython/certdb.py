@@ -549,7 +549,7 @@ class NSSDatabase(object):
         chain = result.output.splitlines()
 
         for c in chain:
-            m = re.match('\s*"(.*)" \[.*', c)
+            m = re.match(r'\s*"(.*)" \[.*', c)
             if m:
                 root_nicknames.append(m.groups()[0])
 

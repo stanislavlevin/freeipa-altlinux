@@ -190,7 +190,7 @@ def assert_not_equal(val1, val2):
 
 
 class Fuzzy(object):
-    """
+    r"""
     Perform a fuzzy (non-strict) equality tests.
 
     `Fuzzy` instances will likely be used when comparing nesting
