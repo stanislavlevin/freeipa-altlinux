@@ -1,4 +1,11 @@
 #!/bin/bash -ex
+
+cat /etc/hosts
+echo -e '127.0.0.1 localhost\n::1 localhost\n' > /etc/hosts
+cat /etc/resolv.conf
+echo 'nameserver 8.8.8.8' > /etc/resolv.conf
+cat /etc/hostname
+
 server_realm=EXAMPLE.TEST
 server_domain=example.test
 server_password=Secret123
