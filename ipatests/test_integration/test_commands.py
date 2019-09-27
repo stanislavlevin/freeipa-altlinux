@@ -22,6 +22,7 @@ from cryptography import x509
 
 from ipalib.constants import IPAAPI_USER
 
+from ipaplatform.constants import constants as platformconstants
 from ipaplatform.paths import paths
 
 from ipapython.dn import DN
@@ -264,7 +265,7 @@ class TestIPACommand(IntegrationTest):
         An update file meant to ensure a more sane default was
         overriding any customization done to the order.
         """
-        maporder = "unconfined_u:s0-s0:c0.c1023"
+        maporder = platformconstants.SELINUX_USERMAP_DEFAULT
 
         # set a new default
         tasks.kinit_admin(self.master)
