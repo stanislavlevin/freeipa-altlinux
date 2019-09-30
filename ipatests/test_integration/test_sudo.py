@@ -24,7 +24,7 @@ from ipaplatform.paths import paths
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration.tasks import (
     clear_sssd_cache, get_host_ip_with_hostmask, remote_sssd_config,
-    FileBackup)
+    FileBackup, get_platform)
 
 class TestSudo(IntegrationTest):
     """
@@ -159,6 +159,9 @@ class TestSudo(IntegrationTest):
         "any", reason="NISDOMAIN cannot be set in containerized environment"
     )
     def test_nisdomainname(self):
+        platform = get_platform(self.client)
+        if platform == 'altlinux':
+            pytest.skip("ALT Linux doesn't use NIS")
         result = self.client.run_command('nisdomainname')
         assert self.client.domain.name in result.stdout_text
 
