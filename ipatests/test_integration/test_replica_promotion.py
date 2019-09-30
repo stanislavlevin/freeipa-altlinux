@@ -4,6 +4,7 @@
 
 from __future__ import absolute_import
 
+import os
 import time
 import re
 from tempfile import NamedTemporaryFile
@@ -561,8 +562,9 @@ class TestSubCAkeyReplication(IntegrationTest):
         master = self.master
         replica = self.replicas[0]
 
-        TEST_KEY_FILE = '/etc/pki/tls/private/test_subca.key'
-        TEST_CRT_FILE = '/etc/pki/tls/private/test_subca.crt'
+        OPENSSL_PRIV_DIR = os.path.join(paths.OPENSSL_DIR, "private")
+        TEST_KEY_FILE = os.path.join(OPENSSL_PRIV_DIR, 'test_subca.key')
+        TEST_CRT_FILE = os.path.join(OPENSSL_PRIV_DIR, 'test_subca.crt')
 
         caacl_cmd = [
             'ipa', 'caacl-add-ca', 'hosts_services_caIPAserviceCert',

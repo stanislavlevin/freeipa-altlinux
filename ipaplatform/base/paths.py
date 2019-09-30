@@ -195,6 +195,7 @@ class BasePathNamespace(object):
     ODS_ENFORCER = None
     ODS_ENFORCER_DB_SETUP = None
     OPENSSL = "/usr/bin/openssl"
+    OPENSSL_DIR = "/etc/pki/tls"
     PK12UTIL = "/usr/bin/pk12util"
     SOFTHSM2_UTIL = "/usr/bin/softhsm2-util"
     SSLGET = "/usr/bin/sslget"

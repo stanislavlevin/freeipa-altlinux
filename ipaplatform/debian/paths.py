@@ -41,6 +41,7 @@ class DebianPathNamespace(BasePathNamespace):
     NAMED_MANAGED_KEYS_DIR = "/var/cache/bind/dynamic"
     CHRONY_CONF = "/etc/chrony/chrony.conf"
     OPENLDAP_LDAP_CONF = "/etc/ldap/ldap.conf"
+    OPENSSL_DIR = "/usr/lib/ssl"
     ETC_DEBIAN_VERSION = "/etc/debian_version"
     IPA_P11_KIT = "/usr/local/share/ca-certificates/ipa-ca.crt"
     ETC_SYSCONFIG_DIR = "/etc/default"

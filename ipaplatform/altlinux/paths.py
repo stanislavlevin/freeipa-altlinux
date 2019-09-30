@@ -78,6 +78,7 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     NTPDATE = "/usr/sbin/ntpdate"
     IPA_CUSTODIA_SOCKET = "/run/httpd2/ipa-custodia.sock"
     OLD_KRA_AGENT_PEM = "/etc/httpd2/conf/nss/kra-agent.pem"
+    OPENSSL_DIR = "/var/lib/ssl"
     VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/kerberos/krb5kdc/"
     VAR_KRB5KDC_K5_REALM = "/var/lib/kerberos/krb5kdc/.k5."
     CACERT_PEM = "/var/lib/kerberos/krb5kdc/cacert.pem"
