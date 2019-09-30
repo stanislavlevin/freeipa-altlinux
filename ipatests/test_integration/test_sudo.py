@@ -153,6 +153,9 @@ class TestSudo(IntegrationTest):
             assert result1.returncode == 0 and result2.returncode == 0,\
                 'rules cleanup failed'
 
+    @pytest.mark.xfail(
+        osinfo.id == 'altlinux',
+        reason="ALT Linux doesn't use NIS", strict=True)
     def test_nisdomainname(self):
         result = self.client.run_command('nisdomainname')
         assert self.client.domain.name in result.stdout_text
