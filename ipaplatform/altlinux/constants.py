@@ -23,6 +23,8 @@ class ALTLinuxConstantsNamespace(BaseConstantsNamespace):
     ODS_GROUP = "_opendnssec"
     SSSD_USER = "_sssd"
     NAMED_DATA_DIR = "/var/lib/bind/data/"
+    NAMED_OPTIONS_VAR = "EXTRAOPTIONS"
+    NAMED_SSL_ENGINE = "pkcs11"
     NAMED_ZONE_COMMENT = "//"
     # ntpd init variable used for daemon options
     NTPD_OPTS_VAR = "NTPD_ARGS"

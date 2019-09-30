@@ -458,6 +458,7 @@ Summary: IPA tests and test tools
 Group: System/Base
 Requires: python3-module-ipaclient = %EVR
 Requires: python3-module-ipaserver = %EVR
+Requires: drill
 Requires: tar
 Requires: xz
 Requires: python3-module-coverage

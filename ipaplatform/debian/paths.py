@@ -42,6 +42,7 @@ class DebianPathNamespace(BasePathNamespace):
     CHRONY_CONF = "/etc/chrony/chrony.conf"
     OPENLDAP_LDAP_CONF = "/etc/ldap/ldap.conf"
     OPENSSL_DIR = "/usr/lib/ssl"
+    OPENSSL_CONF = "/usr/lib/ssl/openssl.cnf"
     ETC_DEBIAN_VERSION = "/etc/debian_version"
     IPA_P11_KIT = "/usr/local/share/ca-certificates/ipa-ca.crt"
     ETC_SYSCONFIG_DIR = "/etc/default"

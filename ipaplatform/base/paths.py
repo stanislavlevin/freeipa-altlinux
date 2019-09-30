@@ -72,6 +72,7 @@ class BasePathNamespace(object):
     IPA_DEFAULT_CONF = "/etc/ipa/default.conf"
     IPA_DNSKEYSYNCD_KEYTAB = "/etc/ipa/dnssec/ipa-dnskeysyncd.keytab"
     IPA_ODS_EXPORTER_KEYTAB = "/etc/ipa/dnssec/ipa-ods-exporter.keytab"
+    DNSSEC_OPENSSL_CONF = None
     DNSSEC_SOFTHSM2_CONF = "/etc/ipa/dnssec/softhsm2.conf"
     DNSSEC_SOFTHSM_PIN_SO = "/etc/ipa/dnssec/softhsm_pin_so"
     IPA_NSSDB_DIR = "/etc/ipa/nssdb"
@@ -197,6 +198,7 @@ class BasePathNamespace(object):
     ODS_ENFORCER_DB_SETUP = None
     OPENSSL = "/usr/bin/openssl"
     OPENSSL_DIR = "/etc/pki/tls"
+    OPENSSL_CONF = "/etc/pki/tls/openssl.cnf"
     PK12UTIL = "/usr/bin/pk12util"
     SOFTHSM2_UTIL = "/usr/bin/softhsm2-util"
     SSLGET = "/usr/bin/sslget"
