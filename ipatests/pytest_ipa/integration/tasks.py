@@ -311,6 +311,21 @@ def enable_replication_debugging(host, log_level=0):
                      stdin_text=logging_ldif)
 
 
+def enable_db_lock_minwrite(host):
+    logger.info('Set LDAP DB lock type to DB_LOCK_MINWRITE')
+    logging_ldif = textwrap.dedent("""
+        dn: cn=config,cn=ldbm database,cn=plugins,cn=config
+        changetype: modify
+        replace: nsslapd-db-deadlock-policy
+        nsslapd-db-deadlock-policy: 6
+        """)
+    host.run_command(['ldapmodify', '-x',
+                      '-D', str(host.config.dirman_dn),
+                      '-w', host.config.dirman_password,
+                      ],
+                     stdin_text=logging_ldif)
+
+
 def set_default_ttl_for_ipa_dns_zone(host, raiseonerr=True):
     args = [
         'ipa', 'dnszone-mod', host.domain.name,
@@ -363,6 +378,7 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
     if result.returncode == 0 and not external_ca:
         # external CA step 1 doesn't have DS and KDC fully configured, yet
         enable_replication_debugging(host)
+        enable_db_lock_minwrite(host)
         setup_sssd_debugging(host)
         kinit_admin(host)
         if setup_dns:
@@ -485,6 +501,7 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
                                  stdin_text=stdin_text)
     if result.returncode == 0:
         enable_replication_debugging(replica)
+        enable_db_lock_minwrite(replica)
         setup_sssd_debugging(replica)
         kinit_admin(replica)
     return result
