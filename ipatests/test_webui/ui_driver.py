@@ -28,8 +28,8 @@ from datetime import datetime
 import time
 import re
 import os
+
 from functools import wraps
-import unittest
 from urllib.error import URLError
 
 import paramiko
@@ -101,8 +101,6 @@ def screenshot(fn):
     def screenshot_wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
-        except unittest.SkipTest:
-            raise
         except Exception:
             self = args[0]
             name = '%s_%s_%s' % (
@@ -148,7 +146,7 @@ class UI_driver:
     def ui_driver_setup(self, request):
         cls = request.cls
         if NO_SELENIUM:
-            raise unittest.SkipTest('Selenium not installed')
+            pytest.skip('Selenium not installed')
         cls.load_config()
 
     @pytest.fixture(autouse=True)
@@ -177,9 +175,9 @@ class UI_driver:
                 with open(path, 'r') as conf:
                     cls.config = yaml.load(conf)
             except yaml.YAMLError as e:
-                raise unittest.SkipTest("Invalid Web UI config.\n%s" % e)
+                pytest.skip("Invalid Web UI config.\n%s" % e)
             except IOError as e:
-                raise unittest.SkipTest(
+                pytest.skip(
                     "Can't load Web UI test config: %s" % e
                 )
         else:
@@ -218,7 +216,7 @@ class UI_driver:
 
         if driver_type == 'remote':
             if 'host' not in cls.config:
-                raise unittest.SkipTest('Selenium server host not configured')
+                pytest.skip('Selenium server host not configured')
             host = cls.config["host"]
 
             if browser == 'chrome':
@@ -234,11 +232,11 @@ class UI_driver:
                     command_executor='http://%s:%d/wd/hub' % (host, port),
                     desired_capabilities=capabilities)
             except URLError as e:
-                raise unittest.SkipTest(
+                pytest.skip(
                     'Error connecting to selenium server: %s' % e
                 )
             except RuntimeError as e:
-                raise unittest.SkipTest(
+                pytest.skip(
                     'Error while establishing webdriver: %s' % e
                 )
         else:
@@ -254,11 +252,11 @@ class UI_driver:
                     ff_log_path = cls.config.get("geckodriver_log_path")
                     driver = webdriver.Firefox(fp, log_path=ff_log_path)
             except URLError as e:
-                raise unittest.SkipTest(
+                pytest.skip(
                     'Error connecting to selenium server: %s' % e
                 )
             except RuntimeError as e:
-                raise unittest.SkipTest(
+                pytest.skip(
                     'Error while establishing webdriver: %s' % e
                 )
 
@@ -1991,7 +1989,7 @@ class UI_driver:
         """
         Skip tests
         """
-        raise unittest.SkipTest(reason)
+        pytest.skip(reason)
 
     def assert_text(self, selector, value, parent=None):
         """
