@@ -340,17 +340,16 @@ def request_and_wait_for_cert(
             # probably unrecoverable error
             logger.debug("Giving up on cert request %s", req_id)
             break
-        elif not resubmit_timeout:
+        if not resubmit_timeout:
             # no resubmit
             break
-        elif time.time() > deadline:
+        if time.time() > deadline:
             logger.debug("Request %s reached resubmit dead line", req_id)
             break
-        else:
-            # sleep and resubmit
-            logger.debug("Sleep and resubmit cert request %s", req_id)
-            time.sleep(10)
-            resubmit_request(req_id)
+        # sleep and resubmit
+        logger.debug("Sleep and resubmit cert request %s", req_id)
+        time.sleep(10)
+        resubmit_request(req_id)
 
     raise RuntimeError(
         "Certificate issuance failed ({}: {})".format(state, ca_error)
