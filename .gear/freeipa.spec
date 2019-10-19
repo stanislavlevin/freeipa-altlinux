@@ -463,6 +463,8 @@ Requires: xz
 Requires: python3-module-coverage
 Requires: python3-module-sssdconfig >= %sssd_version
 Requires: iptables
+# Tests have a huge amount useless Provides
+%set_findprov_skiplist %python3_sitelibdir/ipatests/*
 
 %description -n python3-module-ipatests
 IPA is an integrated solution to provide centrally managed Identity (users,
