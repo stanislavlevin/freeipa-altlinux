@@ -305,6 +305,7 @@ jobs:
   parameters:
     jobName: NT_test_installation_TestInstallWithCA1
     jobTitle: [NT] test_installation_TestInstallWithCA1
+    jobTimeout: 90
     testsToRun:
     - test_integration/test_installation.py::TestInstallWithCA1
     taskToRun: run-integration-tests
@@ -315,6 +316,7 @@ jobs:
   parameters:
     jobName: NT_test_installation_TestInstallWithCA2
     jobTitle: [NT] test_installation_TestInstallWithCA2
+    jobTimeout: 90
     testsToRun:
     - test_integration/test_installation.py::TestInstallWithCA2
     taskToRun: run-integration-tests
@@ -325,6 +327,7 @@ jobs:
   parameters:
     jobName: NT_test_installation_TestInstallWithCA_KRA1
     jobTitle: [NT] test_installation_TestInstallWithCA_KRA1
+    jobTimeout: 90
     testsToRun:
     - test_integration/test_installation.py::TestInstallWithCA_KRA1
     taskToRun: run-integration-tests
@@ -335,6 +338,7 @@ jobs:
   parameters:
     jobName: NT_test_installation_TestInstallWithCA_KRA2
     jobTitle: [NT] test_installation_TestInstallWithCA_KRA2
+    jobTimeout: 90
     testsToRun:
     - test_integration/test_installation.py::TestInstallWithCA_KRA2
     taskToRun: run-integration-tests
@@ -345,6 +349,7 @@ jobs:
   parameters:
     jobName: NT_test_installation_TestInstallWithCA_DNS1
     jobTitle: [NT] test_installation_TestInstallWithCA_DNS1
+    jobTimeout: 90
     testsToRun:
     - test_integration/test_installation.py::TestInstallWithCA_DNS1
     taskToRun: run-integration-tests
@@ -355,6 +360,7 @@ jobs:
   parameters:
     jobName: NT_test_installation_TestInstallWithCA_DNS2
     jobTitle: [NT] test_installation_TestInstallWithCA_DNS2
+    jobTimeout: 90
     testsToRun:
     - test_integration/test_installation.py::TestInstallWithCA_DNS2
     taskToRun: run-integration-tests
@@ -381,6 +387,7 @@ jobs:
   parameters:
     jobName: NT_test_installation_TestInstallWithCA_KRA_DNS1
     jobTitle: [NT] test_installation_TestInstallWithCA_KRA_DNS1
+    jobTimeout: 90
     testsToRun:
     - test_integration/test_installation.py::TestInstallWithCA_KRA_DNS1
     taskToRun: run-integration-tests
@@ -391,6 +398,7 @@ jobs:
   parameters:
     jobName: NT_test_installation_TestInstallWithCA_KRA_DNS2
     jobTitle: [NT] test_installation_TestInstallWithCA_KRA_DNS2
+    jobTimeout: 90
     testsToRun:
     - test_integration/test_installation.py::TestInstallWithCA_KRA_DNS2
     taskToRun: run-integration-tests

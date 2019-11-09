@@ -1,6 +1,7 @@
 parameters:
   jobName: ''
   jobTitle: ''
+  jobTimeout: 60
   testsToIgnore: []
   testsToRun: []
   testsToDedicate: []
@@ -15,6 +16,7 @@ jobs:
   displayName: ${{ parameters.jobTitle }}
   dependsOn: Build
   condition: succeeded()
+  timeoutInMinutes: ${{ parameters.jobTimeout }}
   pool:
     vmImage: 'Ubuntu-16.04'
   strategy:
