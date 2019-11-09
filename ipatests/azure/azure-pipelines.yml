@@ -133,16 +133,16 @@ jobs:
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_installation_TestInstallMaster
-    jobTitle: GATING test_installation_TestInstallMaster
+    jobName: GT_installation_TestInstallMaster
+    jobTitle: [GT] installation_TestInstallMaster
     testsToRun:
     - test_integration/test_installation.py::TestInstallMaster
     taskToRun: run-integration-tests
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_kerberos_flags
-    jobTitle: GATING test_kerberos_flags
+    jobName: GT_kerberos_flags
+    jobTitle: [GT] kerberos_flags
     testsToRun:
     - test_integration/test_kerberos_flags.py
     taskToRun: run-integration-tests
@@ -151,8 +151,8 @@ jobs:
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_dnssec_TestInstallDNSSECFirst
-    jobTitle: GATING test_dnssec_TestInstallDNSSECFirst
+    jobName: GT_dnssec_TestInstallDNSSECFirst
+    jobTitle: [GT] dnssec_TestInstallDNSSECFirst
     testsToRun:
     - test_integration/test_dnssec.py::TestInstallDNSSECFirst
     taskToRun: run-integration-tests
@@ -161,8 +161,8 @@ jobs:
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_simple_replication
-    jobTitle: GATING test_simple_replication
+    jobName: GT_simple_replication
+    jobTitle: [GT] simple_replication
     testsToRun:
     - test_integration/test_simple_replication.py
     taskToRun: run-integration-tests
@@ -171,8 +171,8 @@ jobs:
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_caless_TestServerReplicaCALessToCAFull
-    jobTitle: GATING test_caless_TestServerReplicaCALessToCAFull
+    jobName: GT_caless_TestServerReplicaCALessToCAFull
+    jobTitle: [GT] caless_TestServerReplicaCALessToCAFull
     testsToRun:
     - test_integration/test_caless.py::TestServerReplicaCALessToCAFull
     taskToRun: run-integration-tests
@@ -181,18 +181,8 @@ jobs:
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_dnssec_TestMigrateDNSSECMaster
-    jobTitle: GATING test_dnssec_TestMigrateDNSSECMaster
-    testsToRun:
-    - test_integration/test_dnssec.py::TestMigrateDNSSECMaster
-    taskToRun: run-integration-tests
-    topology:
-      replica: 2
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GATING_test_external_ca_TestExternalCA
-    jobTitle: GATING test_external_ca_TestExternalCA
+    jobName: GT_external_ca_TestExternalCA
+    jobTitle: [GT] external_ca_TestExternalCA
     testsToRun:
     - test_integration/test_external_ca.py::TestExternalCA
     taskToRun: run-integration-tests
@@ -202,16 +192,16 @@ jobs:
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_external_ca_TestSelfExternalSelf
-    jobTitle: GATING test_external_ca_TestSelfExternalSelf
+    jobName: GT_external_ca_TestSelfExternalSelf
+    jobTitle: [GT] external_ca_TestSelfExternalSelf
     testsToRun:
     - test_integration/test_external_ca.py::TestSelfExternalSelf
     taskToRun: run-integration-tests
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_external_ca_TestExternalCAInstall
-    jobTitle: GATING test_external_ca_TestExternalCAInstall
+    jobName: GT_external_ca_TestExternalCAInstall
+    jobTitle: [GT] external_ca_TestExternalCAInstall
     testsToRun:
     - test_integration/test_external_ca.py::TestExternalCAInstall
     taskToRun: run-integration-tests
@@ -219,8 +209,8 @@ jobs:
 # requires nothing, don't install anything
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_topologies_and_testconfig
-    jobTitle: GATING test_topologies_and_testconfig
+    jobName: GT_topologies_and_testconfig
+    jobTitle: [GT] topologies_and_testconfig
     testsToRun:
     - test_integration/test_topologies.py
     - test_integration/test_testconfig.py
@@ -228,16 +218,16 @@ jobs:
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_commands
-    jobTitle: GATING test_commands
+    jobName: GT_commands
+    jobTitle: [GT] commands
     testsToRun:
     - test_integration/test_commands.py
     taskToRun: run-integration-tests
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_sudo
-    jobTitle: GATING test_sudo
+    jobName: GT_sudo
+    jobTitle: [GT] sudo
     testsToRun:
     - test_integration/test_sudo.py
     taskToRun: run-integration-tests
@@ -246,8 +236,8 @@ jobs:
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_forced_client_reenrollment
-    jobTitle: GATING test_forced_client_reenrollment
+    jobName: GT_forced_client_reenrollment
+    jobTitle: [GT] forced_client_reenrollment
     testsToRun:
     - test_integration/test_forced_client_reenrollment.py
     taskToRun: run-integration-tests
@@ -257,29 +247,253 @@ jobs:
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_service_permissions
-    jobTitle: GATING test_service_permissions
+    jobName: GT_service_permissions
+    jobTitle: [GT] service_permissions
     testsToRun:
     - test_integration/test_service_permissions.py
     taskToRun: run-integration-tests
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_netgroup
-    jobTitle: GATING test_netgroup
+    jobName: GT_netgroup
+    jobTitle: [GT] netgroup
     testsToRun:
     - test_integration/test_netgroup.py
     taskToRun: run-integration-tests
 
 - template: templates/test-jobs.yml
   parameters:
-    jobName: GATING_test_replica_promotion_TestSubCAkeyReplication
-    jobTitle: GATING test_replica_promotion_TestSubCAkeyReplication
+    jobName: GT_replica_promotion_TestSubCAkeyReplication
+    jobTitle: [GT] replica_promotion_TestSubCAkeyReplication
     testsToRun:
     - test_integration/test_replica_promotion.py::TestSubCAkeyReplication
     taskToRun: run-integration-tests
     topology:
       replica: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_dnssec_TestMigrateDNSSECMaster
+    jobTitle: [NT] test_dnssec_TestMigrateDNSSECMaster
+    testsToRun:
+    - test_integration/test_dnssec.py::TestMigrateDNSSECMaster
+    taskToRun: run-integration-tests
+    topology:
+      replica: 2
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_http_kdc_proxy
+    jobTitle: [NT] test_http_kdc_proxy
+    testsToRun:
+    - test_integration/test_http_kdc_proxy.py
+    taskToRun: run-integration-tests
+    topology:
+      client: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_vault
+    jobTitle: [NT] test_vault
+    testsToRun:
+    - test_integration/test_vault.py
+    taskToRun: run-integration-tests
+    topology:
+      replica: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallWithCA1
+    jobTitle: [NT] test_installation_TestInstallWithCA1
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallWithCA1
+    taskToRun: run-integration-tests
+    topology:
+      replica: 3
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallWithCA2
+    jobTitle: [NT] test_installation_TestInstallWithCA2
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallWithCA2
+    taskToRun: run-integration-tests
+    topology:
+      replica: 3
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallWithCA_KRA1
+    jobTitle: [NT] test_installation_TestInstallWithCA_KRA1
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallWithCA_KRA1
+    taskToRun: run-integration-tests
+    topology:
+      replica: 3
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallWithCA_KRA2
+    jobTitle: [NT] test_installation_TestInstallWithCA_KRA2
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallWithCA_KRA2
+    taskToRun: run-integration-tests
+    topology:
+      replica: 3
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallWithCA_DNS1
+    jobTitle: [NT] test_installation_TestInstallWithCA_DNS1
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallWithCA_DNS1
+    taskToRun: run-integration-tests
+    topology:
+      replica: 3
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallWithCA_DNS2
+    jobTitle: [NT] test_installation_TestInstallWithCA_DNS2
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallWithCA_DNS2
+    taskToRun: run-integration-tests
+    topology:
+      replica: 3
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallWithCA_DNS3
+    jobTitle: [NT] test_installation_TestInstallWithCA_DNS3
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallWithCA_DNS3
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallWithCA_DNS4
+    jobTitle: [NT] test_installation_TestInstallWithCA_DNS4
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallWithCA_DNS4
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallWithCA_KRA_DNS1
+    jobTitle: [NT] test_installation_TestInstallWithCA_KRA_DNS1
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallWithCA_KRA_DNS1
+    taskToRun: run-integration-tests
+    topology:
+      replica: 3
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallWithCA_KRA_DNS2
+    jobTitle: [NT] test_installation_TestInstallWithCA_KRA_DNS2
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallWithCA_KRA_DNS2
+    taskToRun: run-integration-tests
+    topology:
+      replica: 3
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallMasterKRA
+    jobTitle: [NT] test_installation_TestInstallMasterKRA
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallMasterKRA
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_installation_TestInstallMasterDNS
+    jobTitle: [NT] test_installation_TestInstallMasterDNS
+    testsToRun:
+    - test_integration/test_installation.py::TestInstallMasterDNS
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_idviews_TestIDViews
+    jobTitle: [NT] test_idviews_TestIDViews
+    testsToRun:
+    - test_integration/test_idviews.py::TestIDViews
+    taskToRun: run-integration-tests
+    topology:
+      client: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_caless_TestServerInstall
+    jobTitle: [NT] test_caless_TestServerInstall
+    testsToRun:
+    - test_integration/test_caless.py::TestServerInstall
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_caless_TestReplicaInstall
+    jobTitle: [NT] test_caless_TestReplicaInstall
+    testsToRun:
+    - test_integration/test_caless.py::TestReplicaInstall
+    taskToRun: run-integration-tests
+    topology:
+      replica: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_caless_TestClientInstall
+    jobTitle: [NT] test_caless_TestClientInstall
+    testsToRun:
+    - test_integration/test_caless.py::TestClientInstall
+    taskToRun: run-integration-tests
+    topology:
+      client: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_caless_TestIPACommands
+    jobTitle: [NT] test_caless_TestIPACommands
+    testsToRun:
+    - test_integration/test_caless.py::TestIPACommands
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_caless_TestCertInstall
+    jobTitle: [NT] test_caless_TestCertInstall
+    testsToRun:
+    - test_integration/test_caless.py::TestCertInstall
+    taskToRun: run-integration-tests
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_caless_TestPKINIT
+    jobTitle: [NT] test_caless_TestPKINIT
+    testsToRun:
+    - test_integration/test_caless.py::TestPKINIT
+    taskToRun: run-integration-tests
+    topology:
+      replica: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_caless_TestReplicaCALessToCAFull
+    jobTitle: [NT] test_caless_TestReplicaCALessToCAFull
+    testsToRun:
+    - test_integration/test_caless.py::TestReplicaCALessToCAFull
+    taskToRun: run-integration-tests
+    topology:
+      replica: 1
+
+- template: templates/test-jobs.yml
+  parameters:
+    jobName: NT_test_caless_TestServerCALessToExternalCA
+    jobTitle: [NT] test_caless_TestServerCALessToExternalCA
+    testsToRun:
+    - test_integration/test_caless.py::TestServerCALessToExternalCA
+    taskToRun: run-integration-tests
 
 - template: templates/test-jobs.yml
   parameters:
