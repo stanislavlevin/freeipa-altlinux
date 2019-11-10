@@ -443,6 +443,7 @@ jobs:
   parameters:
     jobName: NT_test_caless_TestReplicaInstall
     jobTitle: NT:caless:TestReplicaInstall
+    jobTimeout: 90
     testsToRun:
     - test_integration/test_caless.py::TestReplicaInstall
     taskToRun: run-integration-tests
