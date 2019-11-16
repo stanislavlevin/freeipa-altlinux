@@ -40,6 +40,7 @@ steps:
     cd container
     export IPA_DOCKER_IMAGE=${{ parameters.imageName }}
     export IPA_NETWORK=ipanet
+    export IPA_IPV6_SUBNET="2001:db8:1:1::/64"
     docker-compose -p $(Build.BuildId) up -d \
         --scale replica=${{ coalesce(parameters.topology.replica, 0) }} \
         --scale client=${{ coalesce(parameters.topology.client, 0) }} \

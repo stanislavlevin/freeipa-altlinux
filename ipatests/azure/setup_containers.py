@@ -6,12 +6,15 @@ from jinja2 import Template
 
 IPA_CLIENT_NUM = int(os.environ.get('IPA_CLIENT_NUM', 0))
 IPA_REPLICA_NUM = int(os.environ.get('IPA_REPLICA_NUM', 0))
-IPA_CONT_PREFIX = os.environ.get('IPA_CONT_PREFIX', '')
+IPA_CONT_PREFIX = os.environ.get('IPA_CONT_PREFIX', '1')
 IPA_TEST_DOMAIN = os.environ.get('IPA_TEST_DOMAIN', 'ipa.test')
 IPA_SSH_PRIV_KEY = os.environ.get('IPA_SSH_PRIV_KEY', '/root/.ssh/id_rsa')
 IPA_DNS_FORWARDER = os.environ.get('IPA_DNS_FORWARDER', '8.8.8.8')
 IPA_NETWORK = os.environ.get('IPA_NETWORK', 'ipanet')
 IPA_CONTROLLER = os.environ.get('IPA_CONTROLLER', 'master')
+
+CONTAINER_DIR = "container_{}".format(IPA_CONT_PREFIX)
+IPA_TEST_CONFIG = "ipa-test-config.yaml"
 
 
 class Container:
@@ -216,7 +219,7 @@ class Controller(Container):
 
         print(template.render(config))
 
-        with open('ipa-test-config.yaml', 'w') as f:
+        with open(os.path.join(CONTAINER_DIR, IPA_TEST_CONFIG), 'w') as f:
             f.write(template.render(config))
 
 

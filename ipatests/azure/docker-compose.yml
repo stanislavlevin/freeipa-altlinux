@@ -32,4 +32,4 @@ networks:
     ipam:
       driver: default
       config:
-      - subnet: "2001:db8:1::/64"
+      - subnet: ${IPA_IPV6_SUBNET}
