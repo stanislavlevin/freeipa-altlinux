@@ -67,6 +67,22 @@ class Container:
             self._ips = [self.ip(n) for n in self.names]
         return self._ips
 
+    def umount_docker_resource(self, path):
+        """
+        Umount resource by its path
+        """
+        cmd = [
+            "/bin/umount", path
+        ]
+        self.execute_all(cmd)
+
+        cmd = [
+            "/bin/chmod",
+            "a-x",
+            path,
+        ]
+        self.execute_all(cmd)
+
     def execute(self, name, args):
         """
         Exec an arbitrary command within container
@@ -97,6 +113,7 @@ class Container:
         """
         Overwrite hosts within every container of group
         """
+        self.umount_docker_resource("/etc/hosts")
         for n, i, h in zip(self.names, self.ips, self.hostnames):
             hosts = "127.0.0.1 localhost\n::1 localhost\n{ip} {host}".format(
                 ip=i, host=h,
@@ -108,6 +125,7 @@ class Container:
             self.execute(name=n, args=cmd)
 
     def setup_hostname(self):
+        self.umount_docker_resource("/etc/hostname")
         for n, h in zip(self.names, self.hostnames):
             cmd = [
                 "/bin/bash", "-c",
@@ -125,6 +143,7 @@ class Container:
         """
         Overwrite resolv conf within every container of group
         """
+        self.umount_docker_resource("/etc/resolv.conf")
         ns = "nameserver {dns}".format(dns=self.dns)
         cmd = [
             "/bin/bash", "-c",
