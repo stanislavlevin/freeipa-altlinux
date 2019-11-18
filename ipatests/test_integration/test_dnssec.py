@@ -109,6 +109,13 @@ class TestInstallDNSSECLast(IntegrationTest):
         tasks.install_master(cls.master, setup_dns=True)
         tasks.install_replica(cls.master, cls.replicas[0], setup_dns=True)
 
+    @classmethod
+    def uninstall(cls, mh):
+        # reverse uninstall order
+        for replica in cls.replicas:
+            tasks.uninstall_master(replica)
+        tasks.uninstall_master(cls.master)
+
     def test_install_dnssec_master(self):
         """Both master and replica have DNS installed"""
         args = [

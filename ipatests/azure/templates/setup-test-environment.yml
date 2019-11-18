@@ -1,8 +1,9 @@
 parameters:
   imageName: 'freeipa-fedora-builder:latest'
+  containerJobs: 1
   topology:
-    replica: 0
-    client: 0
+    replicas: 0
+    clients: 0
 
 steps:
 - script: |
@@ -32,25 +33,30 @@ steps:
     docker inspect freeipa-fedora-builder:latest
   displayName: Import pre-built container to the engine
 - script: |
-    set -e
-    mkdir container
-    cp ipatests/azure/docker-compose.yml container/
-    touch ipatests/azure/ipa-test-config.yaml
-    ln -sfr ipatests/azure/ipa-test-config.yaml container/ipa-test-config.yaml
-    cd container
-    export IPA_DOCKER_IMAGE=${{ parameters.imageName }}
-    export IPA_NETWORK=ipanet
-    export IPA_IPV6_SUBNET="2001:db8:1:1::/64"
-    docker-compose -p $(Build.BuildId) up -d \
-        --scale replica=${{ coalesce(parameters.topology.replica, 0) }} \
-        --scale client=${{ coalesce(parameters.topology.client, 0) }} \
-        --force-recreate --remove-orphans
+    set -ex
+    for project in $(seq ${{ parameters.containerJobs }}); do
+        cont_dirname="container_$project"
+        mkdir "$cont_dirname"
+        ln -sfr ipatests/azure/docker-compose.yml "$cont_dirname"/
+        touch "$cont_dirname"/ipa-test-config.yaml
+        cd "$cont_dirname"
+        export IPA_DOCKER_IMAGE="${{ parameters.imageName }}"
+        export IPA_NETWORK=ipanet
+        export IPA_IPV6_SUBNET="2001:db8:1:1::/64"
+        docker-compose -p "$project" up -d \
+            --scale replica="${{ parameters.topology.replicas }}" \
+            --scale client="${{ parameters.topology.clients }}" \
+            --force-recreate --remove-orphans
+    done
   displayName: Create and start container(s) for running tests
 - script: |
-    set -e
-    cd ./ipatests/azure
-    export IPA_CONT_PREFIX=$(Build.BuildId)
-    export IPA_CLIENT_NUM=${{ coalesce(parameters.topology.client, 0) }}
-    export IPA_REPLICA_NUM=${{ coalesce(parameters.topology.replica, 0) }}
-    python3 setup_containers.py
+    set -ex
+    ln -sfr ipatests/azure/templates ./
+    ln -sfr ipatests/azure/setup_containers.py ./
+    for project in $(seq ${{ parameters.containerJobs }}); do
+        export IPA_CONT_PREFIX="$project"
+        export IPA_CLIENT_NUM="${{ parameters.topology.clients }}"
+        export IPA_REPLICA_NUM="${{ parameters.topology.replicas }}"
+        python3 setup_containers.py
+    done
   displayName: Setup container(s) for running tests

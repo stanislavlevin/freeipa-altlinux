@@ -1,11 +1,3 @@
-schedules:
-- cron: "0 6 * * *"
-  displayName: Daily tests
-  branches:
-    include:
-    - sisyphus-ci
-  always: true
-
 variables:
   CI_RUNNER_LOGS_DIR: logs
   localsdir: $(Build.Repository.LocalPath)
@@ -131,398 +123,199 @@ jobs:
         testRunTitle: 'Web UI unit test results'
       condition: succeededOrFailed()
 
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_installation_TestInstallMaster
-    jobTitle: GT:installation:TestInstallMaster
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallMaster
-    taskToRun: run-integration-tests
+      # - template: templates/test-jobs.yml
+      #   parameters:
+      #     jobs:
+      #     - job: installation_TestInstallMaster
+      #       testsToRun:
+      #       - test_integration/test_installation.py::TestInstallMaster
+      #       - test_test.py
+      #     - job: kerberos_flags
+      #       testsToRun:
+      #       - test_integration/test_kerberos_flags.py
+      #       topology:
+      #         clients: 1
+      #     taskToRun: run-integration-tests
 
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_kerberos_flags
-    jobTitle: GT:kerberos_flags
-    testsToRun:
-    - test_integration/test_kerberos_flags.py
-    taskToRun: run-integration-tests
-    topology:
-      client: 1
 
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_dnssec_TestInstallDNSSECFirst
-    jobTitle: GT:dnssec:TestInstallDNSSECFirst
-    testsToRun:
-    - test_integration/test_dnssec.py::TestInstallDNSSECFirst
-    taskToRun: run-integration-tests
-    topology:
-      replica: 1
+- job: GATING
+  pool:
+    vmImage: 'Ubuntu-16.04'
+  dependsOn: Build
+  condition: succeeded()
+  strategy:
+    matrix:
+      installation_TestInstallMaster:
+        testsToRun: test_integration/test_installation.py::TestInstallMaster
+      kerberos_flags:
+        testsToRun: test_integration/test_kerberos_flags.py
+        testsClients: 1
+      dnssec_TestInstallDNSSECFirst:
+        testsToRun: test_integration/test_dnssec.py::TestInstallDNSSECFirst
+        testsReplicas: 1
+      simple_replication:
+        testsToRun: test_integration/test_simple_replication.py
+        testsReplicas: 1
+      caless_TestServerReplicaCALessToCAFull:
+        testsToRun: test_integration/test_caless.py::TestServerReplicaCALessToCAFull
+        testsReplicas: 1
+      external_ca_TestExternalCA:
+        testsToRun: test_integration/test_external_ca.py::TestExternalCA
+        testsReplicas: 1
+        testsClients: 1
+      external_ca_TestSelfExternalSelf:
+        testsToRun: test_integration/test_external_ca.py::TestSelfExternalSelf
+      external_ca_TestExternalCAInstall:
+        testsToRun: test_integration/test_external_ca.py::TestExternalCAInstall
+      # requires nothing, don't install anything
+      topologies_and_testconfig:
+        testsToRun: test_integration/test_topologies.py test_integration/test_testconfig.py
+      #
+      commands:
+        testsToRun: test_integration/test_commands.py
+      sudo:
+        testsToRun: test_integration/test_sudo.py
+        testsClients: 1
+      forced_client_reenrollment:
+        testsToRun: test_integration/test_forced_client_reenrollment.py
+        testsReplicas: 1
+        testsClients: 1
+      service_permissions:
+        testsToRun: test_integration/test_service_permissions.py
+      netgroup:
+        testsToRun: test_integration/test_netgroup.py
+      replica_promotion_TestSubCAkeyReplication:
+        testsToRun: test_integration/test_replica_promotion.py::TestSubCAkeyReplication
+        testsReplicas: 1
+  timeoutInMinutes: 90
 
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_simple_replication
-    jobTitle: GT:simple_replication
-    testsToRun:
-    - test_integration/test_simple_replication.py
-    taskToRun: run-integration-tests
-    topology:
-      replica: 1
+  steps:
+  - script: |
+      set -e
+      echo "##vso[task.setvariable variable=testsClients]${TESTSCLIENTS:-0}"
+      echo "##vso[task.setvariable variable=testsReplicas]${TESTSREPLICAS:-0}"
+    displayName: Generate variables
 
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_caless_TestServerReplicaCALessToCAFull
-    jobTitle: GT:caless:TestServerReplicaCALessToCAFull
-    testsToRun:
-    - test_integration/test_caless.py::TestServerReplicaCALessToCAFull
-    taskToRun: run-integration-tests
-    topology:
-      replica: 1
+  - template: templates/test-jobs.yml
+    parameters:
+      taskToRun: run-integration-tests
+      testsToRun: "$(testsToRun)"
+      topology:
+        clients: "$(testsClients)"
+        replicas: "$(testsReplicas)"
 
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_external_ca_TestExternalCA
-    jobTitle: GT:external_ca:TestExternalCA
-    testsToRun:
-    - test_integration/test_external_ca.py::TestExternalCA
-    taskToRun: run-integration-tests
-    topology:
-      replica: 1
-      client: 1
+- job: NIGHTLY
+  pool:
+    vmImage: 'Ubuntu-16.04'
+  dependsOn: GATING
+  condition: succeeded()
+  strategy:
+    matrix:
+      dnssec_TestMigrateDNSSECMaster:
+        testsToRun: test_integration/test_dnssec.py::TestMigrateDNSSECMaster
+        testsReplicas: 2
+      http_kdc_proxy:
+        testsToRun: test_integration/test_http_kdc_proxy.py
+        testsClients: 1
+      vault:
+        testsToRun: test_integration/test_vault.py
+        testsReplicas: 1
+      installation_TestInstallWithCA1:
+        testsToRun: test_integration/test_installation.py::TestInstallWithCA1
+        testsReplicas: 3
+      installation_TestInstallWithCA2:
+        testsToRun: test_integration/test_installation.py::TestInstallWithCA2
+        testsReplicas: 3
+      installation_TestInstallWithCA_KRA1:
+        testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA1
+        testsReplicas: 3
+      installation_TestInstallWithCA_KRA2:
+        testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA2
+        testsReplicas: 3
+      installation_TestInstallWithCA_DNS1:
+        testsToRun: test_integration/test_installation.py::TestInstallWithCA_DNS1
+        testsReplicas: 3
+      installation_TestInstallWithCA_DNS2:
+        testsToRun: test_integration/test_installation.py::TestInstallWithCA_DNS2
+        testsReplicas: 3
+      installation_TestInstallWithCA_DNS3:
+        testsToRun: test_integration/test_installation.py::TestInstallWithCA_DNS3
+      installation_TestInstallWithCA_DNS4:
+        testsToRun: test_integration/test_installation.py::TestInstallWithCA_DNS4
+      installation_TestInstallWithCA_KRA_DNS1:
+        testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA_DNS1
+        testsReplicas: 3
+      installation_TestInstallWithCA_KRA_DNS2:
+        testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA_DNS2
+        testsReplicas: 3
+      installation_TestInstallMasterKRA:
+        testsToRun: test_integration/test_installation.py::TestInstallMasterKRA
+      installation_TestInstallMasterDNS:
+        testsToRun: test_integration/test_installation.py::TestInstallMasterDNS
+      idviews_TestIDViews:
+        testsToRun: test_integration/test_idviews.py::TestIDViews
+        testsClients: 1
+      caless_TestServerInstall:
+        testsToRun: test_integration/test_caless.py::TestServerInstall
+      caless_TestReplicaInstall:
+        testsToRun: test_integration/test_caless.py::TestReplicaInstall
+        testsReplicas: 1
+      caless_TestClientInstall:
+        testsToRun: test_integration/test_caless.py::TestClientInstall
+        testsClients: 1
+      caless_TestIPACommands:
+        testsToRun: test_integration/test_caless.py::TestIPACommands
+      caless_TestCertInstall:
+        testsToRun: test_integration/test_caless.py::TestCertInstall
+      caless_TestPKINIT:
+        testsToRun: test_integration/test_caless.py::TestPKINIT
+        testsReplicas: 1
+      caless_TestReplicaCALessToCAFull:
+        testsToRun: test_integration/test_caless.py::TestReplicaCALessToCAFull
+        testsReplicas: 1
+      caless_TestServerCALessToExternalCA:
+        testsToRun: test_integration/test_caless.py::TestServerCALessToExternalCA
+  timeoutInMinutes: 90
 
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_external_ca_TestSelfExternalSelf
-    jobTitle: GT:external_ca:TestSelfExternalSelf
-    testsToRun:
-    - test_integration/test_external_ca.py::TestSelfExternalSelf
-    taskToRun: run-integration-tests
+  steps:
+  - script: |
+      set -e
+      echo "##vso[task.setvariable variable=testsClients]${TESTSCLIENTS:-0}"
+      echo "##vso[task.setvariable variable=testsReplicas]${TESTSREPLICAS:-0}"
+    displayName: Generate variables
 
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_external_ca_TestExternalCAInstall
-    jobTitle: GT:external_ca:TestExternalCAInstall
-    testsToRun:
-    - test_integration/test_external_ca.py::TestExternalCAInstall
-    taskToRun: run-integration-tests
+  - template: templates/test-jobs.yml
+    parameters:
+      taskToRun: run-integration-tests
+      testsToRun: "$(testsToRun)"
+      topology:
+        clients: "$(testsClients)"
+        replicas: "$(testsReplicas)"
 
-# requires nothing, don't install anything
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_topologies_and_testconfig
-    jobTitle: GT:topologies_and_testconfig
-    testsToRun:
-    - test_integration/test_topologies.py
-    - test_integration/test_testconfig.py
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_commands
-    jobTitle: GT:commands
-    testsToRun:
-    - test_integration/test_commands.py
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_sudo
-    jobTitle: GT:sudo
-    testsToRun:
-    - test_integration/test_sudo.py
-    taskToRun: run-integration-tests
-    topology:
-      client: 1
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_forced_client_reenrollment
-    jobTitle: GT:forced_client_reenrollment
-    testsToRun:
-    - test_integration/test_forced_client_reenrollment.py
-    taskToRun: run-integration-tests
-    topology:
-      replica: 1
-      client: 1
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_service_permissions
-    jobTitle: GT:service_permissions
-    testsToRun:
-    - test_integration/test_service_permissions.py
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_netgroup
-    jobTitle: GT:netgroup
-    testsToRun:
-    - test_integration/test_netgroup.py
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: GT_replica_promotion_TestSubCAkeyReplication
-    jobTitle: GT:replica_promotion:TestSubCAkeyReplication
-    testsToRun:
-    - test_integration/test_replica_promotion.py::TestSubCAkeyReplication
-    taskToRun: run-integration-tests
-    topology:
-      replica: 1
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_dnssec_TestMigrateDNSSECMaster
-    jobTitle: NT:dnssec:TestMigrateDNSSECMaster
-    testsToRun:
-    - test_integration/test_dnssec.py::TestMigrateDNSSECMaster
-    taskToRun: run-integration-tests
-    topology:
-      replica: 2
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_http_kdc_proxy
-    jobTitle: NT:http_kdc_proxy
-    testsToRun:
-    - test_integration/test_http_kdc_proxy.py
-    taskToRun: run-integration-tests
-    topology:
-      client: 1
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_vault
-    jobTitle: NT:vault
-    testsToRun:
-    - test_integration/test_vault.py
-    taskToRun: run-integration-tests
-    topology:
-      replica: 1
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallWithCA1
-    jobTitle: NT:installation:TestInstallWithCA1
-    jobTimeout: 90
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallWithCA1
-    taskToRun: run-integration-tests
-    topology:
-      replica: 3
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallWithCA2
-    jobTitle: NT:installation:TestInstallWithCA2
-    jobTimeout: 90
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallWithCA2
-    taskToRun: run-integration-tests
-    topology:
-      replica: 3
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallWithCA_KRA1
-    jobTitle: NT:installation:TestInstallWithCA_KRA1
-    jobTimeout: 90
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallWithCA_KRA1
-    taskToRun: run-integration-tests
-    topology:
-      replica: 3
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallWithCA_KRA2
-    jobTitle: NT:installation:TestInstallWithCA_KRA2
-    jobTimeout: 90
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallWithCA_KRA2
-    taskToRun: run-integration-tests
-    topology:
-      replica: 3
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallWithCA_DNS1
-    jobTitle: NT:installation:TestInstallWithCA_DNS1
-    jobTimeout: 90
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallWithCA_DNS1
-    taskToRun: run-integration-tests
-    topology:
-      replica: 3
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallWithCA_DNS2
-    jobTitle: NT:installation:TestInstallWithCA_DNS2
-    jobTimeout: 90
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallWithCA_DNS2
-    taskToRun: run-integration-tests
-    topology:
-      replica: 3
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallWithCA_DNS3
-    jobTitle: NT:installation:TestInstallWithCA_DNS3
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallWithCA_DNS3
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallWithCA_DNS4
-    jobTitle: NT:installation:TestInstallWithCA_DNS4
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallWithCA_DNS4
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallWithCA_KRA_DNS1
-    jobTitle: NT:installation:TestInstallWithCA_KRA_DNS1
-    jobTimeout: 90
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallWithCA_KRA_DNS1
-    taskToRun: run-integration-tests
-    topology:
-      replica: 3
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallWithCA_KRA_DNS2
-    jobTitle: NT:installation:TestInstallWithCA_KRA_DNS2
-    jobTimeout: 90
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallWithCA_KRA_DNS2
-    taskToRun: run-integration-tests
-    topology:
-      replica: 3
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallMasterKRA
-    jobTitle: NT:installation:TestInstallMasterKRA
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallMasterKRA
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_installation_TestInstallMasterDNS
-    jobTitle: NT:installation:TestInstallMasterDNS
-    testsToRun:
-    - test_integration/test_installation.py::TestInstallMasterDNS
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_idviews_TestIDViews
-    jobTitle: NT:idviews:TestIDViews
-    testsToRun:
-    - test_integration/test_idviews.py::TestIDViews
-    taskToRun: run-integration-tests
-    topology:
-      client: 1
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_caless_TestServerInstall
-    jobTitle: NT:caless:TestServerInstall
-    testsToRun:
-    - test_integration/test_caless.py::TestServerInstall
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_caless_TestReplicaInstall
-    jobTitle: NT:caless:TestReplicaInstall
-    jobTimeout: 90
-    testsToRun:
-    - test_integration/test_caless.py::TestReplicaInstall
-    taskToRun: run-integration-tests
-    topology:
-      replica: 1
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_caless_TestClientInstall
-    jobTitle: NT:caless:TestClientInstall
-    testsToRun:
-    - test_integration/test_caless.py::TestClientInstall
-    taskToRun: run-integration-tests
-    topology:
-      client: 1
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_caless_TestIPACommands
-    jobTitle: NT:caless:TestIPACommands
-    testsToRun:
-    - test_integration/test_caless.py::TestIPACommands
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_caless_TestCertInstall
-    jobTitle: NT:caless:TestCertInstall
-    testsToRun:
-    - test_integration/test_caless.py::TestCertInstall
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_caless_TestPKINIT
-    jobTitle: NT:caless:TestPKINIT
-    testsToRun:
-    - test_integration/test_caless.py::TestPKINIT
-    taskToRun: run-integration-tests
-    topology:
-      replica: 1
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_caless_TestReplicaCALessToCAFull
-    jobTitle: NT:caless:TestReplicaCALessToCAFull
-    testsToRun:
-    - test_integration/test_caless.py::TestReplicaCALessToCAFull
-    taskToRun: run-integration-tests
-    topology:
-      replica: 1
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: NT_test_caless_TestServerCALessToExternalCA
-    jobTitle: NT:caless:TestServerCALessToExternalCA
-    testsToRun:
-    - test_integration/test_caless.py::TestServerCALessToExternalCA
-    taskToRun: run-integration-tests
-
-- template: templates/test-jobs.yml
-  parameters:
-    jobName: BASE_XMLRPC
-    jobTitle: BASE and XMLRPC tests
-    testsToRun:
-    - test_cmdline
-    - test_install
-    - test_ipaclient
-    - test_ipalib
-    - test_ipaplatform
-    - test_ipapython
-    - test_ipaserver
-    - test_ipatests_plugins
-    - test_xmlrpc
-    testsToIgnore:
-    - test_integration
-    - test_webui
-    - test_ipapython/test_keyring.py
-    testsToDedicate:
-    - test_xmlrpc/test_dns_plugin.py
-    taskToRun: run-tests
-    tasksParallel: 3
+- job: BASE_XMLRPC
+  pool:
+    vmImage: 'Ubuntu-16.04'
+  dependsOn: Build
+  condition: succeeded()
+  strategy:
+    parallel: 3
+  steps:
+  - template: templates/test-jobs.yml
+    parameters:
+      testsToRun:
+      - test_cmdline
+      - test_install
+      - test_ipaclient
+      - test_ipalib
+      - test_ipaplatform
+      - test_ipapython
+      - test_ipaserver
+      - test_ipatests_plugins
+      - test_xmlrpc
+      testsToIgnore:
+      - test_integration
+      - test_webui
+      - test_ipapython/test_keyring.py
+      testsToDedicate:
+      - test_xmlrpc/test_dns_plugin.py
+      taskToRun: run-tests

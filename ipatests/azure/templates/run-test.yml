@@ -4,17 +4,38 @@ parameters:
   testsToRun: ''
   testsToIgnore: ''
   testsToDedicate: ''
+  containerJobs: 1
 
 steps:
 - script: |
     set -e
-    docker exec --env TESTS_TO_RUN="${{ parameters.testsToRun }}" \
-                --env TESTS_TO_IGNORE="${{ parameters.testsToIgnore }}" \
-                --env TESTS_TO_DEDICATE="${{ parameters.testsToDedicate }}" \
-                --env CI_RUNNER_LOGS_DIR="${{ parameters.logsPath }}" \
-                --env SYSTEM_TOTALJOBSINPHASE=$(System.TotalJobsInPhase) \
-                --env SYSTEM_JOBPOSITIONINPHASE=$(System.JobPositionInPhase) \
-                --privileged -t \
-                $(Build.BuildId)_master_1 \
-                /bin/bash --noprofile --norc -x /freeipa/ipatests/azure/azure-${{parameters.taskToRun}}.sh
+    case "$SYSTEM_PARALLELEXECUTIONTYPE" in
+      # slicing
+      "MultiMachine" )
+
+      TOTALJOBSINPHASE="$(System.TotalJobsInPhase)"
+      JOBPOSITIONINPHASE="$(System.JobPositionInPhase)"
+      ;;
+
+      * )
+      # matrix job's strategy also sets these variables
+      # MultiConfiguration
+      TOTALJOBSINPHASE=
+      JOBPOSITIONINPHASE=
+      ;;
+    esac
+
+    for project in $(seq ${{ parameters.containerJobs }}); do
+        docker exec \
+            --env TESTS_TO_RUN="${{ parameters.testsToRun }}" \
+            --env TESTS_TO_IGNORE="${{ parameters.testsToIgnore }}" \
+            --env TESTS_TO_DEDICATE="${{ parameters.testsToDedicate }}" \
+            --env CI_RUNNER_LOGS_DIR="${{ parameters.logsPath }}" \
+            --env SYSTEM_TOTALJOBSINPHASE="$TOTALJOBSINPHASE" \
+            --env SYSTEM_JOBPOSITIONINPHASE="$JOBPOSITIONINPHASE" \
+            --privileged -t \
+            "${project}"_master_1 \
+            /bin/bash --noprofile --norc \
+                -x /freeipa/ipatests/azure/azure-${{parameters.taskToRun}}.sh
+    done
   displayName: Run test
