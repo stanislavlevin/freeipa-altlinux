@@ -217,7 +217,7 @@ class CALessBase(IntegrationTest):
             cls.copy_cert(host, filename)
 
         # Remove existing ca certs from default database to avoid conflicts
-        args = [paths.CERTUTIL, "-D", "-d", "/etc/httpd/alias", "-n"]
+        args = [paths.CERTUTIL, "-D", "-d", paths.HTTPD_ALIAS_DIR, "-n"]
         host.run_command(args + ["ca1"], raiseonerr=False)
         host.run_command(args + ["ca1/server"], raiseonerr=False)
 
