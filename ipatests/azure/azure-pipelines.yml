@@ -220,18 +220,18 @@ jobs:
       vault:
         testsToRun: test_integration/test_vault.py
         testsReplicas: 1
-      installation_TestInstallWithCA1:
-        testsToRun: test_integration/test_installation.py::TestInstallWithCA1
-        testsReplicas: 3
-      installation_TestInstallWithCA2:
-        testsToRun: test_integration/test_installation.py::TestInstallWithCA2
-        testsReplicas: 3
-      installation_TestInstallWithCA_KRA1:
-        testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA1
-        testsReplicas: 3
-      installation_TestInstallWithCA_KRA2:
-        testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA2
-        testsReplicas: 3
+      # installation_TestInstallWithCA1:
+      #   testsToRun: test_integration/test_installation.py::TestInstallWithCA1
+      #   testsReplicas: 3
+      # installation_TestInstallWithCA2:
+      #   testsToRun: test_integration/test_installation.py::TestInstallWithCA2
+      #   testsReplicas: 3
+      # installation_TestInstallWithCA_KRA1:
+      #   testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA1
+      #   testsReplicas: 3
+      # installation_TestInstallWithCA_KRA2:
+      #   testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA2
+      #   testsReplicas: 3
       installation_TestInstallWithCA_DNS1:
         testsToRun: test_integration/test_installation.py::TestInstallWithCA_DNS1
         testsReplicas: 3
