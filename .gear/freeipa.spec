@@ -287,7 +287,7 @@ Group: System/Base
 Requires: %name-server = %EVR
 Requires: %name-common = %EVR
 
-Requires: samba >= %samba_version
+Requires: samba-dc-mitkrb5 >= %samba_version
 Requires: samba-winbind
 
 Requires: python3-module-samba
