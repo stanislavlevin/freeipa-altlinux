@@ -20,6 +20,7 @@ import re
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
+from ipaplatform import services
 from ipaplatform.paths import paths
 
 import os
@@ -69,7 +70,7 @@ class TestNFS(TestInit):
         for client in clients:
             cls.fix_resolv_conf(client, cls.master)
             tasks.install_client(cls.master, client)
-            client.run_command(["cat", "/etc/resolv.conf"])
+            client.run_command(["cat", paths.RESOLV_CONF])
 
     def cleanup(self):
 
@@ -78,10 +79,12 @@ class TestNFS(TestInit):
         automntclt = self.replicas[1]
 
         nfsclt.run_command(["umount", "-a", "-t", "nfs4"])
-        nfsclt.run_command(["systemctl", "stop", "rpc-gssd"])
+        rpcgssd_name = services.knownservices["rpcgssd"].systemd_name
+        nfsclt.run_command(["systemctl", "stop", rpcgssd_name])
 
-        nfssrv.run_command(["systemctl", "stop", "nfs-server"])
-        nfssrv.run_command(["systemctl", "disable", "nfs-server"])
+        nfs_server_name = services.knownservices["nfs-server"].systemd_name
+        nfssrv.run_command(["systemctl", "stop", nfs_server_name])
+        nfssrv.run_command(["systemctl", "disable", nfs_server_name])
         nfssrv.run_command([
             "rm", "-f", "/etc/exports.d/krbnfs.exports",
             "/etc/exports.d/stdnfs.exports"
@@ -99,8 +102,9 @@ class TestNFS(TestInit):
         self.master.run_command([
             "ipa", "automountlocation-del", "seattle"
         ])
-        nfsclt.run_command(["systemctl", "restart", "nfs-utils"])
-        nfssrv.run_command(["systemctl", "restart", "nfs-utils"])
+        nfs_utils_name = services.knownservices["nfs-utils"].systemd_name
+        nfsclt.run_command(["systemctl", "restart", nfs_utils_name])
+        nfssrv.run_command(["systemctl", "restart", nfs_utils_name])
         for client in (nfssrv, nfsclt, automntclt):
             self.restore_resolv_conf(client)
         tasks.uninstall_master(self.master)
@@ -138,10 +142,11 @@ class TestNFS(TestInit):
         ])
         nfssrv.run_command([
             "ipa-getkeytab", "-p", "nfs/%s" % nfssrv.hostname,
-            "-k", "/etc/krb5.keytab"
+            "-k", paths.KRB5_KEYTAB
         ])
-        nfssrv.run_command(["systemctl", "restart", "nfs-server"])
-        nfssrv.run_command(["systemctl", "enable", "nfs-server"])
+        nfs_server_name = services.knownservices["nfs-server"].systemd_name
+        nfssrv.run_command(["systemctl", "restart", nfs_server_name])
+        nfssrv.run_command(["systemctl", "enable", nfs_server_name])
         time.sleep(WAIT_AFTER_INSTALL)
 
         basedir = "exports"
@@ -168,17 +173,17 @@ class TestNFS(TestInit):
         nfssrv = self.clients[0]
         nfsclt = self.replicas[0]
 
-        nfsclt.run_command(["systemctl", "restart", "rpc-gssd"])
+        rpcgssd_name = services.knownservices["rpcgssd"].systemd_name
+        nfsclt.run_command(["systemctl", "restart", rpcgssd_name])
         time.sleep(WAIT_AFTER_INSTALL)
         mountpoints = ("/mnt/krb", "/mnt/std", "/home")
         for mountpoint in mountpoints:
             nfsclt.run_command(["mkdir", "-p", mountpoint])
         nfsclt.run_command([
-            "systemctl", "status", "gssproxy"
+            "systemctl",
+            "status", services.knownservices["gssproxy"].systemd_name
         ])
-        nfsclt.run_command([
-            "systemctl", "status", "rpc-gssd"
-        ])
+        nfsclt.run_command([ "systemctl", "status", rpcgssd_name ])
         nfsclt.run_command([
             "mount", "-t", "nfs4", "-o", "sec=krb5p,vers=4.0",
             "%s:/exports/krbnfs" % nfssrv.hostname, "/mnt/krb", "-v"
@@ -238,7 +243,7 @@ class TestNFS(TestInit):
         # https://pagure.io/freeipa/issue/7918
         # check whether idmapd.conf was setup using the IPA domain
         automntclt.run_command([
-            "grep", "Domain = %s" % self.master.domain.name, "/etc/idmapd.conf"
+            "grep", "Domain = %s" % self.master.domain.name, paths.IDMAPD_CONF
         ])
 
         automntclt.run_command([
@@ -270,7 +275,7 @@ class TestNFS(TestInit):
         # check whether idmapd.conf was setup properly:
         # grep must not find any configured Domain.
         result = automntclt.run_command(
-            ["grep", "^Domain =", "/etc/idmapd.conf"], raiseonerr=False
+            ["grep", "^Domain =", paths.IDMAPD_CONF], raiseonerr=False
         )
         assert result.returncode == 1
 
@@ -289,7 +294,7 @@ class TestNFS(TestInit):
         ])
         # check whether idmapd.conf was setup using nfs_domain
         automntclt.run_command([
-            "grep", "Domain = %s" % nfs_domain, "/etc/idmapd.conf"
+            "grep", "Domain = %s" % nfs_domain, paths.IDMAPD_CONF
         ])
 
         time.sleep(WAIT_AFTER_INSTALL)
