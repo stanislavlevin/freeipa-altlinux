@@ -276,7 +276,7 @@ def uninstall(fstore, statestore):
        paths.SYSCONFIG_NFS,
        paths.IDMAPD_CONF,
     ]
-    STATES=['autofs', 'rpcidmapd', 'rpcgssd']
+    STATES=['autofs', 'rpcidmapd', 'rpcgssd', 'nfsclient']
 
     # automount only touches /etc/nsswitch.conf if LDAP is
     # used. Don't restore it otherwise.
@@ -337,6 +337,16 @@ def uninstall(fstore, statestore):
         statestore.delete_state('rpcgssd','enabled')
         statestore.delete_state('rpcgssd','running')
 
+    # restore nfs-client.target
+    if statestore.has_state('nfsclient'):
+        enabled = statestore.restore_state('nfsclient', 'enabled')
+        running = statestore.restore_state('nfsclient', 'running')
+        nfsclient = services.knownservices.nfs_client
+        if not enabled:
+            nfsclient.disable()
+        if not running:
+            nfsclient.stop()
+
     nfsutils = services.knownservices['nfs-utils']
     try:
         nfsutils.restart()
@@ -385,6 +395,19 @@ def configure_nfs(fstore, statestore, options):
         conf.changeConf(paths.IDMAPD_CONF, section_with_changes)
         tasks.restore_context(paths.IDMAPD_CONF)
         print("Configured %s" % paths.IDMAPD_CONF)
+
+    # by default nfs-client.target is disabled in ALT
+    nfsclient = services.knownservices.nfs_client
+    statestore.backup_state('nfsclient', 'enabled', nfsclient.is_enabled())
+    statestore.backup_state('nfsclient', 'running', nfsclient.is_running())
+    try:
+        nfsclient.enable()
+    except Exception as e:
+        logger.error("Failed to enable nfs-client.target (%s)", str(e))
+    try:
+        nfsclient.restart()
+    except Exception as e:
+        logger.error("Failed to restart nfs-client.target (%s)", str(e))
 
     rpcgssd = services.knownservices.rpcgssd
     try:
