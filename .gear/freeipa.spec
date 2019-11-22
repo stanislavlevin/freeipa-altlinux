@@ -345,6 +345,7 @@ Requires: %name-client = %EVR
 Requires: autofs-sss
 Requires: libsss_autofs
 Requires: sssd-nfs-idmap
+Requires: nfs-clients
 
 %description client-automount
 IPA is an integrated solution to provide centrally managed Identity (users,
