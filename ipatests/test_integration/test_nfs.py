@@ -163,6 +163,8 @@ class TestNFS(TestInit):
             exportline = " ".join((exportpath, exports[export]))
             nfssrv.run_command(["mkdir", "-p", exportpath])
             nfssrv.run_command(["chmod", "770", exportpath])
+            nfssrv.run_command(["mkdir", "-p", "/etc/exports.d"],
+                               raiseonerr=False)
             nfssrv.put_file_contents(exportfile, exportline)
             nfssrv.run_command(["cat", exportfile])
         nfssrv.run_command(["exportfs", "-r"])
