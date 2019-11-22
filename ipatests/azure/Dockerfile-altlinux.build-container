@@ -5,6 +5,7 @@ COPY dist /root
 RUN \
     apt-get update \
     && apt-get install -y /root/rpms/*.rpm openssh rng-tools \
+        gssproxy-nfs-server nfs-server \
     && apt-get clean \
     && find /var/lib/apt/lists/ -type f -exec rm "{}" \; \
     && rm -rf /var/cache/apt/*.bin \
