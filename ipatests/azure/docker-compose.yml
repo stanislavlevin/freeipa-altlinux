@@ -22,6 +22,9 @@ services:
     privileged: true
     image: ${IPA_DOCKER_IMAGE}
     build: .
+    volumes:
+    # nfs server
+    - ./exports:/exports
     networks:
     - ${IPA_NETWORK}
 

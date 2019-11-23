@@ -36,7 +36,12 @@ steps:
     set -ex
     for project in $(seq ${{ parameters.containerJobs }}); do
         cont_dirname="container_$project"
+        rm -rf "$cont_dirname" ||:
         mkdir "$cont_dirname"
+        # OverlayFS Adds NFS Export Support In Linux 4.16
+        # our kernel is too old
+        uname -a
+        mkdir "$cont_dirname"/exports
         ln -sfr ipatests/azure/docker-compose.yml "$cont_dirname"/
         touch "$cont_dirname"/ipa-test-config.yaml
         cd "$cont_dirname"
