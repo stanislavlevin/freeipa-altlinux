@@ -1,0 +1,17 @@
+object 2ccc34b8806d6e426f2ff8fc94d6da5f6bf5c5e0
+type commit
+tag release-4-7-4
+tagger Alexander Bokovoy <abokovoy@redhat.com> 1574774552 +0200
+
+tagging FreeIPA 4.7.4
+-----BEGIN PGP SIGNATURE-----
+
+iQFIBAABCgAyFiEEQepdgpabRRLDzQC/fTs0GEpfA1kFAl3dJxgUHGFib2tvdm95
+QHJlZGhhdC5jb20ACgkQfTs0GEpfA1lACggAgRLOy9uqREhd39MSCHZtBKBJQmvQ
+AWxwESci9JJUwFkmMAXiO8pkdh31W5t6OVwPbI55a9QrmdOH5GwGhdp1stPhQqDI
+yC5ekiw02FZKQD7AqNCVr4MBcOBcg5FUBM7br6rWU2HWQ52Y/+k7jzosSKRqJJmv
+gblUBtUgaCWwooNGcwu0mgpfPrZTXOD0XB1HjUpwrwam8bMkpp3qRRqFOPDPDvqd
+k+zGc9rUXObGimJwzvAuQKlsnutLOWrdwkr3eLPRWhoO8q0Me3n56+Uha1dKQlHo
+Xhoa/dIqC5Ilx5vClPdXcnSTI4ygMjjy/qvwP63BSrKLmRbxMrCVydaJ8w==
+=VMIj
+-----END PGP SIGNATURE-----
