@@ -76,7 +76,7 @@ jobs:
     - template: templates/prepare-build.yml
     - script: |
         set -e
-        sudo apt-get install -y nss-tools python3-module-pip
+        sudo apt-get install -y nss-utils python3-module-pip
         python3 -m pip install --user --upgrade pip setuptools pycodestyle
       displayName: 'Install prerequisites'
     - script: |
