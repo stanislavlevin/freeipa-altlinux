@@ -145,137 +145,37 @@ jobs:
   condition: succeeded()
   strategy:
     matrix:
-      installation_TestInstallMaster:
-        testsToRun: test_integration/test_installation.py::TestInstallMaster
-      kerberos_flags:
-        testsToRun: test_integration/test_kerberos_flags.py
-        testsClients: 1
-      dnssec_TestInstallDNSSECFirst:
-        testsToRun: test_integration/test_dnssec.py::TestInstallDNSSECFirst
-        testsReplicas: 1
-      simple_replication:
-        testsToRun: test_integration/test_simple_replication.py
-        testsReplicas: 1
-      caless_TestServerReplicaCALessToCAFull:
-        testsToRun: test_integration/test_caless.py::TestServerReplicaCALessToCAFull
-        testsReplicas: 1
-      external_ca_TestExternalCA:
-        testsToRun: test_integration/test_external_ca.py::TestExternalCA
-        testsReplicas: 1
-        testsClients: 1
-      external_ca_TestSelfExternalSelf:
-        testsToRun: test_integration/test_external_ca.py::TestSelfExternalSelf
-      external_ca_TestExternalCAInstall:
-        testsToRun: test_integration/test_external_ca.py::TestExternalCAInstall
-      # requires nothing, don't install anything
-      topologies_and_testconfig:
-        testsToRun: test_integration/test_topologies.py test_integration/test_testconfig.py
-      #
-      commands:
-        testsToRun: test_integration/test_commands.py
-      sudo:
-        testsToRun: test_integration/test_sudo.py
-        testsClients: 1
-      forced_client_reenrollment:
-        testsToRun: test_integration/test_forced_client_reenrollment.py
-        testsReplicas: 1
-        testsClients: 1
-      service_permissions:
-        testsToRun: test_integration/test_service_permissions.py
-      netgroup:
-        testsToRun: test_integration/test_netgroup.py
-      replica_promotion_TestSubCAkeyReplication:
-        testsToRun: test_integration/test_replica_promotion.py::TestSubCAkeyReplication
-        testsReplicas: 1
-  timeoutInMinutes: 90
-
-  steps:
-  - script: |
-      set -e
-      echo "##vso[task.setvariable variable=testsClients]${TESTSCLIENTS:-0}"
-      echo "##vso[task.setvariable variable=testsReplicas]${TESTSREPLICAS:-0}"
-    displayName: Generate variables
-
-  - template: templates/test-jobs.yml
-    parameters:
-      taskToRun: run-integration-tests
-      testsToRun: "$(testsToRun)"
-      topology:
-        clients: "$(testsClients)"
-        replicas: "$(testsReplicas)"
-
-- job: NIGHTLY
-  pool:
-    vmImage: 'Ubuntu-16.04'
-  dependsOn: GATING
-  condition: succeeded()
-  strategy:
-    matrix:
-      dnssec_TestMigrateDNSSECMaster:
-        testsToRun: test_integration/test_dnssec.py::TestMigrateDNSSECMaster
+      dnssec_1:
+        testsToRun: test_integration/test_dnssec.py
         testsReplicas: 2
-      http_kdc_proxy:
-        testsToRun: test_integration/test_http_kdc_proxy.py
-        testsClients: 1
-      vault:
-        testsToRun: test_integration/test_vault.py
-        testsReplicas: 1
-      # installation_TestInstallWithCA1:
-      #   testsToRun: test_integration/test_installation.py::TestInstallWithCA1
-      #   testsReplicas: 3
-      # installation_TestInstallWithCA2:
-      #   testsToRun: test_integration/test_installation.py::TestInstallWithCA2
-      #   testsReplicas: 3
-      # installation_TestInstallWithCA_KRA1:
-      #   testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA1
-      #   testsReplicas: 3
-      # installation_TestInstallWithCA_KRA2:
-      #   testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA2
-      #   testsReplicas: 3
-      installation_TestInstallWithCA_DNS1:
-        testsToRun: test_integration/test_installation.py::TestInstallWithCA_DNS1
-        testsReplicas: 3
-      installation_TestInstallWithCA_DNS2:
-        testsToRun: test_integration/test_installation.py::TestInstallWithCA_DNS2
-        testsReplicas: 3
-      installation_TestInstallWithCA_DNS3:
-        testsToRun: test_integration/test_installation.py::TestInstallWithCA_DNS3
-      installation_TestInstallWithCA_DNS4:
-        testsToRun: test_integration/test_installation.py::TestInstallWithCA_DNS4
-      installation_TestInstallWithCA_KRA_DNS1:
-        testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA_DNS1
-        testsReplicas: 3
-      installation_TestInstallWithCA_KRA_DNS2:
-        testsToRun: test_integration/test_installation.py::TestInstallWithCA_KRA_DNS2
-        testsReplicas: 3
-      installation_TestInstallMasterKRA:
-        testsToRun: test_integration/test_installation.py::TestInstallMasterKRA
-      installation_TestInstallMasterDNS:
-        testsToRun: test_integration/test_installation.py::TestInstallMasterDNS
-      idviews_TestIDViews:
-        testsToRun: test_integration/test_idviews.py::TestIDViews
-        testsClients: 1
-      caless_TestServerInstall:
-        testsToRun: test_integration/test_caless.py::TestServerInstall
-      caless_TestReplicaInstall:
-        testsToRun: test_integration/test_caless.py::TestReplicaInstall
-        testsReplicas: 1
-      caless_TestClientInstall:
-        testsToRun: test_integration/test_caless.py::TestClientInstall
-        testsClients: 1
-      caless_TestIPACommands:
-        testsToRun: test_integration/test_caless.py::TestIPACommands
-      caless_TestCertInstall:
-        testsToRun: test_integration/test_caless.py::TestCertInstall
-      caless_TestPKINIT:
-        testsToRun: test_integration/test_caless.py::TestPKINIT
-        testsReplicas: 1
-      caless_TestReplicaCALessToCAFull:
-        testsToRun: test_integration/test_caless.py::TestReplicaCALessToCAFull
-        testsReplicas: 1
-      caless_TestServerCALessToExternalCA:
-        testsToRun: test_integration/test_caless.py::TestServerCALessToExternalCA
-  timeoutInMinutes: 90
+      dnssec_2:
+        testsToRun: test_integration/test_dnssec.py
+        testsReplicas: 2
+      dnssec_3:
+        testsToRun: test_integration/test_dnssec.py
+        testsReplicas: 2
+      dnssec_4:
+        testsToRun: test_integration/test_dnssec.py
+        testsReplicas: 2
+      dnssec_5:
+        testsToRun: test_integration/test_dnssec.py
+        testsReplicas: 2
+      dnssec_6:
+        testsToRun: test_integration/test_dnssec.py
+        testsReplicas: 2
+      dnssec_7:
+        testsToRun: test_integration/test_dnssec.py
+        testsReplicas: 2
+      dnssec_8:
+        testsToRun: test_integration/test_dnssec.py
+        testsReplicas: 2
+      dnssec_9:
+        testsToRun: test_integration/test_dnssec.py
+        testsReplicas: 2
+      dnssec_10:
+        testsToRun: test_integration/test_dnssec.py
+        testsReplicas: 2
+  timeoutInMinutes: 120
 
   steps:
   - script: |
@@ -291,31 +191,3 @@ jobs:
       topology:
         clients: "$(testsClients)"
         replicas: "$(testsReplicas)"
-
-- job: BASE_XMLRPC
-  pool:
-    vmImage: 'Ubuntu-16.04'
-  dependsOn: Build
-  condition: succeeded()
-  strategy:
-    parallel: 3
-  steps:
-  - template: templates/test-jobs.yml
-    parameters:
-      testsToRun:
-      - test_cmdline
-      - test_install
-      - test_ipaclient
-      - test_ipalib
-      - test_ipaplatform
-      - test_ipapython
-      - test_ipaserver
-      - test_ipatests_plugins
-      - test_xmlrpc
-      testsToIgnore:
-      - test_integration
-      - test_webui
-      - test_ipapython/test_keyring.py
-      testsToDedicate:
-      - test_xmlrpc/test_dns_plugin.py
-      taskToRun: run-tests
