@@ -25,6 +25,7 @@ services:
     volumes:
     # nfs server
     - ./exports:/exports
+    - /lib/modules:/lib/modules:ro
     networks:
     - ${IPA_NETWORK}
 
