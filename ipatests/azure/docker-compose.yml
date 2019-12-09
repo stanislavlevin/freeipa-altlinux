@@ -1,10 +1,14 @@
 version: '2.1'
 services:
   master:
-    privileged: true
     image: ${IPA_DOCKER_IMAGE}
     build: .
+    cap_add:
+    - ALL
+    security_opt:
+    - apparmor:unconfined
     volumes:
+    - /sys/fs/cgroup:/sys/fs/cgroup:ro
     - ./ipa-test-config.yaml:/root/.ipa/ipa-test-config.yaml:ro
     - ${BUILD_REPOSITORY_LOCALPATH}:/freeipa
 
@@ -12,17 +16,26 @@ services:
     - ${IPA_NETWORK}
 
   replica:
-    privileged: true
     image: ${IPA_DOCKER_IMAGE}
     build: .
+    cap_add:
+    - ALL
+    security_opt:
+    - apparmor:unconfined
+    volumes:
+    - /sys/fs/cgroup:/sys/fs/cgroup:ro
     networks:
     - ${IPA_NETWORK}
 
   client:
-    privileged: true
     image: ${IPA_DOCKER_IMAGE}
     build: .
+    cap_add:
+    - ALL
+    security_opt:
+    - apparmor:unconfined
     volumes:
+    - /sys/fs/cgroup:/sys/fs/cgroup:ro
     # nfs server
     - ./exports:/exports
     - /lib/modules:/lib/modules:ro

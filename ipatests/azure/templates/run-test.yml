@@ -33,7 +33,7 @@ steps:
             --env CI_RUNNER_LOGS_DIR="${{ parameters.logsPath }}" \
             --env SYSTEM_TOTALJOBSINPHASE="$TOTALJOBSINPHASE" \
             --env SYSTEM_JOBPOSITIONINPHASE="$JOBPOSITIONINPHASE" \
-            --privileged -t \
+            -t \
             "${project}"_master_1 \
             /bin/bash --noprofile --norc \
                 -x /freeipa/ipatests/azure/azure-${{parameters.taskToRun}}.sh
