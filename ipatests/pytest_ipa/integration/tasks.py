@@ -1780,3 +1780,30 @@ def run_command_as_user(host, user, command, *args, **kwargs):
 
 def kinit_as_user(host, user, password):
     host.run_command(['kinit', user], stdin_text=password + '\n')
+
+
+def run_ssh_command_as_user(host, username, password, cmd, raiseonerr=True):
+    """
+    Log in via SSH to a known host using username+password and
+    execute command.
+    Helpfull to perform some action as IPA user.
+    """
+    ssh_params = {
+        'ssh_username': username,
+        'ssh_password': password,
+        'ssh_key_filename': None,
+        'test_dir': os.path.join('/home', username),
+    }
+    backed_ssh_params = {}
+    for param in ssh_params:
+        backed_ssh_params[param] = getattr(host, param)
+    try:
+        for param in ssh_params:
+            setattr(host, param, ssh_params[param])
+        host.reset_connection()
+        result = host.run_command(cmd, set_env=False, raiseonerr=raiseonerr)
+        return result
+    finally:
+        for param in backed_ssh_params:
+            setattr(host, param, backed_ssh_params[param])
+        host.reset_connection()
