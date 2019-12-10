@@ -37,6 +37,7 @@ class BasePathNamespace(object):
     ETC_DIRSRV = "/etc/dirsrv"
     DS_KEYTAB = "/etc/dirsrv/ds.keytab"
     ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE = "/etc/dirsrv/slapd-%s"
+    AUTOFS_CONF = "/etc/autofs.conf"
     ETC_FEDORA_RELEASE = "/etc/fedora-release"
     GROUP = "/etc/group"
     ETC_HOSTNAME = "/etc/hostname"
@@ -398,6 +399,7 @@ class BasePathNamespace(object):
     IPA_GETKEYTAB = '/usr/sbin/ipa-getkeytab'
     EXTERNAL_SCHEMA_DIR = '/usr/share/ipa/schema.d'
     GSSPROXY_CONF = '/etc/gssproxy/10-ipa.conf'
+    GSSPROXY_SYSTEM_CONF = '/etc/gssproxy/gssproxy.conf'
     KRB5CC_HTTPD = '/tmp/krb5cc-httpd'
     IF_INET6 = '/proc/net/if_inet6'
     WSGI_PREFIX_DIR = "/run/httpd/wsgi"
@@ -409,6 +411,7 @@ class BasePathNamespace(object):
         "/etc/systemd/system/dirsrv@%s.service.d/ipa-env.conf"
     IPA_SERVER_UPGRADE = '/usr/sbin/ipa-server-upgrade'
     KEYCTL = '/bin/keyctl'
+    REQUEST_KEY_CONF = '/etc/request-key.conf'
     GETENT = '/usr/bin/getent'
     SSHD = '/usr/sbin/sshd'
     SSSCTL = '/usr/sbin/sssctl'
