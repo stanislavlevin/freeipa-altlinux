@@ -41,6 +41,51 @@ from . import tasks
 
 logger = logging.getLogger(__name__)
 
+CLASS_LOGFILES = [
+    # dirsrv logs
+    paths.VAR_LOG_DIRSRV,
+    # IPA install logs
+    paths.IPASERVER_INSTALL_LOG,
+    paths.IPACLIENT_INSTALL_LOG,
+    paths.IPAREPLICA_INSTALL_LOG,
+    paths.IPAREPLICA_CONNCHECK_LOG,
+    paths.IPAREPLICA_CA_INSTALL_LOG,
+    paths.IPASERVER_KRA_INSTALL_LOG,
+    paths.IPA_CUSTODIA_AUDIT_LOG,
+    paths.IPACLIENTSAMBA_INSTALL_LOG,
+    paths.IPACLIENTSAMBA_UNINSTALL_LOG,
+    paths.IPATRUSTENABLEAGENT_LOG,
+    # IPA uninstall logs
+    paths.IPASERVER_UNINSTALL_LOG,
+    paths.IPACLIENT_UNINSTALL_LOG,
+    # IPA upgrade logs
+    paths.IPAUPGRADE_LOG,
+    # IPA backup and restore logs
+    paths.IPARESTORE_LOG,
+    paths.IPABACKUP_LOG,
+    # kerberos related logs
+    paths.KADMIND_LOG,
+    paths.KRB5KDC_LOG,
+    # httpd logs
+    paths.VAR_LOG_HTTPD_DIR,
+    # dogtag logs
+    paths.VAR_LOG_PKI_DIR,
+    # selinux logs
+    paths.VAR_LOG_AUDIT,
+    # sssd
+    paths.VAR_LOG_SSSD_DIR,
+    # system
+    paths.RESOLV_CONF,
+    paths.HOSTS,
+]
+
+
+def make_class_logs(host):
+    logs = list(CLASS_LOGFILES)
+    env_filename = os.path.join(host.config.test_dir, 'env.sh')
+    logs.append(env_filename)
+    return logs
+
 
 def pytest_addoption(parser):
     group = parser.getgroup("IPA integration tests")
@@ -134,6 +179,8 @@ def collect_logs(name, logs_dict, logfile_dir=None, beakerlib_plugin=None):
 
         for host, logs in logs_dict.items():
             logger.info('Collecting logs from: %s', host.hostname)
+            # make unique list of log filenames
+            logs = list(set(logs))
             dirname = os.path.join(topdirname, host.hostname)
             if not os.path.isdir(dirname):
                 os.makedirs(dirname)
@@ -183,19 +230,113 @@ def collect_logs(name, logs_dict, logfile_dir=None, beakerlib_plugin=None):
                 shutil.rmtree(topdirname)
 
 
+class IntegrationLogs:
+    """Represent logfile collections
+    Collection is a mapping of IPA hosts and a list of logfiles to be
+    collected. There are two types of collections: class and method.
+    The former contains a list of logfiles which will be collected on
+    each test (within class) completion, while the latter contains
+    a list of logfiles which will be collected on only certain test
+    completion (once).
+    """
+    def __init__(self):
+        self._class_logs = {}
+        self._method_logs = {}
+
+    def set_logs(self, host, logs):
+        self._class_logs[host] = list(logs)
+
+    @property
+    def method_logs(self):
+        return self._method_logs
+
+    @property
+    def class_logs(self):
+        return self._class_logs
+
+    def init_method_logs(self):
+        """Initilize method logs with the class ones"""
+        self._method_logs = {}
+        for k in self._class_logs:
+            self._method_logs[k] = list(self._class_logs[k])
+
+    def collect_class_log(self, host, filename):
+        """Add class scope log
+        The file with the given filename will be collected from the
+        host on an each test completion(within a test class).
+        """
+        logger.info('Adding %s:%s to list of class logs to collect',
+                    host.external_hostname, filename)
+        self._class_logs.setdefault(host, []).append(filename)
+        self._method_logs.setdefault(host, []).append(filename)
+
+    def collect_method_log(self, host, filename):
+        """Add method scope log
+        The file with the given filename will be collected from the
+        host on a test completion.
+        """
+        logger.info('Adding %s:%s to list of method logs to collect',
+                    host.external_hostname, filename)
+        self._method_logs.setdefault(host, []).append(filename)
+
+
 @pytest.fixture(scope='class')
-def class_integration_logs():
-    """Internal fixture providing class-level logs_dict"""
-    return {}
+def class_integration_logs(request):
+    """Internal fixture providing class-level logs_dict
+    For adjusting collection of logs, please, use 'integration_logs'
+    fixture.
+    """
+    integration_logs = IntegrationLogs()
+    yield integration_logs
+    class_logs = integration_logs.class_logs
+    hosts = class_logs.keys()  # pylint: disable=dict-keys-not-iterating
+    collect_test_logs(request.node, class_logs, request.config)
+    collect_systemd_journal(request.node, hosts, request.config)
 
 
 @yield_fixture
 def integration_logs(class_integration_logs, request):
     """Provides access to test integration logs, and collects after each test
+    To collect a logfile on a test completion one should add the dependency on
+    this fixture and call its 'collect_method_log' method.
+    For example, run TestFoo.
+    ```
+    class TestFoo(IntegrationTest):
+        def test_foo(self):
+            pass
+
+        def test_bar(self, integration_logs):
+            integration_logs.collect_method_log(self.master, '/logfile')
+    ```
+    '/logfile' will be collected only for 'test_bar' test.
+
+    To collect a logfile on a test class completion one should add the
+    dependency on this fixture and call its 'collect_class_log' method.
+    For example, run TestFoo.
+    ```
+    class TestFoo(IntegrationTest):
+        def test_foo(self, integration_logs):
+            integration_logs.collect_class_log(self.master, '/logfile')
+
+        def test_bar(self):
+            pass
+    ```
+    '/logfile' will be collected 3 times:
+    1) on 'test_foo' completion
+    2) on 'test_bar' completion
+    3) on 'TestFoo' completion
+
+    Note, the registration of a collection works at the runtime. This means
+    that if the '/logfile' will be registered in 'test_bar' then
+    it will not be collected on 'test_foo' completion:
+    1) on 'test_bar' completion
+    2) on 'TestFoo' completion
     """
+    class_integration_logs.init_method_logs()
     yield class_integration_logs
-    hosts = class_integration_logs.keys()
-    collect_test_logs(request.node, class_integration_logs, request.config)
+    method_logs = class_integration_logs.method_logs
+    hosts = method_logs.keys()  # pylint: disable=dict-keys-not-iterating
+    collect_test_logs(request.node, method_logs, request.config)
     collect_systemd_journal(request.node, hosts, request.config)
 
 
@@ -256,17 +397,15 @@ def mh(request, class_integration_logs):
         for domain in ad_domains:
             mh.ad_treedomains.extend(domain.hosts_by_role('ad_treedomain'))
 
-    cls.logs_to_collect = class_integration_logs
-
-    def collect_log(host, filename):
-        logger.info('Adding %s:%s to list of logs to collect',
-                    host.external_hostname, filename)
-        class_integration_logs.setdefault(host, []).append(filename)
+    cls.logs_to_collect = class_integration_logs.class_logs
 
     if logger.isEnabledFor(logging.INFO):
         logger.info(pformat(mh.config.to_dict()))
+
+    for ipa_host in mh.config.get_all_ipa_hosts():
+        class_integration_logs.set_logs(ipa_host, make_class_logs(ipa_host))
+
     for host in mh.config.get_all_hosts():
-        host.add_log_collector(collect_log)
         logger.info('Preparing host %s', host.hostname)
         tasks.prepare_host(host)
 
@@ -276,17 +415,7 @@ def mh(request, class_integration_logs):
         del_compat_attrs(cls)
     mh._pytestmh_request.addfinalizer(fin)
 
-    try:
-        yield mh.install()
-    finally:
-        hosts = list(cls.get_all_hosts())
-        for host in hosts:
-            host.remove_log_collector(collect_log)
-        collect_test_logs(
-            request.node, class_integration_logs, request.config
-        )
-        collect_systemd_journal(request.node, hosts, request.config)
-
+    yield mh.install()
 
 def add_compat_attrs(cls, mh):
     """Add convenience attributes to the test class
