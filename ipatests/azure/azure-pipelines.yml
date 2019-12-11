@@ -6,7 +6,7 @@ variables:
 jobs:
 - job: Build
   pool:
-    vmImage: 'Ubuntu-16.04'
+    vmImage: 'Ubuntu-18.04'
   container:
     image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
@@ -49,7 +49,7 @@ jobs:
 
 - job: Lint
   pool:
-    vmImage: 'Ubuntu-16.04'
+    vmImage: 'Ubuntu-18.04'
   container:
     image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
@@ -68,7 +68,7 @@ jobs:
 
 - job: Tox
   pool:
-    vmImage: 'Ubuntu-16.04'
+    vmImage: 'Ubuntu-18.04'
   container:
     image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
@@ -95,7 +95,7 @@ jobs:
 
 - job: WebUI_Unit_Tests
   pool:
-    vmImage: 'Ubuntu-16.04'
+    vmImage: 'Ubuntu-18.04'
   container:
     image: stanislavlevin/freeipa-build-altlinux:sisyphus
     options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged
@@ -140,7 +140,7 @@ jobs:
 
 - job: GATING
   pool:
-    vmImage: 'Ubuntu-16.04'
+    vmImage: 'Ubuntu-18.04'
   dependsOn: Build
   condition: succeeded()
   strategy:
