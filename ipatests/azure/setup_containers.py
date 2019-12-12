@@ -103,9 +103,16 @@ class Container:
         """
         Add ssh public key into every container of group
         """
+        home_ssh_dir = "/root/.ssh"
+        auth_keys = os.path.join(home_ssh_dir, "authorized_keys")
         cmd = [
-            "/bin/bash", "-c",
-            "echo {key} >> /root/.ssh/authorized_keys".format(key=key),
+            "/bin/bash", "-c", (
+                f"mkdir {home_ssh_dir} "
+                f"; chmod 0700 {home_ssh_dir} "
+                f"&& touch {auth_keys} "
+                f"&& chmod 0600 {auth_keys} "
+                f"&& echo {key} >> {auth_keys}"
+            )
         ]
         self.execute_all(cmd)
 
