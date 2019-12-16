@@ -1,8 +1,11 @@
+import logging
 import os
 import subprocess
 
 import docker
 from jinja2 import Template
+
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 IPA_CLIENT_NUM = int(os.environ.get('IPA_CLIENT_NUM', 0))
 IPA_REPLICA_NUM = int(os.environ.get('IPA_REPLICA_NUM', 0))
@@ -88,7 +91,18 @@ class Container:
         Exec an arbitrary command within container
         """
         dcont = self.dclient.containers.get(name)
-        return dcont.exec_run(args, demux=True)
+        logging.info(f"{dcont.name}: run: {args}")
+        result = dcont.exec_run(args, demux=True)
+        if result.output[0] is not None:
+            logging.info(f"{dcont.name}: {result.output[0]}")
+        logging.info(f"{dcont.name}: result: {result.exit_code}")
+        if result.exit_code:
+            logging.error(f"stderr: {result.output[1].decode()}")
+            raise subprocess.CalledProcessError(
+                result.exit_code, args,
+                result.output[1]
+            )
+        return result
 
     def execute_all(self, args):
         """
