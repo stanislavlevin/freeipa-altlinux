@@ -1,0 +1,17 @@
+steps:
+- script: |
+    set -e
+    echo "Build rpms"
+    gear-rpm -ba -v \
+        --define '_topdir $(builddir)/rpmbuild' \
+        --without 'lint' \
+        --without 'fasttest' \
+        --without 'fastlint'
+    mkdir -p $(builddir)/dist/{,s}rpms
+    mkdir -p $(builddir)/dist/rpms_debuginfo
+    cp -v $(builddir)/rpmbuild/SRPMS/freeipa-*.src.rpm $(builddir)/dist/srpms/
+    find $(builddir)/rpmbuild/RPMS/ -type f \( -not -name "*-debuginfo-*" \
+        -a -name '*.rpm' \) -exec cp {} $(builddir)/dist/rpms/ \;
+    find $(builddir)/rpmbuild/RPMS/ -type f \( -name "*-debuginfo-*" \
+        -a -name '*.rpm' \) -exec cp {} $(builddir)/dist/rpms_debuginfo/ \;
+  displayName: Build packages
