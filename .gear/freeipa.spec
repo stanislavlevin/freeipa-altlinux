@@ -125,6 +125,7 @@ BuildRequires: python3-module-custodia
 BuildRequires: python3-module-dateutil
 BuildRequires: python3-module-dbus
 BuildRequires: python3-module-dns
+BuildRequires: python3-module-docker
 BuildRequires: python3-module-gssapi
 BuildRequires: python3-module-ipa_hbac
 BuildRequires: python3-module-jinja2
