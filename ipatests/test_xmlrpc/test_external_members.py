@@ -46,8 +46,9 @@ def get_trusted_group_name():
 
 @pytest.mark.tier1
 class test_external_members(Declarative):
-    @pytest.fixture(autouse=True, scope="class")
-    def ext_member_setup(self, declarative_setup):
+    @classmethod
+    def setup_class(cls):
+        super(test_external_members, cls).setup_class()
         if not api.Backend.rpcclient.isconnected():
             api.Backend.rpcclient.connect()
 

@@ -124,6 +124,7 @@ class Backup(admintool.AdminTool):
 
     files = (
         paths.NAMED_CONF,
+        paths.NAMED_CUSTOM_CONFIG,
         paths.NAMED_KEYTAB,
         paths.RESOLV_CONF,
         paths.SYSCONFIG_PKI_TOMCAT,
@@ -194,7 +195,7 @@ class Backup(admintool.AdminTool):
     ) + tuple(
         os.path.join(paths.IPA_NSSDB_DIR, file)
         for file in (certdb.NSS_DBM_FILES + certdb.NSS_SQL_FILES)
-    )
+    ) + tasks.get_pkcs11_modules()
 
     logs=(
       paths.VAR_LOG_PKI_DIR,
@@ -294,7 +295,7 @@ class Backup(admintool.AdminTool):
         os.chown(self.top_dir, pent.pw_uid, pent.pw_gid)
         os.chmod(self.top_dir, 0o750)
         self.dir = os.path.join(self.top_dir, "ipa")
-        os.mkdir(self.dir, mode=0o750)
+        os.mkdir(self.dir, 0o750)
         os.chown(self.dir, pent.pw_uid, pent.pw_gid)
         self.tarfile = None
 
@@ -320,7 +321,7 @@ class Backup(admintool.AdminTool):
                 logger.info('Stopping IPA services')
                 run([paths.IPACTL, 'stop'])
 
-            instance = installutils.realm_to_serverid(api.env.realm)
+            instance = ipaldap.realm_to_serverid(api.env.realm)
             if os.path.exists(paths.VAR_LIB_SLAPD_INSTANCE_DIR_TEMPLATE %
                               instance):
                 if os.path.exists(paths.SLAPD_INSTANCE_DB_DIR_TEMPLATE %
@@ -364,7 +365,7 @@ class Backup(admintool.AdminTool):
 
         NOTE: this adds some things that may not get backed up.
         '''
-        serverid = installutils.realm_to_serverid(api.env.realm)
+        serverid = ipaldap.realm_to_serverid(api.env.realm)
 
         for dir in [paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % serverid,
                     paths.VAR_LIB_DIRSRV_INSTANCE_SCRIPTS_TEMPLATE % serverid,
@@ -394,14 +395,13 @@ class Backup(admintool.AdminTool):
         if self._conn is not None:
             return self._conn
 
-        ldap_uri = ipaldap.get_ldap_uri(protocol='ldapi', realm=api.env.realm)
-        self._conn = ipaldap.LDAPClient(ldap_uri)
+        self._conn = ipaldap.LDAPClient.from_realm(api.env.realm)
 
         try:
             self._conn.external_bind()
         except Exception as e:
             logger.error("Unable to bind to LDAP server %s: %s",
-                         self._conn.host, e)
+                         self._conn.ldap_uri, e)
 
         return self._conn
 
@@ -453,11 +453,12 @@ class Backup(admintool.AdminTool):
                 )
 
         else:
-            args = [paths.DB2LDIF,
-                    '-Z', instance,
-                    '-r',
-                    '-n', backend,
-                    '-a', ldiffile]
+            args = [paths.DSCTL,
+                    instance,
+                    'db2ldif',
+                    '--replication',
+                    backend,
+                    ldiffile]
             result = run(args, raiseonerr=False)
             if result.returncode != 0:
                 raise admintool.ScriptError(
@@ -520,7 +521,10 @@ class Backup(admintool.AdminTool):
                 )
 
         else:
-            args = [paths.DB2BAK, bakdir, '-Z', instance]
+            args = [paths.DSCTL,
+                    instance,
+                    'db2bak',
+                    bakdir]
             result = run(args, raiseonerr=False)
             if result.returncode != 0:
                 raise admintool.ScriptError(
@@ -637,7 +641,7 @@ class Backup(admintool.AdminTool):
               "Unable to obtain list of master services, continuing anyway")
         except Exception as e:
             logger.error("Failed to read services from '%s': %s",
-                         conn.host, e)
+                         conn.ldap_uri, e)
         else:
             services_cns = [s.single_value['cn'] for s in services]
 
@@ -673,7 +677,7 @@ class Backup(admintool.AdminTool):
             filename = os.path.join(backup_dir, "ipa-full.tar")
 
         try:
-            os.mkdir(backup_dir, mode=0o700)
+            os.mkdir(backup_dir, 0o700)
         except (OSError, IOError) as e:
             raise admintool.ScriptError(
                 'Could not create backup directory: %s' % e

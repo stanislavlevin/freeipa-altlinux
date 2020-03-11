@@ -194,6 +194,7 @@ ipa_class_members = {
                 {'ad_admin_name': dir(str)},
                 {'ad_admin_password': dir(str)},
                 {'domain_level': dir(str)},
+                {'fips_mode': dir(bool)},
             ]},
             {'domain': [
                 {'realm': dir(str)},
@@ -432,6 +433,7 @@ AstroidBuilder(MANAGER).string_build(textwrap.dedent(
     api.env.ca_host = ''
     api.env.ca_install_port = None
     api.env.ca_port = 0
+    api.env.certmonger_wait_timeout = 0
     api.env.conf = ''  # object
     api.env.conf_default = ''  # object
     api.env.confdir = ''  # object
@@ -499,6 +501,7 @@ AstroidBuilder(MANAGER).string_build(textwrap.dedent(
     api.env.force_schema_check = False
     api.env.home = ''  # object
     api.env.host = ''
+    api.env.host_princ = ''
     api.env.http_timeout = 0
     api.env.in_server = False  # object
     api.env.in_tree = False  # object
@@ -524,6 +527,7 @@ AstroidBuilder(MANAGER).string_build(textwrap.dedent(
     api.env.script = ''  # object
     api.env.site_packages = ''  # object
     api.env.skip_version_check = False
+    api.env.smb_princ = ''
     api.env.startup_timeout = 0
     api.env.startup_traceback = False
     api.env.tls_ca_cert = ''  # object

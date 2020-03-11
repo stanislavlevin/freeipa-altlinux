@@ -40,10 +40,11 @@ from ipaserver.install.replication import wait_for_task
 from ipalib import errors, api
 from ipalib.util import normalize_zone
 from ipapython.dn import DN
+from ipapython import ipachangeconf
+from ipapython import ipaldap
 from ipapython import ipautil
 import ipapython.errors
 
-import ipaclient.install.ipachangeconf
 from ipaplatform import services
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
@@ -187,7 +188,7 @@ class ADTRUSTInstance(service.Service):
 
         self.suffix = ipautil.realm_to_suffix(self.realm)
         self.ldapi_socket = "%%2fvar%%2frun%%2fslapd-%s.socket" % \
-                            installutils.realm_to_serverid(self.realm)
+                            ipaldap.realm_to_serverid(self.realm)
 
         # DN definitions
         self.trust_dn = DN(api.env.container_trusts, self.suffix)
@@ -566,7 +567,7 @@ class ADTRUSTInstance(service.Service):
         Purge old CIFS keys from samba and clean up samba ccache
         """
         self.clean_samba_keytab()
-        installutils.remove_ccache(paths.KRB5CC_SAMBA)
+        ipautil.remove_ccache(paths.KRB5CC_SAMBA)
 
     def set_keytab_owner(self, keytab=None, owner=None):
         """
@@ -638,7 +639,7 @@ class ADTRUSTInstance(service.Service):
             self.print_msg("Cannot modify /etc/krb5.conf")
 
         krbconf = (
-            ipaclient.install.ipachangeconf.IPAChangeConf("IPA Installer"))
+            ipachangeconf.IPAChangeConf("IPA Installer"))
         krbconf.setOptionAssignment((" = ", " "))
         krbconf.setSectionNameDelimiters(("[", "]"))
         krbconf.setSubSectionDelimiters(("{", "}"))
@@ -929,19 +930,16 @@ class ADTRUSTInstance(service.Service):
             self.print_msg('WARNING: ' + str(e))
 
         # Remove samba's credentials cache
-        installutils.remove_ccache(ccache_path=paths.KRB5CC_SAMBA)
+        ipautil.remove_ccache(ccache_path=paths.KRB5CC_SAMBA)
 
         # Remove samba's configuration file
-        installutils.remove_file(self.smb_conf)
+        ipautil.remove_file(self.smb_conf)
 
-        try:
-            # Remove samba's persistent and temporary tdb files
-            tdb_files = [tdb_file for tdb_file in os.listdir(paths.SAMBA_DIR)
-                         if tdb_file.endswith(".tdb")]
-            for tdb_file in tdb_files:
-                installutils.remove_file(tdb_file)
-        except FileNotFoundError:
-            pass
+        # Remove samba's persistent and temporary tdb files
+        tdb_files = [tdb_file for tdb_file in os.listdir(paths.SAMBA_DIR)
+                                           if tdb_file.endswith(".tdb")]
+        for tdb_file in tdb_files:
+            ipautil.remove_file(tdb_file)
 
         # Remove our keys from samba's keytab
         self.clean_samba_keytab()

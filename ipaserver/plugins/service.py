@@ -44,14 +44,15 @@ from .baseldap import (
     LDAPAddAttribute,
     LDAPRemoveAttribute,
     LDAPAddAttributeViaOption,
-    LDAPRemoveAttributeViaOption)
+    LDAPRemoveAttributeViaOption,
+    DNA_MAGIC)
 from ipalib import x509
 from ipalib import _, ngettext
 from ipalib import util
 from ipalib import output
 from ipapython import kerberos
 from ipapython.dn import DN
-
+from ipapython.dnsutil import DNSName
 
 if six.PY3:
     unicode = str
@@ -447,6 +448,16 @@ class service(LDAPObject):
             ],
             'default_privileges': {'Service Administrators'},
         },
+        'System: Read POSIX details of SMB services': {
+            'replaces_global_anonymous_aci': True,
+            'ipapermbindruletype': 'all',
+            'ipapermright': {'read', 'search', 'compare'},
+            'ipapermdefaultattr': {
+                'objectclass', 'cn', 'uid', 'gecos', 'gidnumber',
+                'homedirectory', 'loginshell', 'uidnumber',
+                'ipantsecurityidentifier',
+            },
+        }
     }
 
     label = _('Services')
@@ -523,13 +534,19 @@ class service(LDAPObject):
                   " e.g. this might be necessary for NFS services."),
             values=(u'MS-PAC', u'PAD', u'NONE'),
         ),
-        Str('krbprincipalauthind*',
+        StrEnum(
+            'krbprincipalauthind*',
             cli_name='auth_ind',
             label=_('Authentication Indicators'),
             doc=_("Defines a whitelist for Authentication Indicators."
                   " Use 'otp' to allow OTP-based 2FA authentications."
                   " Use 'radius' to allow RADIUS-based 2FA authentications."
-                  " Other values may be used for custom configurations."),
+                  " Use 'pkinit' to allow PKINIT-based 2FA authentications."
+                  " Use 'hardened' to allow brute-force hardened password"
+                  " authentication by SPAKE or FAST."
+                  " With no indicator specified,"
+                  " all authentication mechanisms are allowed."),
+            values=(u'radius', u'otp', u'pkinit', u'hardened'),
         ),
     ) + ticket_flags_params
 
@@ -550,7 +567,7 @@ class service(LDAPObject):
 
     def get_dn(self, *keys, **kwargs):
         key = keys[0]
-        if isinstance(key, six.text_type):
+        if isinstance(key, str):
             key = kerberos.Principal(key)
 
         key = unicode(normalize_principal(key))
@@ -664,6 +681,133 @@ class service_add(LDAPCreate):
         return dn
 
 
+@register()
+class service_add_smb(LDAPCreate):
+    __doc__ = _('Add a new SMB service.')
+
+    msg_summary = _('Added service "%(value)s"')
+    member_attributes = ['managedby']
+    has_output_params = LDAPCreate.has_output_params + output_params
+    smb_takes_args = (
+        Str('fqdn', util.hostname_validator,
+            cli_name='hostname',
+            label=_('Host name'),
+            primary_key=True,
+            normalizer=util.normalize_hostname,
+            flags={'virtual_attribute', 'no_display', 'no_update',
+                   'no_search'},
+            ),
+        Str('ipantflatname?',
+            cli_name='netbiosname',
+            label=_('SMB service NetBIOS name'),
+            flags={'virtual_attribute', 'no_display', 'no_update',
+                   'no_search'},
+            ),
+    )
+
+    takes_options = LDAPCreate.takes_options
+
+    def get_args(self):
+        """
+        Rewrite arguments to service-add-smb command to make sure we accept
+        hostname instead of a principal as we'll be constructing the principal
+        ourselves
+        """
+        for arg in self.smb_takes_args:
+            yield arg
+        for arg in super(service_add_smb, self).get_args():
+            if arg not in self.smb_takes_args and not arg.primary_key:
+                yield arg
+
+    def get_options(self):
+        """
+        Rewrite options to service-add-smb command to filter out cannonical
+        principal which is autoconstructed. Also filter out options which
+        make no sense for SMB service.
+        """
+        excluded = ('ipakrbauthzdata', 'krbprincipalauthind',
+                    'ipakrbrequirespreauth')
+        for arg in self.takes_options:
+            yield arg
+        for arg in super(service_add_smb, self).get_options():
+            check = all([arg not in self.takes_options,
+                         not arg.primary_key,
+                         arg.name not in excluded])
+            if check:
+                yield arg
+
+    def pre_callback(self, ldap, dn, entry_attrs, attrs_list,
+                     *keys, **options):
+        assert isinstance(dn, DN)
+        hostname = keys[0]
+        if len(keys) == 2:
+            netbiosname = keys[1]
+        else:
+            # By default take leftmost label from the host name
+            netbiosname = DNSName.from_text(hostname)[0].decode().upper()
+
+        # SMB service requires existence of the host object
+        # because DCE RPC calls authenticated with GSSAPI are using
+        # host/.. principal by default for validation
+        try:
+            hostresult = self.api.Command['host_show'](hostname)['result']
+        except errors.NotFound:
+            raise errors.NotFound(reason=_(
+                "The host '%s' does not exist to add a service to.") %
+                hostname)
+
+        # We cannot afford the host not being resolvable even for
+        # clustered environments with CTDB because the target name
+        # has to exist even in that case
+        util.verify_host_resolvable(hostname)
+
+        smbaccount = '{name}$'.format(name=netbiosname)
+        smbprincipal = 'cifs/{hostname}'.format(hostname=hostname)
+
+        entry_attrs['krbprincipalname'] = [
+            str(kerberos.Principal(smbprincipal, realm=self.api.env.realm)),
+            str(kerberos.Principal(smbaccount, realm=self.api.env.realm))]
+
+        entry_attrs['krbcanonicalname'] = entry_attrs['krbprincipalname'][0]
+
+        # Rewrite DN using proper rdn and new canonical name because when
+        # LDAPCreate.execute() was called, it set DN to krbcanonicalname=$value
+        dn = DN(('krbprincipalname', entry_attrs['krbcanonicalname']),
+                DN(self.obj.container_dn, api.env.basedn))
+
+        # Enforce ipaKrbPrincipalAlias to aid case-insensitive searches as
+        # krbPrincipalName/krbCanonicalName are case-sensitive in Kerberos
+        # schema
+        entry_attrs['ipakrbprincipalalias'] = entry_attrs['krbcanonicalname']
+
+        for o in ('ipakrbprincipal', 'ipaidobject', 'krbprincipalaux',
+                  'posixaccount'):
+            if o not in entry_attrs['objectclass']:
+                entry_attrs['objectclass'].append(o)
+
+        entry_attrs['uid'] = ['/'.join(
+            kerberos.Principal(smbprincipal).components)]
+        entry_attrs['uid'].append(smbaccount)
+        entry_attrs['cn'] = netbiosname
+        entry_attrs['homeDirectory'] = '/dev/null'
+        entry_attrs['uidNumber'] = DNA_MAGIC
+        entry_attrs['gidNumber'] = DNA_MAGIC
+
+        self.obj.validate_ipakrbauthzdata(entry_attrs)
+
+        if 'managedby' not in entry_attrs:
+            entry_attrs['managedby'] = hostresult['dn']
+
+        update_krbticketflags(ldap, entry_attrs, attrs_list, options, False)
+
+        return dn
+
+    def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
+        set_kerberos_attrs(entry_attrs, options)
+        rename_ipaallowedtoperform_from_ldap(entry_attrs, options)
+        self.obj.populate_krbcanonicalname(entry_attrs, options)
+        return dn
+
 
 @register()
 class service_del(LDAPDelete):
@@ -751,7 +895,6 @@ class service_find(LDAPSearch):
         assert isinstance(base_dn, DN)
         # lisp style!
         custom_filter = '(&(objectclass=ipaService)' \
-                          '(!(objectClass=posixAccount))' \
                           '(!(|(krbprincipalname=kadmin/*)' \
                               '(krbprincipalname=K/M@*)' \
                               '(krbprincipalname=krbtgt/*))' \

@@ -50,6 +50,7 @@ from ipalib.util import (
     ensure_krbcanonicalname_set
 )
 
+
 if six.PY3:
     unicode = str
 
@@ -80,7 +81,7 @@ def validate_nsaccountlock(entry_attrs):
     if 'nsaccountlock' in entry_attrs:
         nsaccountlock = entry_attrs['nsaccountlock']
         if not isinstance(nsaccountlock, (bool, Bool)):
-            if not isinstance(nsaccountlock, six.string_types):
+            if not isinstance(nsaccountlock, str):
                 raise errors.OnlyOneValueAllowed(attr='nsaccountlock')
             if nsaccountlock.lower() not in ('true', 'false'):
                 raise errors.ValidationError(name='nsaccountlock',
@@ -123,6 +124,29 @@ def fix_addressbook_permission_bindrule(name, template, is_new,
         template['ipapermbindruletype'] = 'anonymous'
 
 
+def update_samba_attrs(ldap, dn, entry_attrs, **options):
+    smb_attrs = {'ipantlogonscript', 'ipantprofilepath',
+                 'ipanthomedirectory', 'ipanthomedirectorydrive'}
+    if 'objectclass' not in entry_attrs:
+        try:
+            oc = ldap.get_entry(dn, ['objectclass'])['objectclass']
+        except errors.NotFound:
+            # In case the entry really does not exist,
+            # compare against an empty list
+            oc = []
+    else:
+        oc = entry_attrs['objectclass']
+    if 'ipantuserattrs' not in (item.lower() for item in oc):
+        for attr in smb_attrs:
+            if options.get(attr, None):
+                raise errors.ValidationError(
+                    name=attr,
+                    error=_(
+                        'Object class ipaNTUserAttrs is missing, '
+                        'user entry cannot have SMB attributes.'
+                    )
+                )
+
 
 class baseuser(LDAPObject):
     """
@@ -136,7 +160,8 @@ class baseuser(LDAPObject):
     object_class_config = 'ipauserobjectclasses'
     possible_objectclasses = [
         'meporiginentry', 'ipauserauthtypeclass', 'ipauser',
-        'ipatokenradiusproxyuser', 'ipacertmapobject'
+        'ipatokenradiusproxyuser', 'ipacertmapobject',
+        'ipantuserattrs'
     ]
     disallow_object_classes = ['krbticketpolicyaux']
     permission_filter_objectclasses = ['posixaccount']
@@ -149,7 +174,8 @@ class baseuser(LDAPObject):
         'ipatokenradiusconfiglink', 'ipatokenradiususername',
         'krbprincipalexpiration', 'usercertificate;binary',
         'krbprincipalname', 'krbcanonicalname',
-        'ipacertmapdata'
+        'ipacertmapdata', 'ipantlogonscript', 'ipantprofilepath',
+        'ipanthomedirectory', 'ipanthomedirectorydrive'
     ]
     search_display_attributes = [
         'uid', 'givenname', 'sn', 'homedirectory', 'krbcanonicalname',
@@ -327,11 +353,12 @@ class baseuser(LDAPObject):
             label=_('SSH public key fingerprint'),
             flags={'virtual_attribute', 'no_create', 'no_update', 'no_search'},
         ),
-        StrEnum('ipauserauthtype*',
+        StrEnum(
+            'ipauserauthtype*',
             cli_name='user_auth_type',
             label=_('User authentication types'),
             doc=_('Types of supported user authentication'),
-            values=(u'password', u'radius', u'otp'),
+            values=(u'password', u'radius', u'otp', u'pkinit', u'hardened'),
         ),
         Str('userclass*',
             cli_name='class',
@@ -378,6 +405,30 @@ class baseuser(LDAPObject):
             doc=_('Certificate mapping data'),
             flags=['no_create', 'no_update', 'no_search'],
         ),
+        Str('ipantlogonscript?',
+            cli_name='smb_logon_script',
+            label=_('SMB logon script path'),
+            flags=['no_create'],
+            ),
+        Str('ipantprofilepath?',
+            cli_name='smb_profile_path',
+            label=_('SMB profile path'),
+            flags=['no_create'],
+            ),
+        Str('ipanthomedirectory?',
+            cli_name='smb_home_dir',
+            label=_('SMB Home Directory'),
+            flags=['no_create'],
+            ),
+        StrEnum('ipanthomedirectoryrive?',
+                cli_name='smb_home_drive',
+                label=_('SMB Home Directory Drive'),
+                flags=['no_create'],
+                values=(
+                    'A:', 'B:', 'C:', 'D:', 'E:', 'F:', 'G:', 'H:', 'I:',
+                    'J:', 'K:', 'L:', 'M:', 'N:', 'O:', 'P:', 'Q:', 'R:',
+                    'S:', 'T:', 'U:', 'V:', 'W:', 'X:', 'Y:', 'Z:'),
+                ),
     )
 
     def normalize_and_validate_email(self, email, config=None):
@@ -391,7 +442,7 @@ class baseuser(LDAPObject):
             if not isinstance(email, (list, tuple)):
                 email = [email]
             for m in email:
-                if isinstance(m, six.string_types):
+                if isinstance(m, str):
                     if '@' not in m and defaultdomain:
                         m = m + u'@' + defaultdomain
                     if not Email(m):
@@ -495,6 +546,7 @@ class baseuser_add(LDAPCreate):
         self.obj.get_password_attributes(ldap, dn, entry_attrs)
         convert_sshpubkey_post(entry_attrs)
         radius_dn2pk(self.api, entry_attrs)
+
 
 class baseuser_del(LDAPDelete):
     """
@@ -632,6 +684,7 @@ class baseuser_mod(LDAPUpdate):
         self.check_objectclass(ldap, dn, entry_attrs)
         self.obj.convert_usercertificate_pre(entry_attrs)
         self.preserve_krbprincipalname_pre(ldap, entry_attrs, *keys, **options)
+        update_samba_attrs(ldap, dn, entry_attrs, **options)
 
     def post_common_callback(self, ldap, dn, entry_attrs, *keys, **options):
         assert isinstance(dn, DN)

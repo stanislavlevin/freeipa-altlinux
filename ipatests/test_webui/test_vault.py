@@ -32,10 +32,6 @@ import pytest
 @pytest.mark.tier1
 class vault_tasks(UI_driver):
 
-    @pytest.fixture(autouse=True)
-    def vaulttasks_setup(self, ui_driver_fsetup):
-        pass
-
     def prep_service_data(self):
 
         host = self.config.get('ipa_server')
@@ -68,8 +64,8 @@ class vault_tasks(UI_driver):
 @pytest.mark.tier1
 class test_vault(vault_tasks):
 
-    @pytest.fixture(autouse=True)
-    def vault_setup(self, vaulttasks_setup):
+    def setup(self, *args, **kwargs):
+        super(test_vault, self).setup(*args, **kwargs)
         if not self.has_kra():
             self.skip('KRA not configured')
 

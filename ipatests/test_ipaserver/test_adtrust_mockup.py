@@ -4,11 +4,7 @@ from __future__ import print_function
 import ipaserver.install.adtrust as adtr
 from ipaserver.install.adtrust import set_and_check_netbios_name
 from collections import namedtuple
-from unittest import TestCase
-try:
-    from unittest import mock
-except ImportError:
-    import mock
+from unittest import TestCase, mock
 from io import StringIO
 
 

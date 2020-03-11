@@ -181,8 +181,7 @@ class test_config(UI_driver):
         self.navigate_to_entity('cert')
         # wait for a half sec for notification to appear
         self.wait(0.5)
-        warning = self.find('div.notification-area .alert-warning',
-                            By.CSS_SELECTOR)
+        warning = self.find_by_selector('div.notification-area .alert-warning')
         try:
             assert not warning, "Warning present: {}".format(warning.text)
         finally:

@@ -211,7 +211,8 @@ class test_user(user_tasks):
         self.reset_password_action(pwd)
         self.assert_text_field('has_password', '******')
 
-        self.action_list_action('unlock')
+        # unlock option should be disabled for new user
+        self.assert_action_list_action('unlock', enabled=False)
 
         # delete
         self.delete_action(user.ENTITY, user.PKEY, action='delete_active_user')
@@ -239,6 +240,7 @@ class test_user(user_tasks):
         csr = generate_csr(user.PKEY, False)
 
         self.action_list_action('request_cert', confirm=False)
+        self.wait(seconds=2)
         self.assert_dialog()
         self.fill_text("textarea[name='csr']", csr)
         self.dialog_button_click('issue')

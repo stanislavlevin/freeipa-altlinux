@@ -26,11 +26,6 @@ import shutil
 import tempfile
 import base64
 
-import six
-# pylint: disable=import-error
-from six.moves.configparser import RawConfigParser
-# pylint: enable=import-error
-
 from ipalib import api
 from ipalib import x509
 from ipaplatform.paths import paths
@@ -55,6 +50,9 @@ ADMIN_GROUPS = [
     'Security Domain Administrators'
 ]
 
+KRA_BASEDN = DN(('o', 'kra'), ('o', 'ipaca'))
+KRA_AGENT_DN = DN(('uid', 'ipakra'), ('ou', 'people'), KRA_BASEDN)
+
 
 class KRAInstance(DogtagInstance):
     """
@@ -65,9 +63,14 @@ class KRAInstance(DogtagInstance):
     be the same for both the CA and KRA.
     """
 
-    tracking_reqs = ('auditSigningCert cert-pki-kra',
-                     'transportCert cert-pki-kra',
-                     'storageCert cert-pki-kra')
+    # Mapping of nicknames for tracking requests, and the profile to
+    # use for that certificate.  'configure_renewal()' reads this
+    # dict.  The profile MUST be specified.
+    tracking_reqs = {
+        'auditSigningCert cert-pki-kra': 'caInternalAuthAuditSigningCert',
+        'transportCert cert-pki-kra': 'caInternalAuthTransportCert',
+        'storageCert cert-pki-kra': 'caInternalAuthDRMstorageCert',
+    }
 
     def __init__(self, realm):
         super(KRAInstance, self).__init__(
@@ -77,12 +80,10 @@ class KRAInstance(DogtagInstance):
             config=paths.KRA_CS_CFG_PATH,
         )
 
-        self.basedn = DN(('o', 'kra'), ('o', 'ipaca'))
-
     def configure_instance(self, realm_name, host_name, dm_password,
                            admin_password, pkcs12_info=None, master_host=None,
-                           subject_base=None, subject=None,
-                           promote=False):
+                           subject_base=None, ca_subject=None,
+                           promote=False, pki_config_override=None):
         """Create a KRA instance.
 
            To create a clone, pass in pkcs12_info.
@@ -95,11 +96,13 @@ class KRAInstance(DogtagInstance):
         if self.pkcs12_info is not None or promote:
             self.clone = True
         self.master_host = master_host
+        self.pki_config_override = pki_config_override
 
         self.subject_base = \
             subject_base or installutils.default_subject_base(realm_name)
-        self.subject = \
-            subject or installutils.default_ca_subject_dn(self.subject_base)
+
+        # eagerly convert to DN to ensure validity
+        self.ca_subject = DN(ca_subject)
 
         self.realm = realm_name
         self.suffix = ipautil.realm_to_suffix(realm_name)
@@ -158,93 +161,23 @@ class KRAInstance(DogtagInstance):
         (admin_p12_fd, admin_p12_file) = tempfile.mkstemp()
         os.close(admin_p12_fd)
 
-        # Create KRA configuration
-        config = RawConfigParser()
-        config.optionxform = str
-        config.add_section("KRA")
-
-        # Security Domain Authentication
-        config.set("KRA", "pki_security_domain_https_port", "443")
-        config.set("KRA", "pki_security_domain_password", self.admin_password)
-        config.set("KRA", "pki_security_domain_user", self.admin_user)
-
-        # issuing ca
-        config.set("KRA", "pki_issuing_ca_uri", "https://%s" %
-                   ipautil.format_netloc(self.fqdn, 443))
-
-        # Server
-        config.set("KRA", "pki_enable_proxy", "True")
-        config.set("KRA", "pki_restart_configured_instance", "False")
-        config.set("KRA", "pki_backup_keys", "True")
-        config.set("KRA", "pki_backup_password", self.admin_password)
-
-        # Client security database
-        config.set("KRA", "pki_client_database_dir", self.tmp_agent_db)
-        config.set("KRA", "pki_client_database_password", tmp_agent_pwd)
-        config.set("KRA", "pki_client_database_purge", "True")
-        config.set("KRA", "pki_client_pkcs12_password", self.admin_password)
-
-        # Administrator
-        config.set("KRA", "pki_admin_name", self.admin_user)
-        config.set("KRA", "pki_admin_uid", self.admin_user)
-        config.set("KRA", "pki_admin_email", "root@localhost")
-        config.set("KRA", "pki_admin_password", self.admin_password)
-        config.set("KRA", "pki_admin_nickname", "ipa-ca-agent")
-        config.set("KRA", "pki_admin_subject_dn",
-                   str(DN(('cn', 'ipa-ca-agent'), self.subject_base)))
-        config.set("KRA", "pki_import_admin_cert", "False")
-        config.set("KRA", "pki_client_admin_cert_p12", admin_p12_file)
-
-        # Directory server
-        config.set("KRA", "pki_ds_ldap_port", "389")
-        config.set("KRA", "pki_ds_password", self.dm_password)
-        config.set("KRA", "pki_ds_base_dn", six.text_type(self.basedn))
-        config.set("KRA", "pki_ds_database", "ipaca")
-        config.set("KRA", "pki_ds_create_new_db", "False")
-
-        self._use_ldaps_during_spawn(config)
-
-        # Certificate subject DNs
-        config.set("KRA", "pki_subsystem_subject_dn",
-                   str(DN(('cn', 'CA Subsystem'), self.subject_base)))
-        config.set("KRA", "pki_sslserver_subject_dn",
-                   str(DN(('cn', self.fqdn), self.subject_base)))
-        config.set("KRA", "pki_audit_signing_subject_dn",
-                   str(DN(('cn', 'KRA Audit'), self.subject_base)))
-        config.set(
-            "KRA", "pki_transport_subject_dn",
-            str(DN(('cn', 'KRA Transport Certificate'), self.subject_base)))
-        config.set(
-            "KRA", "pki_storage_subject_dn",
-            str(DN(('cn', 'KRA Storage Certificate'), self.subject_base)))
-
-        # Certificate nicknames
-        # Note that both the server certs and subsystem certs reuse
-        # the ca certs.
-        config.set("KRA", "pki_subsystem_nickname",
-                   "subsystemCert cert-pki-ca")
-        config.set("KRA", "pki_sslserver_nickname",
-                   "Server-Cert cert-pki-ca")
-        config.set("KRA", "pki_audit_signing_nickname",
-                   "auditSigningCert cert-pki-kra")
-        config.set("KRA", "pki_transport_nickname",
-                   "transportCert cert-pki-kra")
-        config.set("KRA", "pki_storage_nickname",
-                   "storageCert cert-pki-kra")
-
-        # Shared db settings
-        # Needed because CA and KRA share the same database
-        # We will use the dbuser created for the CA
-        config.set("KRA", "pki_share_db", "True")
-        config.set(
-            "KRA", "pki_share_dbuser_dn",
-            str(DN(('uid', 'pkidbuser'), ('ou', 'people'), ('o', 'ipaca'))))
+        cfg = dict(
+            pki_issuing_ca_uri="https://{}".format(
+                ipautil.format_netloc(self.fqdn, 443)),
+            # Client security database
+            pki_client_database_dir=self.tmp_agent_db,
+            pki_client_database_password=tmp_agent_pwd,
+            pki_client_database_purge=True,
+            pki_client_pkcs12_password=self.admin_password,
+            pki_import_admin_cert=False,
+            pki_client_admin_cert_p12=admin_p12_file,
+        )
 
         if not (os.path.isdir(paths.PKI_TOMCAT_ALIAS_DIR) and
                 os.path.isfile(paths.PKI_TOMCAT_PASSWORD_CONF)):
             # generate pin which we know can be used for FIPS NSS database
             pki_pin = ipautil.ipa_generate_password()
-            config.set("KRA", "pki_pin", pki_pin)
+            cfg['pki_server_database_password'] = pki_pin
         else:
             pki_pin = None
 
@@ -256,21 +189,14 @@ class KRAInstance(DogtagInstance):
             pent = pwd.getpwnam(self.service_user)
             os.chown(p12_tmpfile_name, pent.pw_uid, pent.pw_gid)
 
-            # Security domain registration
-            config.set("KRA", "pki_security_domain_hostname", self.fqdn)
-            config.set("KRA", "pki_security_domain_https_port", "443")
-            config.set("KRA", "pki_security_domain_user", self.admin_user)
-            config.set("KRA", "pki_security_domain_password",
-                       self.admin_password)
-
-            # Clone
-            config.set("KRA", "pki_clone", "True")
-            config.set("KRA", "pki_clone_pkcs12_path", p12_tmpfile_name)
-            config.set("KRA", "pki_clone_pkcs12_password", self.dm_password)
-            config.set("KRA", "pki_clone_setup_replication", "False")
-            config.set(
-                "KRA", "pki_clone_uri",
-                "https://%s" % ipautil.format_netloc(self.master_host, 443))
+            self._configure_clone(
+                cfg,
+                security_domain_hostname=self.fqdn,
+                clone_pkcs12_path=p12_tmpfile_name,
+            )
+            cfg.update(
+                pki_clone_setup_replication=False,
+            )
         else:
             # the admin cert file is needed for the first instance of KRA
             cert = self.get_admin_cert()
@@ -285,18 +211,20 @@ class KRAInstance(DogtagInstance):
 
         # Generate configuration file
         pent = pwd.getpwnam(self.service_user)
+        config = self._create_spawn_config(cfg)
         with tempfile.NamedTemporaryFile('w', delete=False) as f:
             config.write(f)
             os.fchown(f.fileno(), pent.pw_uid, pent.pw_gid)
             cfg_file = f.name
 
+        nolog_list = [
+            self.dm_password, self.admin_password, pki_pin, tmp_agent_pwd
+        ]
+
         try:
             DogtagInstance.spawn_instance(
                 self, cfg_file,
-                nolog_list=(self.dm_password,
-                            self.admin_password,
-                            pki_pin,
-                            tmp_agent_pwd)
+                nolog_list=nolog_list
             )
         finally:
             os.remove(p12_tmpfile_name)
@@ -320,9 +248,8 @@ class KRAInstance(DogtagInstance):
         conn.connect(autobind=True)
 
         # create ipakra user with RA agent certificate
-        user_dn = DN(('uid', "ipakra"), ('ou', 'people'), self.basedn)
         entry = conn.make_entry(
-            user_dn,
+            KRA_AGENT_DN,
             objectClass=['top', 'person', 'organizationalPerson',
                          'inetOrgPerson', 'cmsuser'],
             uid=["ipakra"],
@@ -332,14 +259,15 @@ class KRAInstance(DogtagInstance):
             userCertificate=[cert],
             description=['2;%s;%s;%s' % (
                 cert.serial_number,
-                DN(self.subject),
+                self.ca_subject,
                 DN(('CN', 'IPA RA'), self.subject_base))])
         conn.add_entry(entry)
 
         # add ipakra user to Data Recovery Manager Agents group
-        group_dn = DN(('cn', 'Data Recovery Manager Agents'), ('ou', 'groups'),
-                self.basedn)
-        conn.add_entry_to_group(user_dn, group_dn, 'uniqueMember')
+        group_dn = DN(
+            ('cn', 'Data Recovery Manager Agents'), ('ou', 'groups'),
+            KRA_BASEDN)
+        conn.add_entry_to_group(KRA_AGENT_DN, group_dn, 'uniqueMember')
 
         conn.disconnect()
 

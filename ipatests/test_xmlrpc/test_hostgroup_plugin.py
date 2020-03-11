@@ -31,25 +31,25 @@ import pytest
 
 
 @pytest.fixture(scope='class')
-def hostgroup(request, xmlrpc_setup):
+def hostgroup(request):
     tracker = HostGroupTracker(name=u'hostgroup')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def hostgroup_invalid(request, xmlrpc_setup):
+def hostgroup_invalid(request):
     tracker = HostGroupTracker(name=u'@invalid')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def hostgroup_single(request, xmlrpc_setup):
+def hostgroup_single(request):
     tracker = HostGroupTracker(name=u'a')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def host(request, xmlrpc_setup):
+def host(request):
     tracker = HostTracker(name=u'host')
     return tracker.make_fixture(request)
 

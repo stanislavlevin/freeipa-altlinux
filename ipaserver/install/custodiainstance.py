@@ -12,8 +12,8 @@ from ipaplatform.paths import paths
 from ipaplatform.constants import constants
 from ipaserver.install.service import SimpleServiceInstance
 from ipapython import ipautil
+from ipapython import ipaldap
 from ipapython.certdb import NSSDatabase
-from ipaserver.install import installutils
 from ipaserver.install import ldapupdate
 from ipaserver.install import sysupgrade
 from base64 import b64decode
@@ -104,7 +104,7 @@ class CustodiaInstance(SimpleServiceInstance):
     @property
     def ldap_uri(self):
         if self.custodia_peer is None:
-            return installutils.realm_to_ldapi_uri(self.realm)
+            return ipaldap.realm_to_ldapi_uri(self.realm)
         else:
             return "ldap://{}".format(self.custodia_peer)
 
@@ -117,7 +117,7 @@ class CustodiaInstance(SimpleServiceInstance):
             IPA_CUSTODIA_KEYS=paths.IPA_CUSTODIA_KEYS,
             IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET,
             IPA_CUSTODIA_AUDIT_LOG=paths.IPA_CUSTODIA_AUDIT_LOG,
-            LDAP_URI=installutils.realm_to_ldapi_uri(self.realm),
+            LDAP_URI=ipaldap.realm_to_ldapi_uri(self.realm),
             UID=httpd_info.pw_uid,
             GID=httpd_info.pw_gid
         )
@@ -149,7 +149,7 @@ class CustodiaInstance(SimpleServiceInstance):
             'ldap_uri': self.ldap_uri
         })
         keystore.remove_server_keys_file()
-        installutils.remove_file(self.config_file)
+        ipautil.remove_file(self.config_file)
         sysupgrade.set_upgrade_state('custodia', 'installed', False)
 
     def __gen_keys(self):

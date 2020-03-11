@@ -68,11 +68,11 @@ class UserTracker(CertmapdataMixin, KerberosAliasMixin, Tracker):
         """ Check for non-empty unicode string for the required attributes
         in the init method """
 
-        if not (isinstance(givenname, six.string_types) and givenname):
+        if not (isinstance(givenname, str) and givenname):
             raise ValueError(
                 "Invalid first name provided: {!r}".format(givenname)
                 )
-        if not (isinstance(sn, six.string_types) and sn):
+        if not (isinstance(sn, str) and sn):
             raise ValueError("Invalid second name provided: {!r}".format(sn))
 
         super(UserTracker, self).__init__(default_version=None)
@@ -227,7 +227,7 @@ class UserTracker(CertmapdataMixin, KerberosAliasMixin, Tracker):
         result = command()
 
         for key, value in updates.items():
-            if value is None or value is '' or value is u'':
+            if value is None or value == '':
                 del self.attrs[key]
             elif key == 'rename':
                 new_principal = u'{0}@{1}'.format(value, self.api.env.realm)
@@ -241,7 +241,7 @@ class UserTracker(CertmapdataMixin, KerberosAliasMixin, Tracker):
                 else:
                     self.attrs[key] = [value]
         for key, value in expected_updates.items():
-            if value is None or value is '' or value is u'':
+            if value is None or value == '':
                 del self.attrs[key]
             else:
                 self.attrs[key] = value

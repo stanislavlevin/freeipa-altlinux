@@ -23,12 +23,12 @@ import logging
 import os
 import re
 import contextlib
-from tempfile import NamedTemporaryFile
 import pytest
 
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks as platformtasks
+from ipapython.ipaldap import realm_to_serverid
 from ipapython.dn import DN
 from ipapython import ipautil
 from ipatests.test_integration.base import IntegrationTest
@@ -116,6 +116,17 @@ def check_custodia_files(host):
     return True
 
 
+def check_pkcs11_modules(host):
+    """regression test for https://pagure.io/freeipa/issue/8073"""
+    # Return a dictionary with key = filename, value = file content
+    # containing all the PKCS11 modules modified by the installer
+    result = dict()
+    for filename in platformtasks.get_pkcs11_modules():
+        assert host.transport.file_exists(filename)
+        result[filename] = host.get_file_contents(filename)
+    return result
+
+
 CHECKS = [
     (check_admin_in_ldap, assert_entries_equal),
     (check_admin_in_cli, assert_results_equal),
@@ -123,7 +134,8 @@ CHECKS = [
     (check_certs, assert_results_equal),
     (check_dns, assert_results_equal),
     (check_kinit, assert_results_equal),
-    (check_custodia_files, assert_deepequal)
+    (check_custodia_files, assert_deepequal),
+    (check_pkcs11_modules, assert_deepequal)
 ]
 
 
@@ -205,6 +217,15 @@ class TestBackupAndRestore(IntegrationTest):
             dirman_password = self.master.config.dirman_password
             self.master.run_command(['ipa-restore', backup_path],
                                     stdin_text=dirman_password + '\nyes')
+
+            # check the file permssion and ownership is set to 770 and
+            # dirsrv:dirsrv after restore on /var/log/dirsrv/slapd-<instance>
+            # related ticket : https://pagure.io/freeipa/issue/7725
+            instance = realm_to_serverid(self.master.domain.realm)
+            log_path = paths.VAR_LOG_DIRSRV_INSTANCE_TEMPLATE % instance
+            cmd = self.master.run_command(['stat', '-c',
+                                           '"%a %G:%U"', log_path])
+            assert "770 dirsrv:dirsrv" in cmd.stdout_text
 
     def test_full_backup_and_restore_with_removed_users(self):
         """regression test for https://fedorahosted.org/freeipa/ticket/3866"""
@@ -496,12 +517,12 @@ class TestBackupAndRestoreWithReplica(IntegrationTest):
         # Configure /etc/resolv.conf on each replica to use the master as DNS
         # Otherwise ipa-replica-manage re-initialize is unable to
         # resolve the master name
-        tasks.config_replica_resolvconf_with_master_data(
-            cls.master,
-            cls.replica1)
-        tasks.config_replica_resolvconf_with_master_data(
-            cls.master,
-            cls.replica2)
+        tasks.config_host_resolvconf_with_master_data(
+            cls.master, cls.replica1
+        )
+        tasks.config_host_resolvconf_with_master_data(
+            cls.master, cls.replica2
+        )
         # Configure only master and one replica.
         # Replica is configured without CA
         tasks.install_topo(
@@ -798,8 +819,6 @@ class TestReplicaInstallAfterRestore(IntegrationTest):
 
         suffix = ipautil.realm_to_suffix(master.domain.realm)
         suffix = escape_dn_chars(str(suffix))
-        tf = NamedTemporaryFile()
-        ldif_file = tf.name
         entry_ldif = (
             "dn: cn=meTo{hostname},cn=replica,"
             "cn={suffix},"
@@ -815,19 +834,11 @@ class TestReplicaInstallAfterRestore(IntegrationTest):
             "nsds5ReplicaEnabled: off").format(
             hostname=replica1.hostname,
             suffix=suffix)
-        master.put_file_contents(ldif_file, entry_ldif)
-
         # disable replication agreement
-        arg = ['ldapmodify',
-               '-h', master.hostname,
-               '-p', '389', '-D',
-               str(master.config.dirman_dn),  # pylint: disable=no-member
-               '-w', master.config.dirman_password,
-               '-f', ldif_file]
-        master.run_command(arg)
+        tasks.ldapmodify_dm(master, entry_ldif)
 
         # uninstall master.
-        tasks.uninstall_master(master)
+        tasks.uninstall_master(master, clean=False)
 
         # master restore.
         dirman_password = master.config.dirman_password

@@ -7,26 +7,28 @@ Module provides tests which testing ability of various subsystems to be
 installed.
 """
 
-from __future__ import absolute_import, print_function
+from __future__ import absolute_import
 
 import os
 import re
-from datetime import datetime, timedelta
-import sys
 import textwrap
 import time
+from datetime import datetime, timedelta
+
 import pytest
+from cryptography.hazmat.primitives import hashes
+
+from ipalib import x509
 from ipalib.constants import DOMAIN_LEVEL_0
-from ipalib.constants import PKI_GSSAPI_SERVICE_NAME
 from ipaplatform.constants import constants
 from ipaplatform.osinfo import osinfo
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks as platformtasks
+from ipapython import ipautil
+from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.env_config import get_global_config
 from ipatests.test_integration.base import IntegrationTest
-from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.test_caless import CALessBase, ipa_certs_cleanup
-from ipalib import x509
 
 config = get_global_config()
 
@@ -475,6 +477,43 @@ class TestInstallMaster(IntegrationTest):
         exp_str = ("ipa: ERROR: No YubiKey found")
         assert exp_str in cmd.stderr_text
 
+    def test_pki_certs(self):
+        certs, keys = tasks.certutil_certs_keys(
+            self.master,
+            paths.PKI_TOMCAT_ALIAS_DIR,
+            paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT
+        )
+
+        expected_certs = {
+            # CA
+            'caSigningCert cert-pki-ca': 'CTu,Cu,Cu',
+            'ocspSigningCert cert-pki-ca': 'u,u,u',
+            'subsystemCert cert-pki-ca': 'u,u,u',
+            'auditSigningCert cert-pki-ca': 'u,u,Pu',  # why P?
+            # KRA
+            'transportCert cert-pki-kra': 'u,u,u',
+            'storageCert cert-pki-kra': 'u,u,u',
+            'auditSigningCert cert-pki-kra': 'u,u,Pu',
+            # server
+            'Server-Cert cert-pki-ca': 'u,u,u',
+        }
+        assert certs == expected_certs
+        assert len(certs) == len(keys)
+
+        for nickname in sorted(certs):
+            cert = tasks.certutil_fetch_cert(
+                self.master,
+                paths.PKI_TOMCAT_ALIAS_DIR,
+                paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
+                nickname
+            )
+            key_size = cert.public_key().key_size
+            if nickname == 'caSigningCert cert-pki-ca':
+                assert key_size == 3072
+            else:
+                assert key_size == 2048
+            assert cert.signature_hash_algorithm.name == hashes.SHA256.name
+
     def test_p11_kit_softhsm2(self):
         # check that p11-kit-proxy does not inject SoftHSM2
         result = self.master.run_command([
@@ -506,10 +545,7 @@ class TestInstallMaster(IntegrationTest):
             "rpm", "-V",
             "python3-ipaclient",
             "python3-ipalib",
-            "python3-ipaserver",
-            "python2-ipaclient",
-            "python2-ipalib",
-            "python2-ipaserver"
+            "python3-ipaserver"
         ]
 
         if osinfo.id == 'fedora':
@@ -553,97 +589,6 @@ class TestInstallMaster(IntegrationTest):
             msg = "rpm -V found group issues for the following files: {}"
             assert group_warnings == [], msg.format(group_warnings)
 
-    @pytest.mark.parametrize(
-        "keytab, owner, mod",
-        [
-            (os.path.join(
-                paths.PKI_TOMCAT, PKI_GSSAPI_SERVICE_NAME + '.keytab'),
-             constants.PKI_USER, oct(0o600)),
-            (paths.DS_KEYTAB, constants.DS_USER, oct(0o600)),
-            (paths.HTTP_KEYTAB, constants.GSSPROXY_USER, oct(0o600)),
-            (paths.IPA_DNSKEYSYNCD_KEYTAB, constants.ODS_USER, oct(0o440)),
-            (paths.NAMED_KEYTAB, constants.NAMED_USER, oct(0o400)),
-        ])
-    def test_service_keytab_permissions(self, keytab, owner, mod):
-        assert owner
-        assert keytab
-        test_source = textwrap.dedent(r"""
-        import os, pwd, stat
-
-        def assert_equal(act, exp):
-            assert act == exp, \
-            '\\n  Actual: {{}}\\nExpected: {{}}'.format(act, exp)
-
-        def assert_in(val, vals):
-            assert val in vals, \
-            '\\n Value: {{}}\\nNot in: {{}}'.format(val, vals)
-        pw = pwd.getpwnam('{owner}')
-        uid = pw.pw_uid
-        gid = pw.pw_gid
-        # drop root privs if it needs
-        if uid > 0:
-            # need to read traceback
-            os.chmod(__file__, 0o644)
-            os.setgroups([])
-            os.setresgid(gid, gid, gid)
-            os.setresuid(uid, uid, uid)
-            assert_equal(os.getresgid(), (gid, gid, gid))
-            assert_equal(os.getresuid(), (uid, uid, uid))
-        # keytab should be at least readable
-        assert os.access('{path}', os.R_OK)
-        # keytab belongs either to root or our user
-        stats = os.stat('{path}')
-        mode = stats.st_mode
-        assert_in(stats.st_uid, [0, uid])
-        assert_in(stats.st_gid, [0, gid])
-        # keytab has permissions
-        assert stat.S_ISREG(mode)
-        assert_equal(oct(stat.S_IMODE(mode)), oct({mod}))
-
-        # parent dir
-        dir_stats = os.stat(os.path.dirname('{path}'))
-        mode = dir_stats.st_mode
-
-        # belongs either to root or our user
-        assert_in(dir_stats.st_uid, [0, uid])
-        assert_in(dir_stats.st_gid, [0, gid])
-
-        # at least parent directory is not world writable
-        assert not dir_stats.st_mode & stat.S_IWOTH
-        """).format(
-            owner=owner,
-            path=keytab,
-            mod=mod,
-        )
-        exec_source = textwrap.dedent("""
-        import os
-        import subprocess
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(
-                mode="w", dir="/tmp", prefix="test_", suffix=".py") as f:
-            code = \"\"\"{code}\"\"\"
-            f.write(code)
-            f.flush()
-            os.fsync(f.fileno())
-            args = [
-                "{python}",
-                "-c",
-                "import runpy;runpy.run_path('{{}}')".format(f.name),
-            ]
-            subprocess.check_call(args)
-        """).format(
-            python=sys.executable,
-            code=test_source,
-        )
-
-        args = [
-            sys.executable,
-            '-c',
-            exec_source,
-        ]
-        self.master.run_command(args)
-
 
 class TestInstallMasterKRA(IntegrationTest):
 
@@ -677,6 +622,29 @@ class TestInstallMasterDNS(IntegrationTest):
 
     def test_install_kra(self):
         tasks.install_kra(self.master, first_instance=True)
+
+
+class TestInstallMasterDNSRepeatedly(IntegrationTest):
+    """ Test that a repeated installation of the primary with DNS enabled
+    will lead to a already installed message and not in "DNS zone X
+    already exists in DNS" in check_zone_overlap.
+    The error is only occuring if domain is set explicitly in the command
+    line installer as check_zone_overlap is used in the domain_name
+    validator.
+    """
+
+    num_replicas = 0
+
+    @classmethod
+    def install(cls, mh):
+        tasks.install_master(cls.master, setup_dns=True)
+
+    def test_install_master_releatedly(self):
+        cmd = tasks.install_master(self.master,
+                                   setup_dns=True,
+                                   raiseonerr=False)
+        exp_str = ("already exists in DNS")
+        assert (exp_str not in cmd.stderr_text and cmd.returncode != 2)
 
 
 class TestInstallMasterReservedIPasForwarder(IntegrationTest):
@@ -829,3 +797,168 @@ class TestMaskInstall(IntegrationTest):
         """ Method to restore the default bashrc contents"""
         if self.bashrc_file is not None:
             self.master.put_file_contents('/root/.bashrc', self.bashrc_file)
+
+
+class TestInstallMasterReplica(IntegrationTest):
+    """https://pagure.io/freeipa/issue/7929
+    Problem:
+    If a replica installation fails before all the services
+    have been enabled then
+    it could leave things in a bad state.
+
+    ipa-replica-manage del --cleanup --force
+    invalid 'PKINIT enabled server': all masters must have
+    IPA master role enabled
+
+    Root cause was that configuredServices were being
+    considered when determining what masters provide
+    what services, so a partially installed master
+    could cause operations to fail on other masters,
+    to the point where a broken master couldn't be removed.
+    """
+    num_replicas = 1
+    topology = 'star'
+
+    @classmethod
+    def install(cls, mh):
+        tasks.install_master(cls.master, setup_kra=True)
+        # do not install KRA on replica, it is part of test
+        tasks.install_replica(cls.master, cls.replicas[0], setup_kra=False)
+
+    def test_replicamanage_del(self):
+        """Test Steps:
+        1. Setup server
+        2. Setup replica
+        3. modify the replica entry on Master:
+           ldapmodify -D cn="Directory Manager"-w <passwd>
+           dn: cn=KDC,cn=<replicaFQDN>,cn=masters,cn=ipa,cn=etc,<baseDN>
+           changetype: modify
+           delete: ipaconfigstring
+           ipaconfigstring: enabledService
+
+           dn: cn=KDC,cn=<replicaFQDN>,cn=masters,cn=ipa,cn=etc,<baseDN>
+           add: ipaconfigstring
+           ipaconfigstring: configuredService
+        4. On master,
+           run ipa-replica-manage del <replicaFQDN> --cleanup --force
+        """
+        # https://pagure.io/freeipa/issue/7929
+        # modify the replica entry on Master
+        cmd_output = None
+        dn_entry = 'dn: cn=KDC,cn=%s,cn=masters,cn=ipa,' \
+                   'cn=etc,%s' % \
+                   (self.replicas[0].hostname,
+                    ipautil.realm_to_suffix(
+                        self.replicas[0].domain.realm).ldap_text())
+        entry_ldif = textwrap.dedent("""
+            {dn}
+            changetype: modify
+            delete: ipaconfigstring
+            ipaconfigstring: enabledService
+
+            {dn}
+            add: ipaconfigstring
+            ipaconfigstring: configuredService
+        """).format(dn=dn_entry)
+        cmd_output = tasks.ldapmodify_dm(self.master, entry_ldif)
+        assert 'modifying entry' in cmd_output.stdout_text
+
+        cmd_output = self.master.run_command([
+            'ipa-replica-manage', 'del',
+            self.replicas[0].hostname, '--cleanup', '--force'
+        ])
+
+        assert_text = 'Deleted IPA server "%s"' % self.replicas[0].hostname
+        assert assert_text in cmd_output.stdout_text
+
+
+class TestInstallReplicaAgainstSpecificServer(IntegrationTest):
+    """Installation of replica against a specific server
+
+    Test to check replica install against specific server. It uses master and
+    replica1 without CA and having custodia service stopped. Then try to
+    install replica2 from replica1 and expect it to get fail as specified
+    server is not providing all the services.
+
+    related ticket: https://pagure.io/freeipa/issue/7566
+    """
+
+    num_replicas = 2
+
+    @classmethod
+    def install(cls, mh):
+        tasks.install_master(cls.master, setup_kra=True)
+
+        # install replica1 without CA
+        cmd = tasks.install_replica(cls.master, cls.replicas[0],
+                                    setup_ca=False, setup_dns=True,
+                                    promote=False)
+
+        # check for warning that CA is not installed on server
+        warn = 'WARNING: The CA service is only installed on one server'
+        assert warn in cmd.stderr_text
+
+    def test_replica_install_against_server_without_ca(self):
+        """Replica install will fail complaining about CA role
+        and exit code 4"""
+
+        # stop custodia service on replica1
+        self.replicas[0].run_command('systemctl stop ipa-custodia.service')
+
+        # check if custodia service is stopped
+        cmd = self.replicas[0].run_command('ipactl status')
+        assert 'ipa-custodia Service: STOPPED' in cmd.stdout_text
+
+        try:
+            # install replica2 against replica1, as CA is not installed on
+            # replica1, installation on replica2 should fail
+            cmd = tasks.install_replica(self.replicas[0], self.replicas[1],
+                                        promote=False, raiseonerr=False)
+            assert cmd.returncode == 4
+            error = "please provide a server with the CA role"
+            assert error in cmd.stderr_text
+
+        finally:
+            tasks.uninstall_master(self.replicas[1],
+                                   ignore_topology_disconnect=True,
+                                   ignore_last_of_role=True)
+
+    def test_replica_install_against_server_without_kra(self):
+        """Replica install will fail complaining about KRA role
+        and exit code 4"""
+
+        # install ca on replica1
+        tasks.install_ca(self.replicas[0])
+        try:
+            # install replica2 against replica1, as KRA is not installed on
+            # replica1(CA installed), installation should fail on replica2
+            cmd = tasks.install_replica(self.replicas[0], self.replicas[1],
+                                        promote=False, setup_kra=True,
+                                        raiseonerr=False)
+            assert cmd.returncode == 4
+            error = "please provide a server with the KRA role"
+            assert error in cmd.stderr_text
+
+        finally:
+            tasks.uninstall_master(self.replicas[1],
+                                   ignore_topology_disconnect=True,
+                                   ignore_last_of_role=True)
+
+    def test_replica_install_against_server(self):
+        """Replica install should succeed if specified server provide all
+        the services"""
+
+        tasks.install_replica(self.master, self.replicas[1],
+                              setup_dns=True, promote=False)
+
+        # check if replication agreement stablished between master
+        # and replica2 only.
+        cmd = self.replicas[1].run_command(['ipa-replica-manage', 'list',
+                                            self.replicas[0].hostname])
+        assert self.replicas[0].hostname not in cmd.stdout_text
+
+        dirman_password = self.master.config.dirman_password
+        cmd = self.replicas[1].run_command(['ipa-csreplica-manage', 'list',
+                                            self.replicas[0].hostname],
+                                           stdin_text=dirman_password)
+        assert self.replicas[0].hostname not in cmd.stdout_text

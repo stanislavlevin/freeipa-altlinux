@@ -23,7 +23,6 @@ from __future__ import print_function
 import logging
 import os
 import pwd
-import grp
 import socket
 import dbus
 
@@ -44,9 +43,9 @@ from ipapython.dogtag import KDC_PROFILE
 
 from ipaserver.install import replication
 from ipaserver.install import ldapupdate
-from ipaserver.masters import find_providing_servers
 
 from ipaserver.install import certs
+from ipaserver.masters import find_providing_servers
 from ipaplatform.constants import constants
 from ipaplatform.tasks import tasks
 from ipaplatform.paths import paths
@@ -264,7 +263,7 @@ class KrbInstance(service.Service):
                              SUFFIX=self.suffix,
                              DOMAIN=self.domain,
                              HOST=self.host,
-                             SERVER_ID=installutils.realm_to_serverid(self.realm),
+                             SERVER_ID=ipaldap.realm_to_serverid(self.realm),
                              REALM=self.realm,
                              KRB5KDC_KADM5_ACL=paths.KRB5KDC_KADM5_ACL,
                              DICT_WORDS=paths.DICT_WORDS,
@@ -274,7 +273,8 @@ class KrbInstance(service.Service):
                              CACERT_PEM=paths.CACERT_PEM,
                              KDC_CA_BUNDLE_PEM=paths.KDC_CA_BUNDLE_PEM,
                              CA_BUNDLE_PEM=paths.CA_BUNDLE_PEM,
-                             INCLUDES=includes)
+                             INCLUDES=includes,
+                             FIPS='#' if tasks.is_fips_enabled() else '')
 
         # IPA server/KDC is not a subdomain of default domain
         # Proper domain-realm mapping needs to be specified
@@ -349,6 +349,7 @@ class KrbInstance(service.Service):
     def __configure_instance(self):
         self.__template_file(paths.KRB5KDC_KDC_CONF, chmod=None)
         self.__template_file(paths.KRB5_CONF)
+        self.__template_file(paths.KRB5_FREEIPA_SERVER)
         self.__template_file(paths.KRB5_FREEIPA, client_template=True)
         self.__template_file(paths.HTML_KRB5_INI)
         self.__template_file(paths.KRB_CON)
@@ -398,8 +399,8 @@ class KrbInstance(service.Service):
         installutils.create_keytab(paths.KRB5_KEYTAB, host_principal)
 
         # Make sure access is strictly reserved to root only for now
-        os.chown(paths.KRB5_KEYTAB, 0, grp.getgrnam('_keytab').gr_gid)
-        os.chmod(paths.KRB5_KEYTAB, 0o640)
+        os.chown(paths.KRB5_KEYTAB, 0, 0)
+        os.chmod(paths.KRB5_KEYTAB, 0o600)
 
         self.move_service_to_host(host_principal)
 
@@ -459,7 +460,7 @@ class KrbInstance(service.Service):
                 profile=KDC_PROFILE,
                 post_command='renew_kdc_cert',
                 perms=(0o644, 0o600),
-                resubmit_timeout=api.env.replication_wait_timeout
+                resubmit_timeout=api.env.certmonger_wait_timeout
             )
         except dbus.DBusException as e:
             # if the certificate is already tracked, ignore the error
@@ -601,8 +602,8 @@ class KrbInstance(service.Service):
         certmonger.stop_tracking(certfile=paths.KDC_CERT)
 
     def delete_pkinit_cert(self):
-        installutils.remove_file(paths.KDC_CERT)
-        installutils.remove_file(paths.KDC_KEY)
+        ipautil.remove_file(paths.KDC_CERT)
+        ipautil.remove_file(paths.KDC_KEY)
 
     def uninstall(self):
         if self.is_configured():
@@ -628,7 +629,7 @@ class KrbInstance(service.Service):
 
         # stop tracking and remove certificates
         self.stop_tracking_certs()
-        installutils.remove_file(paths.CACERT_PEM)
+        ipautil.remove_file(paths.CACERT_PEM)
         self.delete_pkinit_cert()
 
         if running:

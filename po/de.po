@@ -3,22 +3,21 @@
 # Tomas Babej <tbabej@redhat.com>, 2015. #zanata
 # David Kreitschmann <david@kreitschmann.de>, 2016. #zanata
 # Martin Bašti <mbasti@redhat.com>, 2016. #zanata
-# Paul Ritter <paul-ritter@gmx.net>, 2017. #zanata
 # Paul Ritter <paul-ritter@gmx.net>, 2018. #zanata
 msgid ""
 msgstr ""
-"Project-Id-Version: freeipa 4.7.2.dev201904240756+gita2b40ab0e\n"
+"Project-Id-Version: freeipa 4.8.0\n"
 "Report-Msgid-Bugs-To: https://fedorahosted.org/freeipa/newticket\n"
-"POT-Creation-Date: 2019-04-24 11:14+0300\n"
-"MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2019-08-14 10:13+0300\n"
 "PO-Revision-Date: 2018-04-20 07:50+0000\n"
 "Last-Translator: Paul Ritter <paul-ritter@gmx.net>\n"
 "Language-Team: German\n"
 "Language: de\n"
-"X-Generator: Zanata 4.6.2\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1)\n"
+"X-Generator: Zanata 4.6.2\n"
 
 msgid ""
 "\n"
@@ -304,7 +303,7 @@ msgstr "%(count)d Variablen"
 
 #, python-format
 msgid "%(cver)s client incompatible with %(sver)s server at '%(server)s'"
-msgstr "%(cver)s Client ist inkompatibel mit %(sver)s server auf '%(server)s'"
+msgstr "%(cver)s Client ist inkompatibel mit %(sver)s Server auf '%(server)s'"
 
 #, python-format
 msgid "%(desc)s: %(info)s"
@@ -1637,7 +1636,7 @@ msgstr "Domain"
 #, python-format
 msgid "Domain '%(domain)s' is not a root domain for forest '%(forest)s'"
 msgstr ""
-"Die Domain '%(domain)s' ist keine Root-Domain für den Forest '%(forest)s'"
+"Die Domäne '%(domain)s' ist keine Root Domäne für den Forest '%(forest)s'"
 
 msgid "Domain Level"
 msgstr "Domain Level"
@@ -4149,7 +4148,7 @@ msgstr "Attribut \"%(attribute)s\" ist nicht erlaubt"
 
 #, python-format
 msgid "attribute \"%s\" not allowed"
-msgstr "Attribut »%s« ist nicht erlaubt"
+msgstr "Attribut \"%s\" ist nicht erlaubt"
 
 msgid "attribute is not configurable"
 msgstr "Attribut ist nicht konfigurierbar"
@@ -4191,9 +4190,6 @@ msgstr "darf höchstens %(maxvalue)d sein"
 #, python-format
 msgid "can be at most %(maxvalue)s"
 msgstr "darf höchstens %(maxvalue)s sein"
-
-msgid "cannot be longer that 255 characters"
-msgstr "darf nicht länger als 255 Zeichen sein"
 
 #, python-format
 msgid "cannot connect to '%(uri)s': %(error)s"

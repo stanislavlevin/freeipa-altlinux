@@ -1,7 +1,6 @@
 #
 # Copyright (C) 2014  FreeIPA Contributors see COPYING for license
 #
-from __future__ import absolute_import
 
 import logging
 

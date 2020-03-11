@@ -23,16 +23,13 @@ from __future__ import print_function
 import logging
 import sys
 import os
-
 import re
-import ldap
 import socket
 import traceback
+from urllib.parse import urlparse
+from xmlrpc.client import MAXINT
 
-# pylint: disable=import-error
-from six.moves.urllib.parse import urlparse
-from six.moves.xmlrpc_client import MAXINT
-# pylint: enable=import-error
+import ldap
 
 from ipaclient.install import ipadiscovery
 from ipapython import ipautil
@@ -282,6 +279,7 @@ def del_link(realm, replica1, replica2, dirman_passwd, force=False):
         return False
     except Exception as e:
         print("Failed to determine agreement type for '%s': %s" % (replica2, e))
+        return False
 
     if type1 == replication.IPA_REPLICA and managed_topology:
         exit_on_managed_topology(what)
@@ -1224,7 +1222,6 @@ def re_initialize(realm, thishost, fromhost, dirman_passwd, nolookup=False):
         # we did not replicate memberOf, do so now.
         if not agreement.single_value.get('nsDS5ReplicatedAttributeListTotal'):
             ds = dsinstance.DsInstance(realm_name=realm)
-            ds.ldapi = os.getegid() == 0
             ds.init_memberof()
 
 def force_sync(realm, thishost, fromhost, dirman_passwd, nolookup=False):
@@ -1244,7 +1241,6 @@ def force_sync(realm, thishost, fromhost, dirman_passwd, nolookup=False):
         repl.force_sync(repl.conn, fromhost)
     else:
         ds = dsinstance.DsInstance(realm_name=realm)
-        ds.ldapi = os.getegid() == 0
         ds.replica_manage_time_skew(prevent=False)
         repl = replication.ReplicationManager(realm, fromhost, dirman_passwd)
         repl.force_sync(repl.conn, thishost)

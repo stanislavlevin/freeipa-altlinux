@@ -43,6 +43,17 @@ class BaseConstantsNamespace:
         'httpd_run_ipa': 'on',
         'httpd_dbus_sssd': 'on',
     }
+    # Unlike above, there are multiple use cases for SMB sharing
+    # SELINUX_BOOLEAN_SMBSERVICE is a dictionary of dictionaries
+    # to define set of booleans for each use case
+    SELINUX_BOOLEAN_SMBSERVICE = {
+        'share_home_dirs': {
+            'samba_enable_home_dirs': 'on',
+        },
+        'reshare_nfs_with_samba': {
+            'samba_share_nfs': 'on',
+        },
+    }
     SELINUX_MCS_MAX = 1023
     SELINUX_MCS_REGEX = r"^c(\d+)([.,-]c(\d+))*$"
     SELINUX_MLS_MAX = 15
@@ -67,8 +78,6 @@ class BaseConstantsNamespace:
     # high ciphers without RC4, MD5, TripleDES, pre-shared key, secure
     # remote password, and DSA cert authentication.
     TLS_HIGH_CIPHERS = "HIGH:!aNULL:!eNULL:!MD5:!RC4:!3DES:!PSK:!SRP:!aDSS"
-    HTTPD_IPA_MODULES = None
-    HTTPD_IPA_CONFL_MODULES = None
 
 
 constants = BaseConstantsNamespace()

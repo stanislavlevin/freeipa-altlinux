@@ -90,7 +90,7 @@ notboth_err = _('HBAC rule and local members cannot both be set')
 
 
 def validate_selinuxuser(ugettext, user):
-    r"""
+    """
     An SELinux user has 3 components: user:MLS:MCS. user and MLS are required.
     user traditionally ends with _u but this is not mandatory.
       The regex is {name}

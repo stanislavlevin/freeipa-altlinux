@@ -15,6 +15,7 @@ Developers:
 	Alexander Bokovoy
 	Alexander Koksharov
 	Alexander Scheel
+	Alexandre Mulatinho
 	Alexey Slaykovsky
 	Amit Kumar
 	Ana Krivokapić
@@ -25,7 +26,10 @@ Developers:
 	Benjamin Drung
 	Brian Cook
 	Brian J. Murrell
+	Cédric Jeanneret
+	Changmin Teng
 	Christian Heimes
+	Christian Hermann
 	David Kreitschmann
 	David Kupka
 	David O'Brien
@@ -47,6 +51,7 @@ Developers:
 	Fraser Tweedale
 	Gabe Alford
 	Ganna Kaihorodova
+	German Parente
 	Gowrishankar Rajaiyan
 	Günther Deschner
 	Ian Kumlien
@@ -87,6 +92,7 @@ Developers:
 	Martin Nagy
 	Matt Rogers
 	Michael Simacek
+	Michal Polovka
 	Michal Reznik
 	Michal Židek
 	Milan Kubík
@@ -94,6 +100,7 @@ Developers:
 	Nalin Dahyabhai
 	Nathan Kinder
 	Nathaniel McCallum
+	ndehadra
 	Nick Hatch
 	Nikhil Dehadrai
 	Nikolai Kondrashov
@@ -109,11 +116,13 @@ Developers:
 	Pavel Vomáčka
 	Pavel Zůna
 	Pete Rowley
+	Peter Keresztes Schmidt
 	Peter Lacko
 	Petr Čech
 	Petr Špaček
 	Petr Viktorin
 	Petr Voborník
+	Rafael Guterres Jeffman
 	realsobek
 	René Genz
 	Rich Megginson
@@ -125,23 +134,28 @@ Developers:
 	Serhii Tsymbaliuk
 	shanyin
 	Simo Sorce
+	Spencer E. Olson
 	Stanislav Laznicka
 	Stanislav Levin
 	Stephen Gallagher
 	sudharsanomprakash
 	Sudhir Menon
+	Sumedh Sidhaye
 	Sumit Bose
 	Sylvain Baubeau
 	Takeshi MIZUTA
+	Theodor van Nahl
 	Thierry Bordaz
 	Thomas Woerner
 	Thorsten Scherf
 	Tibor Dudlák
 	Timo Aaltonen
 	Tomáš Babej
+	Tomas Halman
 	Tomáš Křížek
 	Varun Mylaraiah
 	W. Michael Petullo
+	William Brown
 	William Jon McCann
 	Xiao-Long Chen
 	Yuri Chornoivan
@@ -168,26 +182,39 @@ Testing:
 	Yi Zhang
 
 Translators:
+	A S Alam
 	Abhijeet Kasurde
+	Alex
+	Alexander Bokovoy
 	Andi Chandler
 	Andrew Martynov
-	A S Alam
+	Brian Curtich
+	David Kreitschmann
+	dominique
 	Emilio Herrera
 	Gundachandru
 	Héctor Daniel Cabrera
 	Jake Li
 	Jérôme Fenal
+	Josef Hruška
+	Manuela Silva
 	Marco Aurélio Krause
 	Martin Bašti
+	Martin Kosek
+	Martin Liu
 	Olesya Gerasimenko
+	Omar Berroterán S.
 	Paul Ritter
+	Pavel Borecki
 	Pavel Vomacka
 	Piotr Drąg
 	Robert Antoni Buj Gelonch
 	Sankarshan Mukhopadhyay
 	Teguh DC
+	Tomas Babej
 	Yuri Chornoivan
 	Zdenek
+	zhenglei
 
 Wiki, Solution and Idea Contributors:
 	James Hogarth

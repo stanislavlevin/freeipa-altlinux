@@ -14,6 +14,9 @@ from ipaplatform.base.constants import BaseConstantsNamespace
 
 
 class RedHatConstantsNamespace(BaseConstantsNamespace):
-    pass
+    # Use system-wide crypto policy
+    # see https://fedoraproject.org/wiki/Changes/CryptoPolicy
+    TLS_HIGH_CIPHERS = None
+
 
 constants = RedHatConstantsNamespace()

@@ -19,6 +19,7 @@
 
 from __future__ import absolute_import
 
+import configparser
 import logging
 import os
 import stat
@@ -34,7 +35,6 @@ import time
 import datetime
 
 import six
-from six.moves import configparser
 
 from ipalib.install import certmonger, sysrestore
 from ipapython import dogtag
@@ -200,7 +200,7 @@ class CertDB:
         if fstore:
             self.fstore = fstore
         else:
-            self.fstore = sysrestore.FileStore()
+            self.fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
     ca_subject = ipautil.dn_attribute_property('_ca_subject')
     subject_base = ipautil.dn_attribute_property('_subject_base')
@@ -377,14 +377,16 @@ class CertDB:
         except ipautil.CalledProcessError:
             return None
 
-    def track_server_cert(self, nickname, principal, password_file=None, command=None):
+    def track_server_cert(
+            self, nickname, principal,
+            password_file=None, command=None, profile=None):
         """
         Tell certmonger to track the given certificate nickname.
         """
         try:
             request_id = certmonger.start_tracking(
                 self.secdir, nickname=nickname, pinfile=password_file,
-                post_command=command)
+                post_command=command, profile=profile)
         except RuntimeError as e:
             logger.error("certmonger failed starting to track certificate: %s",
                          str(e))
@@ -661,7 +663,7 @@ class CertDB:
     def request_service_cert(self, nickname, principal, host,
                              resubmit_timeout=None):
         if resubmit_timeout is None:
-            resubmit_timeout = api.env.replication_wait_timeout
+            resubmit_timeout = api.env.certmonger_wait_timeout
         return certmonger.request_and_wait_for_cert(
             certpath=self.secdir,
             storage='NSSDB',

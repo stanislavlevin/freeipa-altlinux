@@ -57,8 +57,7 @@ wellknownservices = [
     'rpcidmapd', 'pki_tomcatd', 'chronyd', 'domainname',
     'named', 'ods_enforcerd', 'ods_signerd', 'gssproxy',
     'nfs-utils', 'sssd', 'NetworkManager', 'ipa-custodia',
-    'ipa-dnskeysyncd', 'ipa-otpd', 'ipa-ods-exporter',
-    'nfs_client',
+    'ipa-dnskeysyncd', 'ipa-otpd', 'ipa-ods-exporter'
 ]
 
 # The common ports for these services. This is used to wait for the
@@ -172,6 +171,9 @@ class PlatformService:
         pass
 
     def restart(self, instance_name="", capture_output=True, wait=True):
+        pass
+
+    def try_restart(self, instance_name="", capture_output=True, wait=True):
         pass
 
     def is_running(self, instance_name="", wait=True):
@@ -337,6 +339,10 @@ class SystemdService(PlatformService):
 
     def restart(self, instance_name="", capture_output=True, wait=True):
         self._restart_base(instance_name, "restart",
+                           capture_output, wait)
+
+    def try_restart(self, instance_name="", capture_output=True, wait=True):
+        self._restart_base(instance_name, "try-restart",
                            capture_output, wait)
 
     def is_running(self, instance_name="", wait=True):

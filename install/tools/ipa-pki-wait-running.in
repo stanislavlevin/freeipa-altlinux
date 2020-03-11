@@ -33,7 +33,7 @@ EXIT_FAILURE = 1
 
 
 if hasattr(time, 'monotonic'):
-    curtime = time.monotonic  # pylint: disable=no-member
+    curtime = time.monotonic
 else:
     curtime = time.time
 
@@ -88,7 +88,7 @@ def main():
         sys.exit(EXIT_SUCCESS)
 
     # bootstrap ipalib.api to parse config file
-    api.bootstrap(confdir=paths.ETC_IPA)
+    api.bootstrap(confdir=paths.ETC_IPA, log=None)
     timeout = api.env.startup_timeout
 
     conn = get_conn(api.env.host, subsystem=SUBSYSTEM)

@@ -135,7 +135,7 @@ def main():
 
     check_server_configuration()
 
-    fstore = sysrestore.FileStore()
+    fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
     print("================================================================"
           "==============")

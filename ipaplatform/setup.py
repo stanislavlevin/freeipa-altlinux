@@ -34,7 +34,6 @@ if __name__ == '__main__':
         namespace_packages=['ipaplatform'],
         packages=[
             "ipaplatform",
-            "ipaplatform.altlinux",
             "ipaplatform.base",
             "ipaplatform.debian",
             "ipaplatform.fedora",

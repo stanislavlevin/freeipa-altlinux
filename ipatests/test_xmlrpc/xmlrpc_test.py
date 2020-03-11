@@ -27,11 +27,10 @@ import inspect
 import unittest
 
 import contextlib
-import pytest
 import six
 
 from ipatests.util import assert_deepequal, Fuzzy
-from ipalib import api, request as ipa_request, errors
+from ipalib import api, request, errors
 from ipapython.version import API_VERSION
 
 # pylint: disable=no-name-in-module, import-error
@@ -44,7 +43,7 @@ else:
 # Matches a gidnumber like '1391016742'
 # FIXME: Does it make more sense to return gidnumber, uidnumber, etc. as `int`
 # or `long`?  If not, we still need to return them as `unicode` instead of `str`.
-fuzzy_digits = Fuzzy(r'^\d+$', type=six.string_types)
+fuzzy_digits = Fuzzy(r'^\d+$', type=str)
 
 uuid_re = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 
@@ -110,18 +109,16 @@ fuzzy_caid = fuzzy_uuid
 fuzzy_ipauniqueid = Fuzzy('(?i)ipauniqueid=%s' % uuid_re)
 
 # Matches a hash signature, not enforcing length
-fuzzy_hash = Fuzzy(
-    r'^([a-f0-9][a-f0-9]:)+[a-f0-9][a-f0-9]$', type=six.string_types
-)
+fuzzy_hash = Fuzzy(r'^([a-f0-9][a-f0-9]:)+[a-f0-9][a-f0-9]$', type=str)
 
 # Matches a date, like Tue Apr 26 17:45:35 2016 UTC
 fuzzy_date = Fuzzy(
     r'^[a-zA-Z]{3} [a-zA-Z]{3} \d{2} \d{2}:\d{2}:\d{2} \d{4} UTC$'
 )
 
-fuzzy_issuer = Fuzzy(type=six.string_types)
+fuzzy_issuer = Fuzzy(type=str)
 
-fuzzy_hex = Fuzzy(r'^0x[0-9a-fA-F]+$', type=six.string_types)
+fuzzy_hex = Fuzzy(r'^0x[0-9a-fA-F]+$', type=str)
 
 # Matches password - password consists of all printable characters without
 # whitespaces. The only exception is space, but space cannot be at the
@@ -132,7 +129,7 @@ fuzzy_password = Fuzzy(r'^\S([\S ]*\S)*$')
 fuzzy_dergeneralizedtime = Fuzzy(type=datetime.datetime)
 
 # match any string
-fuzzy_string = Fuzzy(type=six.string_types)
+fuzzy_string = Fuzzy(type=str)
 
 fuzzy_bytes = Fuzzy(type=bytes)
 
@@ -210,16 +207,18 @@ class XMLRPC_test:
     """
     Base class for all XML-RPC plugin tests
     """
-    @pytest.fixture(autouse=True, scope="class")
-    def xmlrpc_setup(self, request):
+
+    @classmethod
+    def setup_class(cls):
         if not server_available:
-            raise unittest.SkipTest(
-                '%r: Server not available: %r' %
-                (request.cls.__module__, api.env.xmlrpc_uri))
+            raise unittest.SkipTest('%r: Server not available: %r' %
+                                (cls.__module__, api.env.xmlrpc_uri))
         if not api.Backend.rpcclient.isconnected():
             api.Backend.rpcclient.connect()
 
-        request.addfinalizer(lambda: ipa_request.destroy_context())
+    @classmethod
+    def teardown_class(cls):
+        request.destroy_context()
 
     def failsafe_add(self, obj, pk, **options):
         """
@@ -307,13 +306,17 @@ class Declarative(XMLRPC_test):
     cleanup_commands = tuple()
     tests = tuple()
 
-    @pytest.fixture(autouse=True, scope="class")
-    def declarative_setup(self, request, xmlrpc_setup):
-        def fin():
-            for command in request.cls.cleanup_commands:
-                request.cls.cleanup(command)
-        fin()
-        request.addfinalizer(fin)
+    @classmethod
+    def setup_class(cls):
+        super(Declarative, cls).setup_class()
+        for command in cls.cleanup_commands:
+            cls.cleanup(command)
+
+    @classmethod
+    def teardown_class(cls):
+        for command in cls.cleanup_commands:
+            cls.cleanup(command)
+        super(Declarative, cls).teardown_class()
 
     @classmethod
     def cleanup(cls, command):

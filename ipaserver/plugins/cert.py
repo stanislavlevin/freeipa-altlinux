@@ -19,8 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import absolute_import
-
 import base64
 import collections
 import datetime
@@ -180,12 +178,12 @@ def _acl_make_request(principal_type, principal, ca_id, profile_id):
     groups = []
     if principal_type == 'user':
         user_obj = api.Command.user_show(
-            six.text_type(principal.username))['result']
+            str(principal.username))['result']
         groups = user_obj.get('memberof_group', [])
         groups += user_obj.get('memberofindirect_group', [])
     elif principal_type == 'host':
         host_obj = api.Command.host_show(
-            six.text_type(principal.hostname))['result']
+            str(principal.hostname))['result']
         groups = host_obj.get('memberof_hostgroup', [])
         groups += host_obj.get('memberofindirect_hostgroup', [])
     req.user.groups = sorted(set(groups))
@@ -1004,7 +1002,7 @@ class cert_request(Create, BaseCertMethod, VirtualCommand):
             if add:
                 if principal.is_service and not principal.is_host:
                     self.api.Command.service_add(
-                        six.text_type(principal), all=True, force=True)
+                        str(principal), all=True, force=True)
                     return self.lookup_principal(principal)  # we want an LDAPEntry
                 else:
                     if principal.is_user:

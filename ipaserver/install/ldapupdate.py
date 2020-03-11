@@ -42,6 +42,7 @@ from ipalib import api, create_api
 from ipalib import constants
 from ipaplatform.constants import constants as platformconstants
 from ipaplatform.paths import paths
+from ipaplatform.tasks import tasks
 from ipapython.dn import DN
 
 if six.PY3:
@@ -55,8 +56,12 @@ UPDATE_SEARCH_TIME_LIMIT = 30  # seconds
 
 def connect(ldapi=False, realm=None, fqdn=None, dm_password=None):
     """Create a connection for updates"""
-    ldap_uri = ipaldap.get_ldap_uri(fqdn, ldapi=ldapi, realm=realm)
-    conn = ipaldap.LDAPClient(ldap_uri, decode_attrs=False)
+    if ldapi:
+        conn = ipaldap.LDAPClient.from_realm(realm, decode_attrs=False)
+    else:
+        conn = ipaldap.LDAPClient.from_hostname_secure(
+            fqdn, decode_attrs=False
+        )
     try:
         if dm_password:
             conn.simple_bind(bind_dn=ipaldap.DIRMAN_DN,
@@ -280,7 +285,7 @@ class LDAPUpdate:
             self.realm = api.env.realm
             suffix = ipautil.realm_to_suffix(self.realm) if self.realm else None
 
-        self.ldapuri = installutils.realm_to_ldapi_uri(self.realm)
+        self.ldapuri = ipaldap.realm_to_ldapi_uri(self.realm)
         if suffix is not None:
             assert isinstance(suffix, DN)
 
@@ -321,6 +326,8 @@ class LDAPUpdate:
         if not self.sub_dict.get("SELINUX_USERMAP_ORDER"):
             self.sub_dict["SELINUX_USERMAP_ORDER"] = \
                 platformconstants.SELINUX_USERMAP_ORDER
+        if "FIPS" not in self.sub_dict:
+            self.sub_dict["FIPS"] = '#' if tasks.is_fips_enabled() else ''
         self.api = create_api(mode=None)
         self.api.bootstrap(in_server=True,
                            context='updates',
@@ -364,6 +371,7 @@ class LDAPUpdate:
 
             * Strip leading & trailing whitespace
             * Substitute any variables
+            * Strip again and skip empty/commented lines after substitution
             * Get the action, attribute, and value
             * Each update has one list per disposition, append to specified disposition list
             '''
@@ -374,6 +382,12 @@ class LDAPUpdate:
 
             # Perform variable substitution on constructued line
             logical_line = self._template_str(logical_line)
+
+            # skip line if substitution has added a comment. FIPS mode
+            # disables some lines that way.
+            logical_line = logical_line.strip()
+            if not logical_line or logical_line.startswith('#'):
+                return
 
             items = logical_line.split(':', 2)
 

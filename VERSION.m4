@@ -20,13 +20,16 @@
 #  ->  "1.0.0"                                         #
 ########################################################
 define(IPA_VERSION_MAJOR, 4)
-define(IPA_VERSION_MINOR, 7)
+define(IPA_VERSION_MINOR, 8)
 define(IPA_VERSION_RELEASE, 4)
 
 ########################################################
 # For 'pre' releases the version will be               #
 #                                                      #
 # <MAJOR>.<MINOR>.<RELEASE><PRE_RELEASE>               #
+#                                                      #
+# pre releases start with RELEASE 90. After pre1 has   #
+# been released, RELEASE is bumpled to 91, and so on   #
 #                                                      #
 # e.g. define(IPA_VERSION_PRE_RELEASE, rc1)            #
 #  ->  "1.0.0rc1"                                      #
@@ -83,9 +86,8 @@ define(IPA_DATA_VERSION, 20100614120000)
 #                                                      #
 ########################################################
 define(IPA_API_VERSION_MAJOR, 2)
-define(IPA_API_VERSION_MINOR, 232)
-# Last change: Add ipamaxhostnamelength to config
-
+define(IPA_API_VERSION_MINOR, 235)
+# Last change: Add memberManager to groups.
 
 ########################################################
 # Following values are auto-generated from values above

@@ -35,18 +35,13 @@ from contextlib import contextmanager
 from pprint import pformat
 
 import six
-import ldap
-import ldap.sasl
-import ldap.modlist
 
 import ipalib
 from ipalib import api
 from ipalib.plugable import Plugin
 from ipalib.request import context
 from ipapython.dn import DN
-from ipapython.ipaldap import ldap_initialize
 from ipapython.ipautil import run
-
 
 try:
     # not available with client-only wheel packages
@@ -60,6 +55,15 @@ try:
 except ImportError:
     paths = None
 
+try:
+    # not available with optional python-ldap
+    import ldap
+except ImportError:
+    pass
+else:
+    import ldap.sasl
+    import ldap.modlist
+    from ipapython.ipaldap import ldap_initialize
 
 if six.PY3:
     unicode = str
@@ -216,7 +220,7 @@ class Fuzzy:
     Use of a regular expression by default implies the ``unicode`` type, so
     comparing with an ``str`` instance will evaluate to ``False``:
 
-    >>> phone.type is six.text_type
+    >>> phone.type is str
     True
     >>> b'123-456-7890' == phone
     False
@@ -284,7 +288,7 @@ class Fuzzy:
         :param test: A callable used to perform equality test, e.g.
             ``lambda other: other >= 18``
         """
-        assert regex is None or isinstance(regex, six.string_types)
+        assert regex is None or isinstance(regex, str)
         assert test is None or callable(test)
         if regex is None:
             self.re = None
@@ -292,7 +296,7 @@ class Fuzzy:
             self.re = re.compile(regex)
             if type is None:
                 type = unicode
-            assert type in (unicode, bytes, six.string_types)
+            assert type in (unicode, bytes, str)
         self.regex = regex
         self.type = type
         self.test = test
@@ -399,7 +403,7 @@ def assert_deepequal(expected, got, doc='', stack=tuple()):
     if isinstance(got, tuple):
         got = list(got)
     if isinstance(expected, DN):
-        if isinstance(got, six.string_types):
+        if isinstance(got, str):
             got = DN(got)
     if (
         not (isinstance(expected, Fuzzy)
@@ -546,9 +550,11 @@ class ClassChecker:
             'get_subcls()'
         )
 
-    @pytest.fixture(autouse=True)
-    def classchecker_setup(self, request):
-        request.addfinalizer(lambda: context.__dict__.clear())
+    def teardown(self):
+        """
+        nose tear-down fixture.
+        """
+        context.__dict__.clear()
 
 
 def get_api(**kw):
@@ -616,9 +622,11 @@ class PluginTester:
         o = api[namespace][self.plugin.__name__]
         return (o, api, home)
 
-    @pytest.fixture(autouse=True)
-    def plugintester_setup(self, request):
-        request.addfinalizer(lambda: context.__dict__.clear())
+    def teardown(self):
+        """
+        nose tear-down fixture.
+        """
+        context.__dict__.clear()
 
 
 class dummy_ugettext:

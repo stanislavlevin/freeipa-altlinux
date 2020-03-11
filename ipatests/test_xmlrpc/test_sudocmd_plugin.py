@@ -29,21 +29,21 @@ import pytest
 
 
 @pytest.fixture(scope='class')
-def sudocmd1(request, xmlrpc_setup):
+def sudocmd1(request):
     tracker = SudoCmdTracker(command=u'/usr/bin/sudotestcmd1',
                              description=u'Test sudo command 1')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def sudocmd2(request, xmlrpc_setup):
+def sudocmd2(request):
     tracker = SudoCmdTracker(command=u'/usr/bin/sudoTestCmd1',
                              description=u'Test sudo command 2')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def sudorule1(request, xmlrpc_setup):
+def sudorule1(request):
     name = u'test_sudorule1'
 
     def fin():

@@ -77,8 +77,7 @@ class test_TestLang:
 
         os.environ.update(self.saved_locale)
 
-    @pytest.fixture(autouse=True)
-    def testlang_setup(self, request):
+    def setup(self):
         self.tmp_dir = None
         self.setup_lang()
 
@@ -118,12 +117,11 @@ class test_TestLang:
 
         self.po_file_iterate = po_file_iterate
 
-        def fin():
-            self.teardown_lang()
+    def teardown(self):
+        self.teardown_lang()
 
-            if self.tmp_dir is not None:
-                shutil.rmtree(self.tmp_dir)
-        request.addfinalizer(fin)
+        if self.tmp_dir is not None:
+            shutil.rmtree(self.tmp_dir)
 
     def test_test_lang(self):
         print("test_test_lang")
@@ -189,7 +187,7 @@ class test_Gettext:
         inst = self.klass('what up?', 'foo', 'bar')
         assert inst.domain == 'foo'
         assert inst.localedir == 'bar'
-        assert inst.msg is 'what up?'
+        assert inst.msg == 'what up?'
         assert inst.args == ('what up?', 'foo', 'bar')
 
     def test_repr(self):
@@ -351,7 +349,7 @@ class test_GettextFactory:
         inst = self.klass('foo', 'bar')
         g = inst('what up?')
         assert type(g) is text.Gettext
-        assert g.msg is 'what up?'
+        assert g.msg == 'what up?'
         assert g.domain == 'foo'
         assert g.localedir == 'bar'
 

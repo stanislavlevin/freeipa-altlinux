@@ -17,13 +17,10 @@ import os
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipaplatform.paths import paths
+from ipapython.ipaldap import realm_to_serverid
 
 # from ipaserver.install.dsinstance
 DS_INSTANCE_PREFIX = 'slapd-'
-
-
-def realm_to_serverid(realm_name):
-    return "-".join(realm_name.split("."))
 
 
 class TestUninstallBase(IntegrationTest):
@@ -120,6 +117,5 @@ class TestUninstallBase(IntegrationTest):
             ])
 
             self.master.run_command([
-                paths.REMOVE_DS_PL,
-                '-i', instance_name
+                paths.DSCTL, serverid, 'remove', '--do-it'
             ])

@@ -30,12 +30,10 @@ import re
 import os
 from functools import wraps
 import unittest
+from urllib.error import URLError
+
 import paramiko
 import pytest
-
-# pylint: disable=import-error
-from six.moves.urllib.error import URLError
-# pylint: enable=import-error
 
 try:
     from selenium import webdriver
@@ -45,6 +43,7 @@ try:
     from selenium.common.exceptions import UnexpectedAlertPresentException
     from selenium.common.exceptions import WebDriverException
     from selenium.common.exceptions import ElementClickInterceptedException
+    from selenium.webdriver.common.action_chains import ActionChains
     from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
     from selenium.webdriver.common.keys import Keys
     from selenium.webdriver.common.by import By
@@ -60,7 +59,9 @@ try:
     NO_YAML = False
 except ImportError:
     NO_YAML = True
+
 from ipaplatform.paths import paths
+from ipaplatform.tasks import tasks
 
 ENV_MAP = {
     'MASTER': 'ipa_server',
@@ -98,9 +99,9 @@ def screenshot(fn):
     Should be applied on methods of UI_driver subclasses
     """
     @wraps(fn)
-    def screenshot_wrapper(*args):
+    def screenshot_wrapper(*args, **kwargs):
         try:
-            return fn(*args)
+            return fn(*args, **kwargs)
         except unittest.SkipTest:
             raise
         except Exception:
@@ -144,22 +145,19 @@ class UI_driver:
 
     request_timeout = 60
 
-    @pytest.fixture(autouse=True, scope="class")
-    def ui_driver_setup(self, request):
-        cls = request.cls
+    @classmethod
+    def setup_class(cls):
         if NO_SELENIUM:
             raise unittest.SkipTest('Selenium not installed')
         cls.load_config()
 
-    @pytest.fixture(autouse=True)
-    def ui_driver_fsetup(self, request):
+    def setup(self):
         self.driver = self.get_driver()
         self.driver.maximize_window()
 
-        def fin():
-            self.driver.delete_all_cookies()
-            self.driver.quit()
-        request.addfinalizer(fin)
+    def teardown(self):
+        self.driver.delete_all_cookies()
+        self.driver.quit()
 
     @classmethod
     def load_config(cls):
@@ -299,6 +297,10 @@ class UI_driver:
 
         return result
 
+    def find_by_selector(self, expression, context=None, **kwargs):
+        return self.find(expression, by=By.CSS_SELECTOR, context=context,
+                         **kwargs)
+
     def files_loaded(self):
         """
         Test if dependencies were loaded. (Checks if UI has been rendered)
@@ -361,6 +363,19 @@ class UI_driver:
             WebDriverWait(self.driver, self.request_timeout).until_not(lambda d: runner.has_active_request())
             self.wait()
         self.wait(d)
+
+    def wait_while_working(self, widget, implicit=0.2):
+        """
+        Wait while working widget active
+        """
+
+        working_widget = self.find('.working-widget', By.CSS_SELECTOR, widget)
+
+        self.wait(implicit)
+        WebDriverWait(self.driver, self.request_timeout).until_not(
+            lambda d: working_widget.is_displayed()
+        )
+        self.wait(0.5)
 
     def xpath_has_val(self, attr, val):
         """
@@ -798,7 +813,8 @@ class UI_driver:
             parent = self.get_form()
         tb = self.find(selector, By.CSS_SELECTOR, parent, strict=True)
         try:
-            tb.clear()
+            tb.send_keys(Keys.CONTROL + 'a')
+            tb.send_keys(Keys.DELETE)
             tb.send_keys(value)
         except InvalidElementStateException as e:
             msg = "Invalid Element State, el: %s, value: %s, error: %s" % (selector, value, e)
@@ -835,6 +851,11 @@ class UI_driver:
         if not parent:
                 parent = self.get_form()
         self.fill_text(search_field_s, value, parent)
+
+    def apply_search_filter(self, value):
+        self.fill_search_filter(value)
+        actions = ActionChains(self.driver)
+        actions.send_keys(Keys.ENTER).perform()
 
     def add_multivalued(self, name, value, parent=None):
         """
@@ -984,7 +1005,8 @@ class UI_driver:
         self.wait_for_request()
 
         list_cnt = self.find('.combobox-widget-list', By.CSS_SELECTOR, cb, strict=True)
-        opt_s = "select[name=list] option[value='%s']" % value
+        opt_s = 'select[name=list] option'
+        opt_s += "[value='%s']" % value if value else ':not([value])'
         option = self.find(opt_s, By.CSS_SELECTOR, cb)
 
         if combobox_input:
@@ -1570,7 +1592,7 @@ class UI_driver:
             self.delete_record(pkey, data.get('del'))
             self.close_notifications()
 
-    def add_table_record(self, name, data, parent=None):
+    def add_table_record(self, name, data, parent=None, add_another=False):
         """
         Add record to dnsrecord table, association table and similar
         """
@@ -1583,8 +1605,24 @@ class UI_driver:
         btn.click()
         self.wait()
         self.fill_fields(data['fields'])
-        self.dialog_button_click('add')
+
+        if not add_another:
+            self.dialog_button_click('add')
+            self.wait_for_request()
+
+    def add_another_table_record(self, data, add_another=False):
+        """
+        Add table record after creating previous one in the same dialog
+        TODO: Create class to manipulate such type of dialog
+        """
+        self.dialog_button_click('add_and_add_another')
         self.wait_for_request()
+
+        self.fill_fields(data['fields'])
+
+        if not add_another:
+            self.dialog_button_click('add')
+            self.wait_for_request()
 
     def prepare_associations(
             self, pkeys, facet=None, facet_btn='add', member_pkeys=None,
@@ -1908,6 +1946,8 @@ class UI_driver:
 
         cmd (str): command to run
         """
+        if tasks.is_fips_enabled():
+            pytest.skip("paramiko is not compatible with FIPS mode")
 
         login = self.config.get('ipa_admin')
         hostname = self.config.get('ipa_server')
@@ -1934,6 +1974,18 @@ class UI_driver:
         """
         class_attr = el.get_attribute("class")
         return bool(class_attr) and cls in class_attr.split()
+
+    def has_form_error(self, name):
+        """
+        Check if form field has error
+        TODO: Move to some mixin class
+        """
+        form_group = self.find(
+            '//input[@name="{}"]/ancestor'
+            '::div[contains(@class, "form-group")]'.format(name),
+            By.XPATH
+        )
+        return self.has_class(form_group, 'has-error')
 
     def skip(self, reason):
         """

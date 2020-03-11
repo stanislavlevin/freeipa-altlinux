@@ -324,6 +324,28 @@ class Restore(admintool.AdminTool):
                     not user_input("Continue to restore?", False)):
                 raise admintool.ScriptError("Aborted")
 
+        # Check have optional dependencies been installed for extra
+        # features from backup
+        if restore_type == 'FULL':
+            if 'ADTRUST' in self.backup_services:
+                if not adtrustinstance or not adtrustinstance.check_inst():
+                    raise admintool.ScriptError(
+                        "Backup includes AD trust feature, it requires '{}' "
+                        "package. Please install the package and "
+                        "run ipa-restore again.".format(
+                            constants.IPA_ADTRUST_PACKAGE_NAME
+                        )
+                    )
+            if 'DNS' in self.backup_services:
+                if not os.path.isfile(paths.IPA_DNS_INSTALL):
+                    raise admintool.ScriptError(
+                        "Backup includes Integrated DNS feature, it requires "
+                        "'{}' package. Please install the package and "
+                        "run ipa-restore again.".format(
+                            constants.IPA_DNS_PACKAGE_NAME
+                        )
+                    )
+
         pent = pwd.getpwnam(constants.DS_USER)
 
         # Temporary directory for decrypting files before restoring
@@ -466,7 +488,7 @@ class Restore(admintool.AdminTool):
         '''
         Create an ldapi connection and bind to it using autobind as root.
         '''
-        instance_name = installutils.realm_to_serverid(api.env.realm)
+        instance_name = ipaldap.realm_to_serverid(api.env.realm)
 
         if not services.knownservices.dirsrv.is_running(instance_name):
             raise admintool.ScriptError(
@@ -476,8 +498,7 @@ class Restore(admintool.AdminTool):
         if self._conn is not None:
             return self._conn
 
-        ldap_uri = ipaldap.get_ldap_uri(protocol='ldapi', realm=api.env.realm)
-        self._conn = ipaldap.LDAPClient(ldap_uri)
+        self._conn = ipaldap.LDAPClient.from_realm(api.env.realm)
 
         try:
             self._conn.external_bind()
@@ -610,13 +631,18 @@ class Restore(admintool.AdminTool):
                 os.makedirs(template_dir)
             except OSError as e:
                 pass
+
+            os.chown(template_dir, pent.pw_uid, pent.pw_gid)
+            os.chmod(template_dir, 0o770)
+
             # Restore SELinux context of template_dir
             tasks.restore_context(template_dir)
 
-            args = [paths.LDIF2DB,
-                    '-Z', instance,
-                    '-i', ldiffile,
-                    '-n', backend]
+            args = [paths.DSCTL,
+                    instance,
+                    'ldif2db',
+                    backend,
+                    ldiffile]
             result = run(args, raiseonerr=False)
             if result.returncode != 0:
                 logger.critical("ldif2db failed: %s", result.error_log)
@@ -626,7 +652,7 @@ class Restore(admintool.AdminTool):
         '''
         Restore a BAK backup of the data and changelog in this instance.
 
-        If backend is None then all backends are restored.
+        For offline restore backend is not used. All backends are restored.
 
         If executed online create a task and wait for it to complete.
 
@@ -666,12 +692,10 @@ class Restore(admintool.AdminTool):
             logger.info("Waiting for restore to finish")
             wait_for_task(conn, dn)
         else:
-            args = [paths.BAK2DB,
-                    '-Z', instance,
+            args = [paths.DSCTL,
+                    instance,
+                    'bak2db',
                     os.path.join(self.dir, instance)]
-            if backend is not None:
-                args.append('-n')
-                args.append(backend)
             result = run(args, raiseonerr=False)
             if result.returncode != 0:
                 logger.critical("bak2db failed: %s", result.error_log)
@@ -872,7 +896,7 @@ class Restore(admintool.AdminTool):
         httpinstance.HTTPInstance().stop_tracking_certificates()
         try:
             dsinstance.DsInstance().stop_tracking_certificates(
-                installutils.realm_to_serverid(api.env.realm))
+                ipaldap.realm_to_serverid(api.env.realm))
         except (OSError, IOError):
             # When IPA is not installed, DS NSS DB does not exist
             pass
@@ -903,13 +927,13 @@ class Restore(admintool.AdminTool):
         api.bootstrap(in_server=True, context='restore', **overrides)
         api.finalize()
 
-        self.instances = [installutils.realm_to_serverid(api.env.realm)]
+        self.instances = [ipaldap.realm_to_serverid(api.env.realm)]
         self.backends = ['userRoot', 'ipaca']
 
         # no IPA config means we are reinstalling from nothing so
         # there is nothing to test the DM password against.
         if os.path.exists(paths.IPA_DEFAULT_CONF):
-            instance_name = installutils.realm_to_serverid(api.env.realm)
+            instance_name = ipapython.ipaldap.realm_to_serverid(api.env.realm)
             if not services.knownservices.dirsrv.is_running(instance_name):
                 raise admintool.ScriptError(
                     "directory server instance is not running"

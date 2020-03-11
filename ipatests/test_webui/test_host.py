@@ -48,8 +48,8 @@ ENTITY = 'host'
 @pytest.mark.tier1
 class host_tasks(UI_driver):
 
-    @pytest.fixture(autouse=True)
-    def hosttasks_setup(self, ui_driver_fsetup):
+    def setup(self, *args, **kwargs):
+        super(host_tasks, self).setup(*args, **kwargs)
         self.prep_data()
         self.prep_data2()
         self.prep_data3()
@@ -182,6 +182,8 @@ class test_host(host_tasks):
         self.wait_for_request(n=2, d=3)
         self.assert_visible(cert_widget_sel)
 
+        widget = self.find(cert_widget_sel, By.CSS_SELECTOR)
+
         # cert view
         self.action_list_action('view', confirm=False,
                                 parents_css_sel=cert_widget_sel)
@@ -216,7 +218,8 @@ class test_host(host_tasks):
         self.wait()
         self.select('select', '6')
         self.dialog_button_click('ok')
-        self.wait_for_request(n=2, d=3)
+        self.wait_while_working(widget)
+
         self.assert_visible(cert_widget_sel + " div.watermark")
 
         # check that revoke action is not enabled
@@ -234,7 +237,7 @@ class test_host(host_tasks):
                                 parents_css_sel=cert_widget_sel)
         self.wait()
         self.dialog_button_click('ok')
-        self.wait_for_request(n=2)
+        self.wait_while_working(widget)
 
         # check that revoke action is enabled
         self.assert_action_list_action('revoke',

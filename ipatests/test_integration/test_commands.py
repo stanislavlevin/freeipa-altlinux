@@ -9,8 +9,8 @@ import base64
 import re
 import os
 import logging
+import random
 import ssl
-from tempfile import NamedTemporaryFile
 from itertools import chain, repeat
 import textwrap
 import time
@@ -28,6 +28,7 @@ from ipapython.dn import DN
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
+from ipaplatform.tasks import tasks as platform_tasks
 from ipatests.create_external_ca import ExternalCA
 from ipatests.test_ipalib.test_x509 import good_pkcs7, badcert
 
@@ -131,8 +132,6 @@ class TestIPACommand(IntegrationTest):
         master = self.master
 
         base_dn = str(master.domain.basedn)  # pylint: disable=no-member
-        tf = NamedTemporaryFile()
-        ldif_file = tf.name
         entry_ldif = textwrap.dedent("""
             dn: uid=system,cn=sysaccounts,cn=etc,{base_dn}
             changetype: add
@@ -145,17 +144,28 @@ class TestIPACommand(IntegrationTest):
         """).format(
             base_dn=base_dn,
             original_passwd=original_passwd)
-        master.put_file_contents(ldif_file, entry_ldif)
-        arg = ['ldapmodify',
-               '-h', master.hostname,
-               '-p', '389', '-D',
-               str(master.config.dirman_dn),   # pylint: disable=no-member
-               '-w', master.config.dirman_password,
-               '-f', ldif_file]
-        master.run_command(arg)
+        tasks.ldapmodify_dm(master, entry_ldif)
 
         tasks.ldappasswd_sysaccount_change(sysuser, original_passwd,
                                            new_passwd, master)
+
+    def get_krbinfo(self, user):
+        base_dn = str(self.master.domain.basedn)  # pylint: disable=no-member
+        result = tasks.ldapsearch_dm(
+            self.master,
+            'uid={user},cn=users,cn=accounts,{base_dn}'.format(
+                user=user, base_dn=base_dn),
+            ['krblastpwdchange', 'krbpasswordexpiration'],
+            scope='base'
+        )
+        output = result.stdout_text.lower()
+
+        # extract krblastpwdchange and krbpasswordexpiration
+        krbchg_pattern = 'krblastpwdchange: (.+)\n'
+        krbexp_pattern = 'krbpasswordexpiration: (.+)\n'
+        krblastpwdchange = re.findall(krbchg_pattern, output)[0]
+        krbexp = re.findall(krbexp_pattern, output)[0]
+        return krblastpwdchange, krbexp
 
     def test_ldapmodify_password_issue7601(self):
         user = 'ipauser'
@@ -179,31 +189,12 @@ class TestIPACommand(IntegrationTest):
             new=original_passwd)
         master.run_command(['kinit', user], stdin_text=user_kinit_stdin_text)
         # Retrieve krblastpwdchange and krbpasswordexpiration
-        search_cmd = [
-            'ldapsearch', '-x',
-            '-D', 'cn=directory manager',
-            '-w', master.config.dirman_password,
-            '-s', 'base',
-            '-b', 'uid={user},cn=users,cn=accounts,{base_dn}'.format(
-                user=user, base_dn=base_dn),
-            '-o', 'ldif-wrap=no',
-            '-LLL',
-            'krblastpwdchange',
-            'krbpasswordexpiration']
-        output = master.run_command(search_cmd).stdout_text.lower()
-
-        # extract krblastpwdchange and krbpasswordexpiration
-        krbchg_pattern = 'krblastpwdchange: (.+)\n'
-        krbexp_pattern = 'krbpasswordexpiration: (.+)\n'
-        krblastpwdchange = re.findall(krbchg_pattern, output)[0]
-        krbexp = re.findall(krbexp_pattern, output)[0]
+        krblastpwdchange, krbexp = self.get_krbinfo(user)
 
         # sleep 1 sec (krblastpwdchange and krbpasswordexpiration have at most
         # a 1s precision)
         time.sleep(1)
         # perform ldapmodify on userpassword as dir mgr
-        mod = NamedTemporaryFile()
-        ldif_file = mod.name
         entry_ldif = textwrap.dedent("""
             dn: uid={user},cn=users,cn=accounts,{base_dn}
             changetype: modify
@@ -213,24 +204,13 @@ class TestIPACommand(IntegrationTest):
             user=user,
             base_dn=base_dn,
             new_passwd=new_passwd)
-        master.put_file_contents(ldif_file, entry_ldif)
-        arg = ['ldapmodify',
-               '-h', master.hostname,
-               '-p', '389', '-D',
-               str(master.config.dirman_dn),   # pylint: disable=no-member
-               '-w', master.config.dirman_password,
-               '-f', ldif_file]
-        master.run_command(arg)
+        tasks.ldapmodify_dm(master, entry_ldif)
 
         # Test new password with kinit
         master.run_command(['kinit', user], stdin_text=new_passwd)
-        # Retrieve krblastpwdchange and krbpasswordexpiration
-        output = master.run_command(search_cmd).stdout_text.lower()
-        # extract krblastpwdchange and krbpasswordexpiration
-        newkrblastpwdchange = re.findall(krbchg_pattern, output)[0]
-        newkrbexp = re.findall(krbexp_pattern, output)[0]
 
         # both should have changed
+        newkrblastpwdchange, newkrbexp = self.get_krbinfo(user)
         assert newkrblastpwdchange != krblastpwdchange
         assert newkrbexp != krbexp
 
@@ -249,13 +229,9 @@ class TestIPACommand(IntegrationTest):
         )
         # Test new password with kinit
         master.run_command(['kinit', user], stdin_text=new_passwd2)
-        # Retrieve krblastpwdchange and krbpasswordexpiration
-        output = master.run_command(search_cmd).stdout_text.lower()
-        # extract krblastpwdchange and krbpasswordexpiration
-        newkrblastpwdchange2 = re.findall(krbchg_pattern, output)[0]
-        newkrbexp2 = re.findall(krbexp_pattern, output)[0]
 
         # both should have changed
+        newkrblastpwdchange2, newkrbexp2 = self.get_krbinfo(user)
         assert newkrblastpwdchange != newkrblastpwdchange2
         assert newkrbexp != newkrbexp2
 
@@ -320,6 +296,8 @@ class TestIPACommand(IntegrationTest):
         """
         Integration test for https://pagure.io/SSSD/sssd/issue/3747
         """
+        if self.master.is_fips_mode:  # pylint: disable=no-member
+            pytest.skip("paramiko is not compatible with FIPS mode")
 
         test_user = 'test-ssh'
         external_master_hostname = \
@@ -603,3 +581,202 @@ class TestIPACommand(IntegrationTest):
             # reset
             entry['ipaConfigString'] = orig_cfg
             conn.update_entry(entry)  # pylint: disable=no-member
+
+    def test_ssh_from_controller(self):
+        """https://pagure.io/SSSD/sssd/issue/3979
+        Test ssh from test controller after adding
+        ldap_deref_threshold=0 to sssd.conf on master
+
+        Steps:
+        1. setup a master
+        2. add ldap_deref_threshold=0 to sssd.conf on master
+        3. add an ipa user
+        4. ssh from controller to master using the user created in step 3
+        """
+        sssd_version = ''
+        cmd_output = self.master.run_command(['sssd', '--version'])
+        sssd_version = platform_tasks.\
+            parse_ipa_version(cmd_output.stdout_text.strip())
+        if sssd_version.version < '2.2.0':
+            pytest.xfail(reason="sssd 2.2.0 unavailable in F29 nightly")
+
+        username = "testuser" + str(random.randint(200000, 9999999))
+        # add ldap_deref_threshold=0 to /etc/sssd/sssd.conf
+        domain = self.master.domain
+        tasks.modify_sssd_conf(
+            self.master,
+            domain.name,
+            {
+                'ldap_deref_threshold': 0
+            },
+        )
+        try:
+            self.master.run_command(['systemctl', 'restart', 'sssd.service'])
+
+            # kinit admin
+            tasks.kinit_admin(self.master)
+
+            # add ipa user
+            cmd = ['ipa', 'user-add',
+                   '--first', username,
+                   '--last', username,
+                   '--password', username]
+            input_passwd = 'Secret123\nSecret123\n'
+            cmd_output = self.master.run_command(cmd, stdin_text=input_passwd)
+            assert 'Added user "%s"' % username in cmd_output.stdout_text
+            input_passwd = 'Secret123\nSecret123\nSecret123\n'
+            self.master.run_command(['kinit', username],
+                                    stdin_text=input_passwd)
+
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect(self.master.hostname,
+                           username=username,
+                           password='Secret123')
+            client.close()
+        finally:
+            # revert back to original ldap config
+            # remove ldap_deref_threshold=0
+            tasks.modify_sssd_conf(
+                self.master,
+                domain.name,
+                {
+                    'ldap_deref_threshold': None
+                },
+            )
+            self.master.run_command(['systemctl', 'restart', 'sssd.service'])
+
+    def test_user_mod_change_capitalization_issue5879(self):
+        """
+        Test that an existing user which has been modified using ipa user-mod
+        and has the first and last name beginning with caps does not
+        throw the error 'ipa: ERROR: Type or value exists:' and
+        instead gets modified
+
+        This is a test case for Pagure issue
+        https://pagure.io/freeipa/issue/5879
+
+        Steps:
+        1. setup a master
+        2. add ipa user on master
+        3. now run ipa user-mod and specifying capital letters in names
+        4. user details should be modified
+        5. ipa: ERROR: Type or value exists is not displayed on console.
+        """
+        # Create an ipa-user
+        tasks.kinit_admin(self.master)
+        ipauser = 'ipauser1'
+        first = 'ipauser'
+        modfirst = 'IpaUser'
+        last = 'test'
+        modlast = 'Test'
+        password = 'Secret123'
+        self.master.run_command(
+            ['ipa', 'user-add', ipauser, '--first', first, '--last', last,
+             '--password'],
+            stdin_text="%s\n%s\n" % (password, password))
+        cmd = self.master.run_command(
+            ['ipa', 'user-mod', ipauser, '--first', modfirst,
+             '--last', modlast])
+        assert 'Modified user "%s"' % (ipauser) in cmd.stdout_text
+        assert 'First name: %s' % (modfirst) in cmd.stdout_text
+        assert 'Last name: %s' % (modlast) in cmd.stdout_text
+
+    def test_enabled_tls_protocols(self):
+        """Check Apache has same TLS versions enabled as crypto policy
+
+        This is the regression test for issue
+        https://pagure.io/freeipa/issue/7995.
+        """
+        def is_tls_version_enabled(tls_version):
+            res = self.master.run_command(
+                ['openssl', 's_client',
+                 '-connect', '{}:443'.format(self.master.hostname),
+                 '-{}'.format(tls_version)],
+                stdin_text='\n',
+                ok_returncode=[0, 1]
+            )
+            return res.returncode == 0
+
+        # get minimum version from current crypto-policy
+        openssl_cnf = self.master.get_file_contents(
+            "/etc/crypto-policies/back-ends/opensslcnf.config",
+            encoding="utf-8"
+        )
+        mo = re.search(r"MinProtocol\s*=\s*(TLSv[0-9.]+)", openssl_cnf)
+        assert mo
+        min_tls = mo.group(1)
+        # Fedora DEFAULT has TLS 1.0 enabled, NEXT has TLS 1.2
+        # even FUTURE crypto policy has TLS 1.2 as minimum version
+        assert min_tls in {"TLSv1", "TLSv1.2"}
+
+        # On Fedora FreeIPA still disables TLS 1.0 and 1.1 in ssl.conf.
+
+        assert not is_tls_version_enabled('tls1')
+        assert not is_tls_version_enabled('tls1_1')
+        assert is_tls_version_enabled('tls1_2')
+        assert is_tls_version_enabled('tls1_3')
+
+    def test_samba_config_file(self):
+        """Check that ipa-adtrust-install generates sane smb.conf
+
+        This is regression test for issue
+        https://pagure.io/freeipa/issue/6951
+        """
+        self.master.run_command(
+            ['ipa-adtrust-install', '-a', 'Secret123', '--add-sids', '-U'])
+        res = self.master.run_command(['testparm', '-s'])
+        assert 'ERROR' not in (res.stdout_text + res.stderr_text)
+
+    def test_sss_ssh_authorizedkeys(self):
+        """Login via Ssh using private-key for ipa-user should work.
+
+        Test for : https://pagure.io/SSSD/sssd/issue/3937
+        Steps:
+        1) setup user with ssh-key and certificate stored in ipaserver
+        2) simulate p11_child timeout
+        3) try to login via ssh using private key.
+        """
+        user = 'testsshuser'
+        passwd = 'Secret123'
+        user_key = tasks.create_temp_file(self.master, create_file=False)
+        pem_file = tasks.create_temp_file(self.master)
+        # Create a user with a password
+        tasks.create_active_user(self.master, user, passwd)
+        tasks.kinit_admin(self.master)
+        tasks.run_command_as_user(
+            self.master, user, ['ssh-keygen', '-N', '',
+                                '-f', user_key])
+        ssh_pub_key = self.master.get_file_contents('{}.pub'.format(
+            user_key), encoding='utf-8')
+        openssl_cmd = [
+            'openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-days', '365',
+            '-nodes', '-out', pem_file, '-subj', '/CN=' + user]
+        self.master.run_command(openssl_cmd)
+        cert_b64 = self.get_cert_base64(self.master, pem_file)
+        sssd_p11_child = '/usr/libexec/sssd/p11_child'
+        backup = tasks.FileBackup(self.master, sssd_p11_child)
+        try:
+            content = '#!/bin/bash\nsleep 999999'
+            # added sleep to simulate the timeout for p11_child
+            self.master.put_file_contents(sssd_p11_child, content)
+            self.master.run_command(
+                ['ipa', 'user-mod', user, '--ssh', ssh_pub_key])
+            self.master.run_command([
+                'ipa', 'user-add-cert', user, '--certificate', cert_b64])
+            # clear cache to avoid SSSD to check the user in old lookup
+            tasks.clear_sssd_cache(self.master)
+            result = self.master.run_command(
+                [paths.SSS_SSH_AUTHORIZEDKEYS, user])
+            assert ssh_pub_key in result.stdout_text
+            # login to the system
+            self.master.run_command(
+                ['ssh', '-o', 'PasswordAuthentication=no',
+                 '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=no',
+                 '-l', user, '-i', user_key, self.master.hostname, 'true'])
+        finally:
+            # cleanup
+            self.master.run_command(['ipa', 'user-del', user])
+            backup.restore()
+            self.master.run_command(['rm', '-f', pem_file, user_key,
+                                     '{}.pub'.format(user_key)])

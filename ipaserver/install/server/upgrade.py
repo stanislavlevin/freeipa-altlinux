@@ -5,6 +5,7 @@
 from __future__ import print_function, absolute_import
 
 import errno
+import itertools
 import logging
 import re
 import os
@@ -18,19 +19,24 @@ import tempfile
 from contextlib import contextmanager
 from augeas import Augeas
 import dns.exception
+
 from ipalib import api, x509
+from ipalib.constants import RENEWAL_CA_NAME, RA_AGENT_PROFILE
 from ipalib.install import certmonger, sysrestore
 import SSSDConfig
 import ipalib.util
 import ipalib.errors
+from ipaclient.install import timeconf
 from ipaclient.install.client import sssd_enable_ifp
 from ipaplatform import services
 from ipaplatform.tasks import tasks
 from ipapython import ipautil, version
+from ipapython import ipaldap
 from ipapython import dnsutil, directivesetter
 from ipapython.dn import DN
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
+from ipaserver import servroles
 from ipaserver.install import installutils
 from ipaserver.install import dsinstance
 from ipaserver.install import httpinstance
@@ -263,7 +269,7 @@ def cleanup_kdc(fstore):
     logger.info('[Checking for deprecated KDC configuration files]')
     for file in ['kpasswd.keytab', 'ldappwd']:
         filename = os.path.join(paths.VAR_KERBEROS_KRB5KDC_DIR, file)
-        installutils.remove_file(filename)
+        ipautil.remove_file(filename)
         if fstore.has_file(filename):
             fstore.untrack_file(filename)
             logger.debug('Uninstalling %s', filename)
@@ -453,6 +459,28 @@ def ca_add_default_ocsp_uri(ca):
     return True  # restart needed
 
 
+def ca_disable_publish_cert(ca):
+    logger.info('[Disabling cert publishing]')
+    if not ca.is_configured():
+        logger.info('CA is not configured')
+        return False
+
+    value = directivesetter.get_directive(
+        paths.CA_CS_CFG_PATH,
+        'ca.publish.cert.enable',
+        separator='=')
+    if value:
+        return False  # already set; restart not needed
+
+    directivesetter.set_directive(
+        paths.CA_CS_CFG_PATH,
+        'ca.publish.cert.enable',
+        'false',
+        quotes=False,
+        separator='=')
+    return True  # restart needed
+
+
 def upgrade_ca_audit_cert_validity(ca):
     """
     Update the Dogtag audit signing certificate.
@@ -465,6 +493,17 @@ def upgrade_ca_audit_cert_validity(ca):
     else:
         logger.info('CA is not configured')
         return False
+
+
+def ca_initialize_hsm_state(ca):
+    """Initializse HSM state as False / internal token
+    """
+    if not ca.sstore.has_state(ca.hsm_sstore):
+        section_name = ca.subsystem.upper()
+        config = SafeConfigParser()
+        config.add_section(section_name)
+        config.set(section_name, 'pki_hsm_enable', 'False')
+        ca.set_hsm_state(config)
 
 
 def named_remove_deprecated_options():
@@ -510,6 +549,34 @@ def named_remove_deprecated_options():
     logger.debug('The following configuration options have been removed: %s',
                  ', '.join(removed_options))
     return True
+
+
+def named_add_ipa_ext_conf_include():
+    """
+    Ensures named.conf does include the ipa-ext.conf file
+    """
+    if not bindinstance.named_conf_exists():
+        logger.info('DNS is not configured.')
+        return False
+
+    if not bindinstance.named_conf_include_exists(paths.NAMED_CUSTOM_CONFIG):
+        bindinstance.named_conf_add_include(paths.NAMED_CUSTOM_CONFIG)
+        return True
+    return False
+
+
+def named_add_ipa_ext_conf_file():
+    """
+    Wrapper around bindinstance.named_add_ext_conf_file().
+    Ensures named is configured before pushing the file.
+    """
+    if not bindinstance.named_conf_exists():
+        logger.info('DNS is not configured.')
+        return False
+
+    return bindinstance.named_add_ext_conf_file(
+        paths.NAMED_CUSTOM_CFG_SRC,
+        paths.NAMED_CUSTOM_CONFIG)
 
 
 def named_set_minimum_connections():
@@ -960,97 +1027,42 @@ def named_add_crypto_policy():
     return True
 
 
-def named_fix_data_dirs():
-    """Correct data directory
-    """
-    if not bindinstance.named_conf_exists():
-        logger.info('DNS is not configured')
-        return False
-
-    if sysupgrade.get_upgrade_state('named.conf', 'fix_data_paths'):
-        # upgrade was done already
-        return False
-
-    logger.info('[Setting paths for data directory in named.conf]')
-    try:
-        bindinstance.named_conf_set_directive(
-            'dump-file',
-            constants.NAMED_DATA_DIR + 'cache_dump.db',
-            bindinstance.NAMED_SECTION_OPTIONS)
-        bindinstance.named_conf_set_directive(
-            'statistics-file',
-            constants.NAMED_DATA_DIR + 'named_stats.txt',
-            bindinstance.NAMED_SECTION_OPTIONS)
-        bindinstance.named_conf_set_directive(
-            'memstatistics-file',
-            constants.NAMED_DATA_DIR + 'named_mem_stats.txt',
-            bindinstance.NAMED_SECTION_OPTIONS)
-    except IOError as e:
-        logger.error('Cannot update data directories configuration in '
-                     '%s: %s',
-                     paths.NAMED_CONF, e)
-    sysupgrade.set_upgrade_state('named.conf', 'fix_data_paths', True)
-    return True
-
-
-def certificate_renewal_update(ca, ds, http):
+def certificate_renewal_update(ca, kra, ds, http):
     """
     Update certmonger certificate renewal configuration.
     """
 
     template = paths.CERTMONGER_COMMAND_TEMPLATE
-    serverid = installutils.realm_to_serverid(api.env.realm)
+    serverid = ipaldap.realm_to_serverid(api.env.realm)
 
-    requests = [
-        {
+    requests = []
+
+    dogtag_reqs = ca.tracking_reqs.items()
+    if kra.is_installed():
+        dogtag_reqs = itertools.chain(dogtag_reqs, kra.tracking_reqs.items())
+
+    for nick, profile in dogtag_reqs:
+        req = {
             'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
-            'cert-nickname': 'auditSigningCert cert-pki-ca',
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
+            'cert-nickname': nick,
+            'ca-name': RENEWAL_CA_NAME,
             'cert-presave-command': template % 'stop_pkicad',
             'cert-postsave-command':
-                (template % 'renew_ca_cert "auditSigningCert cert-pki-ca"'),
-        },
-        {
-            'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
-            'cert-nickname': 'ocspSigningCert cert-pki-ca',
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
-            'cert-presave-command': template % 'stop_pkicad',
-            'cert-postsave-command':
-                (template % 'renew_ca_cert "ocspSigningCert cert-pki-ca"'),
-        },
-        {
-            'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
-            'cert-nickname': 'subsystemCert cert-pki-ca',
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
-            'cert-presave-command': template % 'stop_pkicad',
-            'cert-postsave-command':
-                (template % 'renew_ca_cert "subsystemCert cert-pki-ca"'),
-        },
-        {
-            'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
-            'cert-nickname': 'caSigningCert cert-pki-ca',
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
-            'cert-presave-command': template % 'stop_pkicad',
-            'cert-postsave-command':
-                (template % 'renew_ca_cert "caSigningCert cert-pki-ca"'),
-            'template-profile': None,
-        },
-        {
-            'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
-            'cert-nickname': 'Server-Cert cert-pki-ca',
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
-            'cert-presave-command': template % 'stop_pkicad',
-            'cert-postsave-command':
-                (template % 'renew_ca_cert "Server-Cert cert-pki-ca"'),
-        },
+                (template % 'renew_ca_cert "{}"'.format(nick)),
+            'template-profile': profile,
+        }
+        requests.append(req)
+
+    requests.append(
         {
             'cert-file': paths.RA_AGENT_PEM,
             'key-file': paths.RA_AGENT_KEY,
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
+            'ca-name': RENEWAL_CA_NAME,
+            'template-profile': RA_AGENT_PROFILE,
             'cert-presave-command': template % 'renew_ra_cert_pre',
             'cert-postsave-command': template % 'renew_ra_cert',
         },
-    ]
+    )
 
     logger.info("[Update certmonger certificate renewal configuration]")
     if not ca.is_configured():
@@ -1063,7 +1075,7 @@ def certificate_renewal_update(ca, ds, http):
         requests.append(
             {
                 'cert-file': paths.HTTPD_CERT_FILE,
-                'key-storage': paths.HTTPD_KEY_FILE,
+                'key-file': paths.HTTPD_KEY_FILE,
                 'ca-name': 'IPA',
                 'cert-postsave-command': template % 'restart_httpd',
             }
@@ -1091,7 +1103,7 @@ def certificate_renewal_update(ca, ds, http):
                 {
                     'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
                     'cert-nickname': nickname,
-                    'ca-name': 'dogtag-ipa-ca-renew-agent',
+                    'ca-name': RENEWAL_CA_NAME,
                     'cert-presave-command': template % 'stop_pkicad',
                     'cert-postsave-command':
                         (template % ('renew_ca_cert "%s"' % nickname)),
@@ -1100,18 +1112,33 @@ def certificate_renewal_update(ca, ds, http):
             )
 
     # State not set, lets see if we are already configured
+    missing_or_misconfigured_requests = []
     for request in requests:
         request_id = certmonger.get_request_id(request)
         if request_id is None:
-            break
-    else:
+            missing_or_misconfigured_requests.append(request)
+
+    if len(missing_or_misconfigured_requests) == 0:
         logger.info("Certmonger certificate renewal configuration already "
                     "up-to-date")
         return False
 
+    # Print info about missing requests
+    logger.info("Missing or incorrect tracking request for certificates:")
+    for request in missing_or_misconfigured_requests:
+        cert = None
+        if 'cert-file' in request:
+            cert = request['cert-file']
+        elif 'cert-database' in request and 'cert-nickname' in request:
+            cert = '{cert-database}:{cert-nickname}'.format(**request)
+        if cert is not None:
+            logger.info("  %s", cert)
+
     # Ok, now we need to stop tracking, then we can start tracking them
     # again with new configuration:
     ca.stop_tracking_certificates()
+    if kra.is_installed():
+        kra.stop_tracking_certificates()
     ds.stop_tracking_certificates(serverid)
     http.stop_tracking_certificates()
 
@@ -1119,13 +1146,14 @@ def certificate_renewal_update(ca, ds, http):
     if os.path.exists(filename):
         with installutils.stopped_service('certmonger'):
             logger.info("Removing %s", filename)
-            installutils.remove_file(filename)
+            ipautil.remove_file(filename)
 
     ca.configure_certmonger_renewal()
     ca.configure_renewal()
     ca.configure_agent_renewal()
-    ca.track_servercert()
     ca.add_lightweight_ca_tracking_requests()
+    if kra.is_installed():
+        kra.configure_renewal()
     ds.start_tracking_certificates(serverid)
     http.start_tracking_certificates()
 
@@ -1322,7 +1350,7 @@ def uninstall_dogtag_9(ds, http):
     with open(paths.IPA_DEFAULT_CONF, 'w') as f:
         p.write(f)
 
-    sstore = sysrestore.StateFile()
+    sstore = sysrestore.StateFile(paths.SYSRESTORE)
     sstore.restore_state('pkids', 'enabled')
     sstore.restore_state('pkids', 'running')
     sstore.restore_state('pkids', 'user_exists')
@@ -1417,7 +1445,7 @@ def fix_schema_file_syntax():
         logger.info('Syntax already fixed')
         return
 
-    serverid = installutils.realm_to_serverid(api.env.realm)
+    serverid = ipaldap.realm_to_serverid(api.env.realm)
     ds_dir = dsinstance.config_dirname(serverid)
 
     # 1. 60ipadns.ldif: Add parenthesis to idnsRecord
@@ -1494,7 +1522,7 @@ def remove_ds_ra_cert(subject_base):
         return
 
     dbdir = dsinstance.config_dirname(
-        installutils.realm_to_serverid(api.env.realm))
+        ipaldap.realm_to_serverid(api.env.realm))
     dsdb = certs.CertDB(api.env.realm, nssdir=dbdir, subject_base=subject_base)
 
     nickname = 'CN=IPA RA,%s' % subject_base
@@ -1594,45 +1622,6 @@ def add_default_caacl(ca):
     sysupgrade.set_upgrade_state('caacl', 'add_default_caacl', True)
 
 
-def setup_krb_paths(krb):
-    logger.info("[Setup KRB5 paths]")
-
-    aug = Augeas(flags=Augeas.NO_LOAD | Augeas.NO_MODL_AUTOLOAD,
-                 loadpath=paths.USR_SHARE_IPA_DIR)
-    try:
-        NEW_KRB_HOME = "/var/lib/kerberos"
-        OLD_KRB_HOME = "/var/kerberos"
-        aug.transform("IPAKrb5", paths.KRB5KDC_KDC_CONF)
-        aug.load()
-
-        path = '/files{}/realms/{}'.format(paths.KRB5KDC_KDC_CONF, krb.realm)
-        modified = False
-
-        expr = '{}/*[.=~regexp("{}")]'.format(
-            path, ".*{}.*".format(OLD_KRB_HOME))
-        matches = aug.match(expr)
-        for m in matches:
-            old_value = aug.get(m)
-            new_value = old_value.replace(OLD_KRB_HOME, NEW_KRB_HOME)
-            aug.set(m, new_value)
-            modified = True
-
-        if modified:
-            try:
-                aug.save()
-            except IOError:
-                for error_path in aug.match('/augeas//error'):
-                    logger.error('augeas: %s', aug.get(error_path))
-                    raise
-
-            kadmin = service.SimpleServiceInstance("kadmin")
-            if kadmin.is_configured():
-                kadmin.restart()
-
-    finally:
-        aug.close()
-
-
 def setup_pkinit(krb):
     logger.info("[Setup PKINIT]")
 
@@ -1715,36 +1704,59 @@ def setup_spake(krb):
         aug.close()
 
 
-def enable_certauth(krb):
-    logger.info("[Enable certauth]")
+# Currently, this doesn't support templating.
+def enable_server_snippet():
+    logger.info("[Enable server krb5.conf snippet]")
+    template = os.path.join(
+        paths.USR_SHARE_IPA_DIR,
+        os.path.basename(paths.KRB5_FREEIPA_SERVER) + ".template"
+    )
+    shutil.copy(template, paths.KRB5_FREEIPA_SERVER)
+    os.chmod(paths.KRB5_FREEIPA_SERVER, 0o644)
 
-    aug = Augeas(flags=Augeas.NO_LOAD | Augeas.NO_MODL_AUTOLOAD,
-                 loadpath=paths.USR_SHARE_IPA_DIR)
+    tasks.restore_context(paths.KRB5_FREEIPA_SERVER)
+
+
+def ntpd_cleanup(fqdn, fstore):
+    sstore = sysrestore.StateFile(paths.SYSRESTORE)
+    timeconf.restore_forced_timeservices(sstore, 'ntpd')
+    if sstore.has_state('ntp'):
+        instance = services.service('ntpd', api)
+        sstore.restore_state(instance.service_name, 'enabled')
+        sstore.restore_state(instance.service_name, 'running')
+        sstore.restore_state(instance.service_name, 'step-tickers')
+        try:
+            instance.disable()
+            instance.stop()
+        except Exception as e:
+            logger.debug("Service ntpd was not disabled or stopped")
+
+    for ntpd_file in [paths.NTP_CONF, paths.NTP_STEP_TICKERS,
+                      paths.SYSCONFIG_NTPD]:
+        try:
+            fstore.restore_file(ntpd_file)
+        except ValueError as e:
+            logger.debug(e)
+
     try:
-        aug.transform('IPAKrb5', paths.KRB5_CONF)
-        aug.load()
+        api.Backend.ldap2.delete_entry(DN(('cn', 'NTP'), ('cn', fqdn),
+                                       api.env.container_masters))
+    except ipalib.errors.NotFound:
+        logger.debug("NTP service entry was not found in LDAP.")
 
-        path = '/files{}/plugins/certauth'.format(paths.KRB5_CONF)
-        modified = False
+    ntp_role_instance = servroles.ServiceBasedRole(
+         u"ntp_server_server",
+         u"NTP server",
+         component_services=['NTP']
+    )
 
-        if not aug.match(path):
-            aug.set('{}/module'.format(path), 'ipakdb:kdb/ipadb.so')
-            aug.set('{}/enable_only'.format(path), 'ipakdb')
-            modified = True
+    updated_role_instances = tuple()
+    for role_instance in servroles.role_instances:
+        if role_instance is not ntp_role_instance:
+            updated_role_instances += tuple([role_instance])
 
-        if modified:
-            try:
-                aug.save()
-            except IOError:
-                for error_path in aug.match('/augeas//error'):
-                    logger.error('augeas: %s', aug.get(error_path))
-                raise
-
-            if krb.is_running():
-                krb.stop()
-            krb.start()
-    finally:
-        aug.close()
+    servroles.role_instances = updated_role_instances
+    sysupgrade.set_upgrade_state('ntpd', 'ntpd_cleaned', True)
 
 
 def update_replica_config(db_suffix):
@@ -1852,7 +1864,7 @@ def upgrade_configuration():
 
     logger.debug('IPA version %s', version.VENDOR_VERSION)
 
-    fstore = sysrestore.FileStore()
+    fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
     fqdn = api.env.host
 
@@ -1863,6 +1875,9 @@ def upgrade_configuration():
     ds_running = ds.is_running()
     if not ds_running:
         ds.start(ds.serverid)
+
+    if not sysupgrade.get_upgrade_state('ntpd', 'ntpd_cleaned'):
+        ntpd_cleanup(fqdn, fstore)
 
     if tasks.configure_pkcs11_modules(fstore):
         print("Disabled p11-kit-proxy")
@@ -1923,13 +1938,6 @@ def upgrade_configuration():
         upgrade_file(sub_dict, paths.HTTPD_IPA_CONF,
                      os.path.join(paths.USR_SHARE_IPA_DIR,
                                   "ipa.conf.template"))
-        # move old config
-        if not os.path.exists(paths.HTTPD_IPA_REWRITE_CONF):
-            try:
-                shutil.move("/etc/httpd2/conf/ipa-rewrite.conf",
-                            paths.HTTPD_IPA_REWRITE_CONF)
-            except OSError:
-                pass
         upgrade_file(sub_dict, paths.HTTPD_IPA_REWRITE_CONF,
                      os.path.join(paths.USR_SHARE_IPA_DIR,
                                   "ipa-rewrite.conf.template"))
@@ -1996,6 +2004,7 @@ def upgrade_configuration():
     http.realm = api.env.realm
     http.suffix = ipautil.realm_to_suffix(api.env.realm)
     http.configure_selinux_for_httpd()
+    http.set_mod_ssl_protocol()
 
     http.configure_certmonger_renewal_guard()
 
@@ -2027,10 +2036,8 @@ def upgrade_configuration():
     update_ipa_httpd_service_conf(http)
     update_ipa_http_wsgi_conf(http)
     migrate_to_mod_ssl(http)
-    tasks.configure_ipa_gssproxy_dir()
     update_http_keytab(http)
     http.configure_gssproxy()
-    http.configure_httpd_mods()
     http.start()
 
     uninstall_selfsign(ds, http)
@@ -2061,12 +2068,22 @@ def upgrade_configuration():
     cleanup_dogtag()
     upgrade_adtrust_config()
 
+    bind = bindinstance.BindInstance(fstore)
+    if bind.is_configured() and not bind.is_running():
+        # some upgrade steps may require bind running
+        bind_started = True
+        bind.start()
+    else:
+        bind_started = False
+
     add_ca_dns_records()
 
     # Any of the following functions returns True iff the named.conf file
     # has been altered
     named_conf_changes = (
                           named_remove_deprecated_options(),
+                          named_add_ipa_ext_conf_file(),
+                          named_add_ipa_ext_conf_include(),
                           named_set_minimum_connections(),
                           named_update_gssapi_configuration(),
                           named_update_pid_file(),
@@ -2080,7 +2097,6 @@ def upgrade_configuration():
                           fix_dyndb_ldap_workdir_permissions(),
                           named_add_server_id(),
                           named_add_crypto_policy(),
-                          named_fix_data_dirs(),
                          )
 
     if any(named_conf_changes):
@@ -2088,10 +2104,13 @@ def upgrade_configuration():
         logger.info('Changes to named.conf have been made, restart named')
         bind = bindinstance.BindInstance(fstore)
         try:
-            if bind.is_configured():
+            if bind.is_running():
                 bind.restart()
         except ipautil.CalledProcessError as e:
             logger.error("Failed to restart %s: %s", bind.service_name, e)
+
+    if bind_started:
+        bind.stop()
 
     custodia = custodiainstance.CustodiaInstance(api.env.host, api.env.realm)
     custodia.upgrade_instance()
@@ -2100,12 +2119,13 @@ def upgrade_configuration():
         ca_restart,
         ca_upgrade_schema(ca),
         upgrade_ca_audit_cert_validity(ca),
-        certificate_renewal_update(ca, ds, http),
+        certificate_renewal_update(ca, kra, ds, http),
         ca_enable_pkix(ca),
         ca_configure_profiles_acl(ca),
         ca_configure_lightweight_ca_acls(ca),
         ca_ensure_lightweight_cas_container(ca),
         ca_add_default_ocsp_uri(ca),
+        ca_disable_publish_cert(ca),
     ])
 
     if ca_restart:
@@ -2130,6 +2150,7 @@ def upgrade_configuration():
         cainstance.repair_profile_caIPAserviceCert()
         ca.setup_lightweight_ca_key_retrieval()
         cainstance.ensure_ipa_authority_entry()
+        ca_initialize_hsm_state(ca)
 
     migrate_to_authselect()
     add_systemd_user_hbac()
@@ -2145,7 +2166,7 @@ def upgrade_configuration():
                         SUFFIX=krb.suffix,
                         DOMAIN=api.env.domain,
                         HOST=api.env.host,
-                        SERVER_ID=installutils.realm_to_serverid(krb.realm),
+                        SERVER_ID=ipaldap.realm_to_serverid(krb.realm),
                         REALM=krb.realm,
                         KRB5KDC_KADM5_ACL=paths.KRB5KDC_KADM5_ACL,
                         DICT_WORDS=paths.DICT_WORDS,
@@ -2155,11 +2176,10 @@ def upgrade_configuration():
                         CACERT_PEM=paths.CACERT_PEM,
                         KDC_CA_BUNDLE_PEM=paths.KDC_CA_BUNDLE_PEM,
                         CA_BUNDLE_PEM=paths.CA_BUNDLE_PEM)
-    setup_krb_paths(krb)
     krb.add_anonymous_principal()
     setup_spake(krb)
     setup_pkinit(krb)
-    enable_certauth(krb)
+    enable_server_snippet()
 
     if not ds_running:
         ds.stop(ds.serverid)

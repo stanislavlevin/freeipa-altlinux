@@ -23,22 +23,26 @@ from __future__ import absolute_import
 
 import logging
 import os
+from io import StringIO
 import textwrap
 import re
 import collections
 import itertools
 import tempfile
 import time
+from pipes import quote
+import configparser
+from contextlib import contextmanager
 
 import dns
 from ldif import LDIFWriter
 import pytest
-from six import StringIO
+from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 
-
+from ipapython import certdb
 from ipapython import ipautil
 from ipaplatform.paths import paths
 from ipaplatform.services import knownservices
@@ -53,6 +57,7 @@ from ipalib.constants import (
 from ipatests.create_external_ca import ExternalCA
 from .env_config import env_to_script
 from .host import Host
+from .firewall import Firewall
 
 logger = logging.getLogger(__name__)
 
@@ -302,12 +307,7 @@ def enable_replication_debugging(host, log_level=0):
         replace: nsslapd-errorlog-level
         nsslapd-errorlog-level: {log_level}
         """.format(log_level=log_level))
-    host.run_command(['ldapmodify', '-x',
-                      '-D', str(host.config.dirman_dn),
-                      '-w', host.config.dirman_password,
-                      ],
-                     stdin_text=logging_ldif)
-
+    ldapmodify_dm(host, logging_ldif)
 
 def set_default_ttl_for_ipa_dns_zone(host, raiseonerr=True):
     args = [
@@ -330,6 +330,8 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
     setup_server_logs_collecting(host)
     apply_common_fixes(host)
     fix_apache_semaphores(host)
+    fw = Firewall(host)
+    fw_services = ["freeipa-ldap", "freeipa-ldaps"]
 
     args = [
         'ipa-server-install',
@@ -348,16 +350,20 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
             '--forwarder', host.config.dns_forwarder,
             '--auto-reverse'
         ])
+        fw_services.append("dns")
     if setup_kra:
         args.append('--setup-kra')
     if setup_adtrust:
         args.append('--setup-adtrust')
+        fw_services.append("freeipa-trust")
     if external_ca:
         args.append('--external-ca')
 
     args.extend(extra_args)
     result = host.run_command(args, raiseonerr=raiseonerr,
                               stdin_text=stdin_text)
+    if result.returncode == 0:
+        fw.enable_services(fw_services)
     if result.returncode == 0 and not external_ca:
         # external CA step 1 doesn't have DS and KDC fully configured, yet
         enable_replication_debugging(host)
@@ -411,13 +417,13 @@ def master_authoritative_for_client_domain(master, client):
     return result.returncode == 0
 
 
-def config_replica_resolvconf_with_master_data(master, replica):
+def config_host_resolvconf_with_master_data(master, host):
     """
-    Configure replica /etc/resolv.conf to use master as DNS server
+    Configure host /etc/resolv.conf to use master as DNS server
     """
     content = ('search {domain}\nnameserver {master_ip}'
                .format(domain=master.domain.name, master_ip=master.ip))
-    replica.put_file_contents(paths.RESOLV_CONF, content)
+    host.put_file_contents(paths.RESOLV_CONF, content)
 
 
 def install_replica(master, replica, setup_ca=True, setup_dns=False,
@@ -434,6 +440,8 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
     apply_common_fixes(replica)
     setup_server_logs_collecting(replica)
     allow_sync_ptr(master)
+    fw = Firewall(replica)
+    fw_services = ["freeipa-ldap", "freeipa-ldaps"]
     # Otherwise ipa-client-install would not create a PTR
     # and replica installation would fail
     args = ['ipa-replica-install',
@@ -468,8 +476,10 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
             '--setup-dns',
             '--forwarder', replica.config.dns_forwarder
         ])
+        fw_services.append("dns")
     if setup_adtrust:
         args.append('--setup-adtrust')
+        fw_services.append("freeipa-trust")
     if master_authoritative_for_client_domain(master, replica):
         args.extend(['--ip-address', replica.ip])
 
@@ -478,6 +488,7 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
     fix_apache_semaphores(replica)
     args.extend(['--realm', replica.domain.realm,
                  '--domain', replica.domain.name])
+    fw.enable_services(fw_services)
 
     result = replica.run_command(args, raiseonerr=raiseonerr,
                                  stdin_text=stdin_text)
@@ -485,11 +496,13 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
         enable_replication_debugging(replica)
         setup_sssd_debugging(replica)
         kinit_admin(replica)
+    else:
+        fw.disable_services(fw_services)
     return result
 
 
-def install_client(master, client, extra_args=(),
-                   user=None, password=None):
+def install_client(master, client, extra_args=[], user=None,
+                   password=None, unattended=True, stdin_text=None):
     client.collect_log(paths.IPACLIENT_INSTALL_LOG)
 
     apply_common_fixes(client)
@@ -506,14 +519,21 @@ def install_client(master, client, extra_args=(),
     if password is None:
         password = client.config.admin_password
 
-    result = client.run_command([
-        'ipa-client-install', '-U',
+    args = [
+        'ipa-client-install',
         '--domain', client.domain.name,
         '--realm', client.domain.realm,
         '-p', user,
         '-w', password,
-        '--server', master.hostname] + list(extra_args)
-    )
+        '--server', master.hostname
+    ]
+
+    if unattended:
+        args.append('-U')
+
+    args.extend(extra_args)
+
+    result = client.run_command(args, stdin_text=stdin_text)
 
     setup_sssd_debugging(client)
     kinit_admin(client)
@@ -535,6 +555,8 @@ def install_adtrust(host):
                       '--netbios-name', host.netbios,
                       '-a', host.config.admin_password,
                       '--add-sids'])
+
+    Firewall(host).enable_service("freeipa-trust")
 
     # Restart named because it lost connection to dirsrv
     # (Directory server restarts during the ipa-adtrust-install)
@@ -582,48 +604,57 @@ def is_subdomain(subdomain, domain):
 
     return subdomain
 
-def configure_dns_for_trust(master, ad):
+
+def configure_dns_for_trust(master, *ad_hosts):
     """
     This configures DNS on IPA master according to the relationship of the
     IPA's and AD's domains.
     """
 
     kinit_admin(master)
+    dnssec_disabled = False
+    for ad in ad_hosts:
+        if is_subdomain(ad.domain.name, master.domain.name):
+            master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
+                                '%s.%s' % (ad.shortname, ad.netbios),
+                                '--a-ip-address', ad.ip])
 
-    if is_subdomain(ad.domain.name, master.domain.name):
-        master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
-                            '%s.%s' % (ad.shortname, ad.netbios),
-                            '--a-ip-address', ad.ip])
+            master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
+                                ad.netbios,
+                                '--ns-hostname',
+                                '%s.%s' % (ad.shortname, ad.netbios)])
 
-        master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
-                            ad.netbios,
-                            '--ns-hostname',
-                            '%s.%s' % (ad.shortname, ad.netbios)])
-
-        master.run_command(['ipa', 'dnszone-mod', master.domain.name,
-                            '--allow-transfer', ad.ip])
-    else:
-        disable_dnssec_validation(master)
-        master.run_command(['ipa', 'dnsforwardzone-add', ad.domain.name,
-                            '--forwarder', ad.ip,
-                            '--forward-policy', 'only',
-                            ])
+            master.run_command(['ipa', 'dnszone-mod', master.domain.name,
+                                '--allow-transfer', ad.ip])
+        else:
+            if not dnssec_disabled:
+                disable_dnssec_validation(master)
+                dnssec_disabled = True
+            master.run_command(['ipa', 'dnsforwardzone-add', ad.domain.name,
+                                '--forwarder', ad.ip,
+                                '--forward-policy', 'only',
+                                ])
 
 
-def unconfigure_dns_for_trust(master, ad):
+def unconfigure_dns_for_trust(master, *ad_hosts):
     """
     This undoes changes made by configure_dns_for_trust
     """
     kinit_admin(master)
-    if is_subdomain(ad.domain.name, master.domain.name):
-        master.run_command(['ipa', 'dnsrecord-del', master.domain.name,
-                            '%s.%s' % (ad.shortname, ad.netbios),
-                            '--a-rec', ad.ip])
-        master.run_command(['ipa', 'dnsrecord-del', master.domain.name,
-                            ad.netbios,
-                            '--ns-rec', '%s.%s' % (ad.shortname, ad.netbios)])
-    else:
-        master.run_command(['ipa', 'dnsforwardzone-del', ad.domain.name])
+    dnssec_needs_restore = False
+    for ad in ad_hosts:
+        if is_subdomain(ad.domain.name, master.domain.name):
+            master.run_command(['ipa', 'dnsrecord-del', master.domain.name,
+                                '%s.%s' % (ad.shortname, ad.netbios),
+                                '--a-rec', ad.ip])
+            master.run_command(['ipa', 'dnsrecord-del', master.domain.name,
+                                ad.netbios,
+                                '--ns-rec',
+                                '%s.%s' % (ad.shortname, ad.netbios)])
+        else:
+            master.run_command(['ipa', 'dnsforwardzone-del', ad.domain.name])
+            dnssec_needs_restore = True
+    if dnssec_needs_restore:
         restore_dnssec_validation(master)
 
 
@@ -890,6 +921,9 @@ def uninstall_master(host, ignore_topology_disconnect=True,
 
     result = host.run_command(uninstall_cmd)
     assert "Traceback" not in result.stdout_text
+    if clean:
+        Firewall(host).disable_services(["freeipa-ldap", "freeipa-ldaps",
+                                         "freeipa-trust", "dns"])
 
     host.run_command(['pkidestroy', '-s', 'CA', '-i', 'pki-tomcat'],
                      raiseonerr=False)
@@ -1199,7 +1233,7 @@ def double_circle_topo(master, replicas, site_size=6):
 
 def install_topo(topo, master, replicas, clients, domain_level=None,
                  skip_master=False, setup_replica_cas=True,
-                 setup_replica_kras=False):
+                 setup_replica_kras=False, clients_extra_args=()):
     """Install IPA servers and clients in the given topology"""
     if setup_replica_kras and not setup_replica_cas:
         raise ValueError("Option 'setup_replica_kras' requires "
@@ -1227,15 +1261,15 @@ def install_topo(topo, master, replicas, clients, domain_level=None,
                 setup_kra=setup_replica_kras
             )
         installed.add(child)
-    install_clients([master] + replicas, clients)
+    install_clients([master] + replicas, clients, clients_extra_args)
 
 
-def install_clients(servers, clients):
+def install_clients(servers, clients, extra_args=()):
     """Install IPA clients, distributing them among the given servers"""
     izip = getattr(itertools, 'izip', zip)
     for server, client in izip(itertools.cycle(servers), clients):
         logger.info('Installing client %s on %s', server, client)
-        install_client(server, client)
+        install_client(server, client, extra_args)
 
 
 def _entries_to_ldif(entries):
@@ -1434,6 +1468,7 @@ def install_dns(host, raiseonerr=True, extra_args=()):
     ]
     args.extend(extra_args)
     ret = host.run_command(args, raiseonerr=raiseonerr)
+    Firewall(host).enable_service("dns")
     return ret
 
 
@@ -1488,6 +1523,49 @@ def run_certutil(host, args, reqdir, dbtype=None,
     new_args.extend(args)
     return host.run_command(new_args, raiseonerr=raiseonerr,
                             stdin_text=stdin)
+
+
+def certutil_certs_keys(host, reqdir, pwd_file, token_name=None):
+    """Run certutils and get mappings of cert and key files
+    """
+    base_args = ['-f', pwd_file]
+    if token_name is not None:
+        base_args.extend(['-h', token_name])
+    cert_args = base_args + ['-L']
+    key_args = base_args + ['-K']
+
+    result = run_certutil(host, cert_args, reqdir)
+    certs = {}
+    for line in result.stdout_text.splitlines():
+        mo = certdb.CERT_RE.match(line)
+        if mo:
+            certs[mo.group('nick')] = mo.group('flags')
+
+    result = run_certutil(host, key_args, reqdir)
+    assert 'orphan' not in result.stdout_text
+    keys = {}
+    for line in result.stdout_text.splitlines():
+        mo = certdb.KEY_RE.match(line)
+        if mo:
+            keys[mo.group('nick')] = mo.group('keyid')
+    return certs, keys
+
+
+def certutil_fetch_cert(host, reqdir, pwd_file, nickname, token_name=None):
+    """Run certutil and retrieve a cert as cryptography.x509 object
+    """
+    args = ['-f', pwd_file, '-L', '-a', '-n']
+    if token_name is not None:
+        args.extend([
+            '{}:{}'.format(token_name, nickname),
+            '-h', token_name
+        ])
+    else:
+        args.append(nickname)
+    result = run_certutil(host, args, reqdir)
+    return x509.load_pem_x509_certificate(
+        result.stdout_bytes, default_backend()
+    )
 
 
 def upload_temp_contents(host, contents, encoding='utf-8'):
@@ -1629,7 +1707,7 @@ def add_dns_zone(master, zone, skip_overlap_check=False,
 
 def sign_ca_and_transport(host, csr_name, root_ca_name, ipa_ca_name,
                           root_ca_path_length=None, ipa_ca_path_length=1,
-                          key_size=None,):
+                          key_size=None, root_ca_extensions=()):
     """
     Sign ipa csr and save signed CA together with root CA back to the host.
     Returns root CA and IPA CA paths on the host.
@@ -1642,7 +1720,10 @@ def sign_ca_and_transport(host, csr_name, root_ca_name, ipa_ca_name,
 
     external_ca = ExternalCA(key_size=key_size)
     # Create root CA
-    root_ca = external_ca.create_ca(path_length=root_ca_path_length)
+    root_ca = external_ca.create_ca(
+        path_length=root_ca_path_length,
+        extensions=root_ca_extensions,
+    )
     # Sign CSR
     ipa_ca = external_ca.sign_csr(ipa_csr, path_length=ipa_ca_path_length)
 
@@ -1669,6 +1750,7 @@ def generate_ssh_keypair():
 
     pem = key.private_bytes(
         encoding=serialization.Encoding.PEM,
+        # paramiko does not support PKCS#8 format, yet.
         format=serialization.PrivateFormat.TraditionalOpenSSL,
         encryption_algorithm=serialization.NoEncryption()
     )
@@ -1693,14 +1775,20 @@ def strip_cert_header(pem):
         return pem
 
 
-def user_add(host, login, first='test', last='user', extra_args=()):
+def user_add(host, login, first='test', last='user', extra_args=(),
+             password=None):
     cmd = [
         "ipa", "user-add", login,
         "--first", first,
         "--last", last
     ]
+    if password is not None:
+        cmd.append('--password')
+        stdin_text = '{0}\n{0}\n'.format(password)
+    else:
+        stdin_text = None
     cmd.extend(extra_args)
-    return host.run_command(cmd)
+    return host.run_command(cmd, stdin_text=stdin_text)
 
 
 def group_add(host, groupname, extra_args=()):
@@ -1711,9 +1799,153 @@ def group_add(host, groupname, extra_args=()):
     return host.run_command(cmd)
 
 
-def create_temp_file(host, directory=None):
+def ldapmodify_dm(host, ldif_text, **kwargs):
+    """Run ldapmodify as Directory Manager
+
+    :param host: host object
+    :param ldif_text: ldif string
+    :param kwargs: additional keyword arguments to run_command()
+    :return: result object
+    """
+    # no hard-coded hostname, let ldapmodify pick up the host from ldap.conf.
+    args = [
+        'ldapmodify',
+        '-x',
+        '-D', str(host.config.dirman_dn),  # pylint: disable=no-member
+        '-w', host.config.dirman_password
+    ]
+    return host.run_command(args, stdin_text=ldif_text, **kwargs)
+
+
+def ldapsearch_dm(host, base, ldap_args, scope='sub', **kwargs):
+    """Run ldapsearch as Directory Manager
+
+    :param host: host object
+    :param base: Base DN
+    :param ldap_args: additional arguments to ldapsearch (filter, attributes)
+    :param scope: search scope (base, sub, one)
+    :param kwargs: additional keyword arguments to run_command()
+    :return: result object
+    """
+    args = [
+        'ldapsearch',
+        '-x', '-ZZ',
+        '-h', host.hostname,
+        '-p', '389',
+        '-D', str(host.config.dirman_dn),  # pylint: disable=no-member
+        '-w', host.config.dirman_password,
+        '-s', scope,
+        '-b', base,
+        '-o', 'ldif-wrap=no',
+        '-LLL',
+    ]
+    args.extend(ldap_args)
+    return host.run_command(args, **kwargs)
+
+
+def create_temp_file(host, directory=None, create_file=True):
     """Creates temproray file using mktemp."""
     cmd = ['mktemp']
+    if create_file is False:
+        cmd += ['--dry-run']
     if directory is not None:
         cmd += ['-p', directory]
-    return host.run_command(cmd).stdout_text
+    return host.run_command(cmd).stdout_text.strip()
+
+
+def create_active_user(host, login, password, first='test', last='user'):
+    """Create user and do login to set password"""
+    temp_password = 'Secret456789'
+    kinit_admin(host)
+    user_add(host, login, first=first, last=last, password=temp_password)
+    host.run_command(
+        ['kinit', login],
+        stdin_text='{0}\n{1}\n{1}\n'.format(temp_password, password))
+    kdestroy_all(host)
+
+
+def kdestroy_all(host):
+    return host.run_command(['kdestroy', '-A'])
+
+
+def run_command_as_user(host, user, command, *args, **kwargs):
+    """Run command on remote host using 'su -l'
+
+    Arguments are similar to Host.run_command
+    """
+    if not isinstance(command, str):
+        command = ' '.join(quote(s) for s in command)
+    cwd = kwargs.pop('cwd', None)
+    if cwd is not None:
+        command = 'cd {}; {}'.format(quote(cwd), command)
+    command = ['su', '-l', user, '-c', command]
+    return host.run_command(command, *args, **kwargs)
+
+
+def kinit_as_user(host, user, password):
+    host.run_command(['kinit', user], stdin_text=password + '\n')
+
+
+class FileBackup:
+    """Create file backup and do restore on remote host
+
+    Examples:
+
+        config_backup = FileBackup(host, '/etc/some.conf')
+        ... modify the file and do the test ...
+        config_backup.restore()
+
+    Use as a context manager:
+
+        with FileBackup(host, '/etc/some.conf'):
+            ... modify the file and do the test ...
+
+    """
+
+    def __init__(self, host, filename):
+        """Create file backup."""
+        self._host = host
+        self._filename = filename
+        self._backup = create_temp_file(host)
+        host.run_command(['cp', '--preserve=all', filename, self._backup])
+
+    def restore(self):
+        """Restore file. Can be called multiple times."""
+        self._host.run_command(['mv', self._backup, self._filename])
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.restore()
+
+
+@contextmanager
+def remote_ini_file(host, filename):
+    """Context manager for editing an ini file on a remote host.
+
+    It provides RawConfigParser object which is automatically serialized and
+    uploaded to remote host upon exit from the context.
+
+    If exception is raised inside the context then the ini file is NOT updated
+    on remote host.
+
+    Example:
+
+        with remote_ini_file(master, '/etc/some.conf') as some_conf:
+            some_conf.set('main', 'timeout', 10)
+
+
+    """
+    data = host.get_file_contents(filename, encoding='utf-8')
+    ini_file = configparser.RawConfigParser()
+    ini_file.read_string(data)
+    yield ini_file
+    data = StringIO()
+    ini_file.write(data)
+    host.put_file_contents(filename, data.getvalue())
+
+
+def is_selinux_enabled(host):
+    res = host.run_command('selinuxenabled', ok_returncode=(0, 1))
+    return res.returncode == 0

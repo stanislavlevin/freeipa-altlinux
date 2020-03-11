@@ -28,13 +28,12 @@ import sys
 import tempfile
 import time
 import traceback
+import warnings
 
-# pylint: disable=import-error
-from six.moves.configparser import RawConfigParser
-from six.moves.urllib.parse import urlparse, urlunparse
-# pylint: enable=import-error
+from configparser import RawConfigParser
+from urllib.parse import urlparse, urlunparse
 
-from ipalib import api, errors, x509, createntp
+from ipalib import api, errors, x509
 from ipalib.constants import IPAAPI_USER, MAXHOSTNAMELEN
 from ipalib.install import certmonger, certstore, service, sysrestore
 from ipalib.install import hostname as hostname_
@@ -51,9 +50,7 @@ from ipaplatform import services
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
-from ipapython import certdb, kernel_keyring, ipaldap, ipautil, ntpmethods
-from ipapython.ntpmethods import detect_time_server
-from ipapython.ntpmethods import get_time_source
+from ipapython import certdb, kernel_keyring, ipaldap, ipautil
 from ipapython.admintool import ScriptError
 from ipapython.dn import DN
 from ipapython.install import typing
@@ -68,8 +65,9 @@ from ipapython.ipautil import (
 from ipapython.ssh import SSHPublicKey
 from ipapython import version
 
-from . import automount, ipadiscovery, sssd
-from .ipachangeconf import IPAChangeConf
+from . import automount, timeconf, sssd
+from ipaclient import discovery
+from ipapython.ipachangeconf import IPAChangeConf
 
 NoneType = type(None)
 
@@ -287,13 +285,15 @@ def is_ipa_client_installed(fstore, on_master=False):
 def configure_nsswitch_database(fstore, database, services, preserve=True,
                                 append=True, default_value=()):
     """
+    This function was deprecated. Use ipaplatform.tasks.
+
     Edits the specified nsswitch.conf database (e.g. passwd, group, sudoers)
     to use the specified service(s).
 
     Arguments:
         fstore - FileStore to backup the nsswitch.conf
         database - database configuration that should be ammended,
-                   e.g. 'sudoers'
+                    e.g. 'sudoers'
         service - list of services that should be added, e.g. ['sss']
         preserve - if True, the already configured services will be preserved
 
@@ -303,51 +303,13 @@ def configure_nsswitch_database(fstore, database, services, preserve=True,
                         the database is not mentioned in nsswitch.conf), e.g.
                         ['files']
     """
-
-    # Backup the original version of nsswitch.conf, we're going to edit it now
-    if not fstore.has_file(paths.NSSWITCH_CONF):
-        fstore.backup_file(paths.NSSWITCH_CONF)
-
-    conf = IPAChangeConf("IPA Installer")
-    conf.setOptionAssignment(':')
-
-    if preserve:
-        # Read the existing configuration
-        with open(paths.NSSWITCH_CONF, 'r') as f:
-            opts = conf.parse(f)
-            raw_database_entry = conf.findOpts(opts, 'option', database)[1]
-
-        # Detect the list of already configured services
-        if not raw_database_entry:
-            # If there is no database entry, database is not present in
-            # the nsswitch.conf. Set the list of services to the
-            # default list, if passed.
-            configured_services = list(default_value)
-        else:
-            configured_services = raw_database_entry['value'].strip().split()
-
-        # Make sure no service is added if already mentioned in the list
-        added_services = [s for s in services
-                          if s not in configured_services]
-
-        # Prepend / append the list of new services
-        if append:
-            new_value = ' ' + ' '.join(configured_services + added_services)
-        else:
-            new_value = ' ' + ' '.join(added_services + configured_services)
-
-    else:
-        # Preserve not set, let's rewrite existing configuration
-        new_value = ' ' + ' '.join(services)
-
-    # Set new services as sources for database
-    opts = [
-        conf.setOption(database, new_value),
-        conf.emptyLine(),
-    ]
-
-    conf.changeConf(paths.NSSWITCH_CONF, opts)
-    logger.info("Configured %s in %s", database, paths.NSSWITCH_CONF)
+    warnings.warn(
+        "Use ipaplatform.tasks.tasks.configure_nsswitch_database",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return tasks.configure_nsswitch_database(fstore, database, services,
+                                             preserve, append, default_value)
 
 
 def configure_ipa_conf(
@@ -666,19 +628,25 @@ def hardcode_ldap_server(cli_server):
         "hardcoded server name: %s", cli_server[0])
 
 
-def configure_krb5_conf(
-        cli_realm, cli_domain, cli_server, cli_kdc, dnsok,
-        filename, client_domain, client_hostname, force=False,
-        configure_sssd=True):
-
-    # First, write a snippet to krb5.conf.d.  Currently this doesn't support
-    # templating, but that could be changed in the future.
+# Currently this doesn't support templating, but that could be changed in the
+# future.  Note that this function is also called from %post.
+def configure_krb5_snippet():
     template = os.path.join(
         paths.USR_SHARE_IPA_CLIENT_DIR,
         os.path.basename(paths.KRB5_FREEIPA) + ".template"
     )
     shutil.copy(template, paths.KRB5_FREEIPA)
     os.chmod(paths.KRB5_FREEIPA, 0o644)
+
+    tasks.restore_context(paths.KRB5_FREEIPA)
+
+
+def configure_krb5_conf(
+        cli_realm, cli_domain, cli_server, cli_kdc, dnsok,
+        filename, client_domain, client_hostname, force=False,
+        configure_sssd=True):
+    # First, write a snippet to krb5.conf.d.
+    configure_krb5_snippet()
 
     # Then, perform the rest of our configuration into krb5.conf itself.
     krbconf = IPAChangeConf("IPA Installer")
@@ -811,7 +779,16 @@ def configure_krb5_conf(
 def configure_certmonger(
         fstore, subject_base, cli_realm, hostname, options, ca_enabled):
 
+    cmonger = services.knownservices.certmonger
     if not options.request_cert:
+        # Conditionally restart certmonger to pick up the new IPA
+        # configuration.
+        try:
+            cmonger.try_restart()
+        except Exception as e:
+            logger.error(
+                "Failed to conditionally restart the %s daemon: %s",
+                cmonger.service_name, str(e))
         return
 
     if not ca_enabled:
@@ -826,7 +803,6 @@ def configure_certmonger(
         # which principal name to use when requesting certs.
         certmonger.add_principal_to_cas(principal)
 
-    cmonger = services.knownservices.certmonger
     try:
         cmonger.enable()
         cmonger.start()
@@ -951,9 +927,7 @@ def configure_sssd_conf(
                 "Unable to activate the SUDO service in SSSD config.")
 
         sssdconfig.activate_service('sudo')
-        configure_nsswitch_database(
-            fstore, 'sudoers', ['sss'],
-            default_value=['files'])
+        tasks.enable_sssd_sudo(fstore)
 
     domain.add_provider('ipa', 'id')
 
@@ -1142,7 +1116,6 @@ def configure_ssh_config(fstore, options):
         changes['GlobalKnownHostsFile'] = paths.SSSD_PUBCONF_KNOWN_HOSTS
     if options.trust_sshfp:
         changes['VerifyHostKeyDNS'] = 'yes'
-        changes['HostKeyAlgorithms'] = 'ssh-rsa,ssh-dss'
 
     change_ssh_config(paths.SSH_CONFIG, changes, ['Host', 'Match'])
     logger.info('Configured %s', paths.SSH_CONFIG)
@@ -1643,8 +1616,7 @@ def cert_summary(msg, certs, indent='    '):
 
 
 def get_certs_from_ldap(server, base_dn, realm, ca_enabled):
-    ldap_uri = ipaldap.get_ldap_uri(server)
-    conn = ipaldap.LDAPClient(ldap_uri)
+    conn = ipaldap.LDAPClient.from_hostname_plain(server)
     try:
         conn.gssapi_bind()
         certs = certstore.get_ca_certs(conn, base_dn, realm, ca_enabled)
@@ -2088,15 +2060,16 @@ def install_check(options):
 
     if options.conf_ntp:
         try:
-            ntpmethods.check_timedate_services()
-        except ntpmethods.NTPConflictingService as e:
+            timeconf.check_timedate_services()
+        except timeconf.NTPConflictingService as e:
             print(
                 "WARNING: conflicting time&date synchronization service "
-                "'{}' will be disabled in favor of {}\n".format(
-                    e.conflicting_service, detect_time_server()
+                "'{}' will be disabled in favor of chronyd\n".format(
+                    e.conflicting_service
                 )
             )
-        except ntpmethods.NTPConfigurationError:
+
+        except timeconf.NTPConfigurationError:
             pass
 
     if options.unattended and (
@@ -2195,7 +2168,7 @@ def install_check(options):
         raise ScriptError(rval=CLIENT_INSTALL_ERROR)
 
     # Create the discovery instance
-    ds = ipadiscovery.IPADiscovery()
+    ds = discovery.IPADiscovery()
 
     ret = ds.search(
         domain=options.domain,
@@ -2218,22 +2191,22 @@ def install_check(options):
         print_port_conf_info()
         raise ScriptError(rval=CLIENT_INSTALL_ERROR)
 
-    if ret == ipadiscovery.BAD_HOST_CONFIG:
+    if ret == discovery.BAD_HOST_CONFIG:
         logger.error("Can't get the fully qualified name of this host")
         logger.info("Check that the client is properly configured")
         raise ScriptError(rval=CLIENT_INSTALL_ERROR)
-    if ret == ipadiscovery.NOT_FQDN:
+    if ret == discovery.NOT_FQDN:
         raise ScriptError(
             "{} is not a fully-qualified hostname".format(hostname),
             rval=CLIENT_INSTALL_ERROR)
-    if ret in (ipadiscovery.NO_LDAP_SERVER, ipadiscovery.NOT_IPA_SERVER) \
+    if ret in (discovery.NO_LDAP_SERVER, discovery.NOT_IPA_SERVER) \
             or not ds.domain:
-        if ret == ipadiscovery.NO_LDAP_SERVER:
+        if ret == discovery.NO_LDAP_SERVER:
             if ds.server:
                 logger.debug("%s is not an LDAP server", ds.server)
             else:
                 logger.debug("No LDAP server found")
-        elif ret == ipadiscovery.NOT_IPA_SERVER:
+        elif ret == discovery.NOT_IPA_SERVER:
             if ds.server:
                 logger.debug("%s is not an IPA server", ds.server)
             else:
@@ -2270,7 +2243,7 @@ def install_check(options):
 
     client_domain = hostname[hostname.find(".")+1:]
 
-    if ret in (ipadiscovery.NO_LDAP_SERVER, ipadiscovery.NOT_IPA_SERVER) \
+    if ret in (discovery.NO_LDAP_SERVER, discovery.NOT_IPA_SERVER) \
             or not ds.server:
         logger.debug("IPA Server not found")
         if options.server:
@@ -2322,13 +2295,13 @@ def install_check(options):
             cli_server_source = ds.server_source
             logger.debug("will use discovered server: %s", cli_server[0])
 
-    if ret == ipadiscovery.NOT_IPA_SERVER:
+    if ret == discovery.NOT_IPA_SERVER:
         logger.error("%s is not an IPA v2 Server.", cli_server[0])
         print_port_conf_info()
         logger.debug("(%s: %s)", cli_server[0], cli_server_source)
         raise ScriptError(rval=CLIENT_INSTALL_ERROR)
 
-    if ret == ipadiscovery.NO_ACCESS_TO_LDAP:
+    if ret == discovery.NO_ACCESS_TO_LDAP:
         logger.warning("Anonymous access to the LDAP server is disabled.")
         logger.info("Proceeding without strict verification.")
         logger.info(
@@ -2336,7 +2309,7 @@ def install_check(options):
             "has been explicitly restricted.")
         ret = 0
 
-    if ret == ipadiscovery.NO_TLS_LDAP:
+    if ret == discovery.NO_TLS_LDAP:
         logger.warning(
             "The LDAP server requires TLS is but we do not have the CA.")
         logger.info("Proceeding without strict verification.")
@@ -2384,7 +2357,7 @@ def install_check(options):
     if options.conf_ntp:
         if not options.on_master and not options.unattended and not (
                 options.ntp_servers or options.ntp_pool):
-            options.ntp_servers, options.ntp_pool = get_time_source()
+            options.ntp_servers, options.ntp_pool = timeconf.get_time_source()
 
     cli_realm = ds.realm
     cli_realm_source = ds.realm_source
@@ -2486,6 +2459,73 @@ def update_ipa_nssdb():
                                    (nickname, sys_db.secdir, e))
 
 
+def sync_time(ntp_servers, ntp_pool, fstore, statestore):
+    """
+    Will disable any other time synchronization service and configure chrony
+    with given ntp(chrony) server and/or pool using Augeas.
+    If there is no option --ntp-server set IPADiscovery will try to find ntp
+    server in DNS records.
+    """
+    # We assume that NTP servers are discoverable through SRV records in DNS.
+
+    # disable other time&date services first
+    timeconf.force_chrony(statestore)
+
+    if not ntp_servers and not ntp_pool:
+        # autodiscovery happens in case that NTP configuration isn't explicitly
+        # disabled and user did not provide any NTP server addresses or
+        # NTP pool address to the installer interactively or as an cli argument
+        ds = discovery.IPADiscovery()
+        ntp_servers = ds.ipadns_search_srv(
+            cli_domain, '_ntp._udp', None, break_on_first=False
+        )
+        if ntp_servers:
+            for server in ntp_servers:
+                # when autodiscovery found server records
+                logger.debug("Found DNS record for NTP server: \t%s", server)
+
+    logger.info('Synchronizing time')
+
+    configured = False
+    if ntp_servers or ntp_pool:
+        configured = timeconf.configure_chrony(ntp_servers, ntp_pool,
+                                               fstore, statestore)
+    else:
+        logger.warning("No SRV records of NTP servers found and no NTP server "
+                       "or pool address was provided.")
+
+    if not configured:
+        print("Using default chrony configuration.")
+
+    return timeconf.sync_chrony()
+
+
+def restore_time_sync(statestore, fstore):
+    if statestore.has_state('chrony'):
+        chrony_enabled = statestore.restore_state('chrony', 'enabled')
+        restored = False
+
+        try:
+            # Restore might fail due to missing file(s) in backup.
+            # One example is if the client was updated from a previous version
+            # not configured with chrony. In such a cast it is OK to fail.
+            restored = fstore.restore_file(paths.CHRONY_CONF)
+        except ValueError:  # this will not handle possivble IOError
+            logger.debug("Configuration file %s was not restored.",
+                         paths.CHRONY_CONF)
+
+        if not chrony_enabled:
+            services.knownservices.chronyd.stop()
+            services.knownservices.chronyd.disable()
+        elif restored:
+            services.knownservices.chronyd.restart()
+
+    try:
+        timeconf.restore_forced_timeservices(statestore)
+    except CalledProcessError as e:
+        logger.error('Failed to restore time synchronization service: %s', e)
+
+
 def install(options):
     try:
         _install(options)
@@ -2532,22 +2572,13 @@ def _install(options):
         tasks.set_hostname(options.hostname)
 
     if options.conf_ntp:
-        # Attempt to configure and sync time with NTP server.
-        if not createntp.sync_time_client(fstore, statestore, cli_domain,
-                                          options.ntp_servers,
-                                          options.ntp_pool):
-            print("Warning: IPA client was unable to sync time "
-                  "with IPA server!")
-            print("         Time synchronization is required for IPA "
-                  "to work correctly!")
-        else:
-            print("Successfully synchronization time with IPA server")
+        # Attempt to configure and sync time with NTP server (chrony).
+        sync_time(options.ntp_servers, options.ntp_pool, fstore, statestore)
     elif options.on_master:
         # If we're on master skipping the time sync here because it was done
         # in ipa-server-install
         logger.debug("Skipping attempt to configure and synchronize time with"
-                     " %s server as it has been already done on master.",
-                     detect_time_server())
+                     " chrony server as it has been already done on master.")
     else:
         logger.info("Skipping chrony configuration")
 
@@ -2760,21 +2791,6 @@ def _install(options):
                                    options, client_domain, hostname):
                 raise ScriptError(rval=CLIENT_INSTALL_ERROR)
             logger.info("Configured /etc/sssd/sssd.conf")
-
-            # Configure nsswitch.conf
-            for database in ('passwd', 'group', 'gshadow', 'services',
-                             'netgroup'):
-                configure_nsswitch_database(fstore, database, ['sss'],
-                                            default_value=['files'])
-            configure_nsswitch_database(fstore, 'shadow', ['sss'],
-                                        default_value=['tcb', 'files'])
-            logger.info("Configured %s", paths.NSSWITCH_CONF)
-            # Setup PAM
-            result = ipautil.run(['control', 'system-auth'],
-                                 capture_output=True)
-            statestore.backup_state('control', 'system-auth', result.output)
-            ipautil.run(['control', 'system-auth', 'sss'])
-            logger.info("Configured PAM system-auth")
 
         if options.on_master:
             # If on master assume kerberos is already configured properly.
@@ -3143,7 +3159,7 @@ def uninstall_check(options):
             "IPA client is not configured on this system.",
             rval=rval)
 
-    server_fstore = sysrestore.FileStore()
+    server_fstore = sysrestore.FileStore(paths.SYSRESTORE)
     if server_fstore.has_files() and not options.on_master:
         logger.error(
             "IPA client is configured as a part of IPA server on this system.")
@@ -3157,13 +3173,12 @@ def uninstall(options):
     fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
     statestore = sysrestore.StateFile(paths.IPA_CLIENT_SYSRESTORE)
 
-    if os.path.isfile(paths.IPA_CLIENT_AUTOMOUNT):
-        try:
-            run([paths.IPA_CLIENT_AUTOMOUNT, "--uninstall", "--debug"])
-        except CalledProcessError as e:
-            if e.returncode != CLIENT_NOT_CONFIGURED:
-                logger.error(
-                    "Unconfigured automount client failed: %s", str(e))
+    try:
+        run([paths.IPA_CLIENT_AUTOMOUNT, "--uninstall", "--debug"])
+    except CalledProcessError as e:
+        if e.returncode != CLIENT_NOT_CONFIGURED:
+            logger.error(
+                "Unconfigured automount client failed: %s", str(e))
 
     # Reload the state as automount unconfigure may have modified it
     fstore._load()
@@ -3410,10 +3425,6 @@ def uninstall(options):
                 e)
 
     tasks.restore_hostname(fstore, statestore)
-    if statestore.has_state('control'):
-        value = statestore.restore_state('control', 'system-auth')
-        if value is not None:
-            ipautil.run(['control', 'system-auth', value])
 
     if fstore.has_files():
         logger.info("Restoring client configuration files")
@@ -3434,7 +3445,7 @@ def uninstall(options):
                 service.service_name
             )
 
-    createntp.uninstall_client(fstore, statestore)
+    restore_time_sync(statestore, fstore)
 
     if was_sshd_configured and services.knownservices.sshd.is_running():
         services.knownservices.sshd.restart()

@@ -345,8 +345,7 @@ class BaseTestLegacyClient:
         result = self.legacy_client.run_command(['getent', 'passwd', testuser])
 
         testuser_regex = (r"treetestuser@{0}:\*:{1}:{2}:TreeTest User:"
-                          r"/home/{0}/treetestuser:{3}"
-                          .format(
+                          r"/home/{0}/treetestuser:{3}".format(
                               re.escape(self.ad_treedomain),
                               self.treedomain_testuser_uid_regex,
                               self.treedomain_testuser_gid_regex,
@@ -509,8 +508,8 @@ class BaseTestLegacyNssLdapRedHat:
 # Base classes that join legacy client specific steps with steps required
 # to setup IPA with trust (both with and without using the POSIX attributes)
 
-class BaseTestLegacyClientPosix(BaseTestLegacyClient,
-                                trust_tests.TestEnforcedPosixADTrust):
+class BaseTestLegacyClientPosix(trust_tests.BaseTestTrust,
+                                BaseTestLegacyClient):
 
     testuser_uid_regex = '10042'
     testuser_gid_regex = '10047'
@@ -524,8 +523,8 @@ class BaseTestLegacyClientPosix(BaseTestLegacyClient,
         pass
 
 
-class BaseTestLegacyClientNonPosix(BaseTestLegacyClient,
-                                   trust_tests.TestBasicADTrust):
+class BaseTestLegacyClientNonPosix(trust_tests.BaseTestTrust,
+                                   BaseTestLegacyClient):
 
     testuser_uid_regex = r'(?!10042)(\d+)'
     testuser_gid_regex = r'(?!10047)(\d+)'

@@ -19,6 +19,7 @@
 from __future__ import absolute_import
 
 import collections
+import datetime
 import logging
 import os
 import io
@@ -173,6 +174,11 @@ def unparse_trust_flags(trust_flags):
 
 
 def verify_kdc_cert_validity(kdc_cert, ca_certs, realm):
+    """
+    Verifies the validity of a kdc_cert, ensuring it is trusted by
+    the ca_certs chain, has a PKINIT_KDC extended key usage support,
+    and verify it applies to the given realm.
+    """
     with NamedTemporaryFile() as kdc_file, NamedTemporaryFile() as ca_file:
         kdc_file.write(kdc_cert.public_bytes(x509.Encoding.PEM))
         kdc_file.flush()
@@ -799,6 +805,8 @@ class NSSDatabase:
                     '-out', out_file.name,
                     '-passin', 'file:' + self.pwd_file,
                     '-passout', 'file:' + out_pwdfile.name,
+                    '-certpbe', 'aes-128-cbc',
+                    '-keypbe', 'aes-128-cbc',
                 ]
                 try:
                     ipautil.run(args)
@@ -911,12 +919,32 @@ class NSSDatabase:
             if certname == nick:
                 self.delete_cert(nick)
 
+    def _verify_cert_validity(self, cert):
+        """Common checks for cert validity
+        """
+        utcnow = datetime.datetime.utcnow()
+        if cert.not_valid_before > utcnow:
+            raise ValueError(
+                f"not valid before {cert.not_valid_before} UTC is in the "
+                "future."
+            )
+        if cert.not_valid_after < utcnow:
+            raise ValueError(
+                f"has expired {cert.not_valid_after} UTC"
+            )
+        # make sure the cert does not expire during installation
+        if cert.not_valid_after + datetime.timedelta(hours=1) < utcnow:
+            raise ValueError(
+                f"expires in less than one hour ({cert.not_valid_after} UTC)"
+            )
+
     def verify_server_cert_validity(self, nickname, hostname):
         """Verify a certificate is valid for a SSL server with given hostname
 
         Raises a ValueError if the certificate is invalid.
         """
         cert = self.get_cert(nickname)
+        self._verify_cert_validity(cert)
 
         try:
             self.run_certutil(
@@ -940,6 +968,7 @@ class NSSDatabase:
 
     def verify_ca_cert_validity(self, nickname, minpathlen=None):
         cert = self.get_cert(nickname)
+        self._verify_cert_validity(cert)
 
         if not cert.subject:
             raise ValueError("has empty subject")

@@ -47,8 +47,10 @@ default_group_dn = DN(('cn', default_group), api.env.container_group, api.env.ba
 
 @pytest.mark.tier1
 class test_trustconfig(Declarative):
-    @pytest.fixture(autouse=True, scope="class")
-    def trustconfig_setup(self, declarative_setup):
+
+    @classmethod
+    def setup_class(cls):
+        super(test_trustconfig, cls).setup_class()
         if not api.Backend.rpcclient.isconnected():
             api.Backend.rpcclient.connect()
         try:

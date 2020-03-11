@@ -25,7 +25,6 @@ import os
 import glob
 import errno
 import shlex
-import sys
 import pipes
 import tempfile
 
@@ -128,12 +127,9 @@ class HTTPInstance(service.Service):
                   self.set_mod_ssl_protocol)
         self.step("configuring mod_ssl log directory",
                   self.set_mod_ssl_logdir)
-        self.step("disabling alt mod_ssl defaults",
-                  self.disable_mod_ssl_alt_defaults)
         self.step("disabling mod_ssl OCSP", self.disable_mod_ssl_ocsp)
         self.step("adding URL rewriting rules", self.__add_include)
         self.step("configuring httpd", self.__configure_http)
-        self.step("configuring httpd modules", self.configure_httpd_mods)
         self.step("setting up httpd keytab", self.request_service_keytab)
         self.step("configuring Gssproxy", self.configure_gssproxy)
         self.step("setting up ssl", self.__setup_ssl)
@@ -175,7 +171,7 @@ class HTTPInstance(service.Service):
         # Clean up existing ccaches
         # Make sure that empty env is passed to avoid passing KRB5CCNAME from
         # current env
-        installutils.remove_file(paths.HTTP_CCACHE)
+        ipautil.remove_file(paths.HTTP_CCACHE)
         for f in os.listdir(paths.IPA_CCACHES):
             os.remove(os.path.join(paths.IPA_CCACHES, f))
 
@@ -215,52 +211,8 @@ class HTTPInstance(service.Service):
         http_fd.close()
         os.chmod(target_fname, 0o644)
 
-    def configure_httpd_mods(self):
-        # Disable conflicting modules
-        for a2m in constants.HTTPD_IPA_CONFL_MODULES:
-            ipautil.run(["a2dismod", a2m], raiseonerr=False)
-
-        # Backup state of the httpd modules
-        for a2m in constants.HTTPD_IPA_MODULES:
-            ipautil.run(["a2enmod", a2m])
-
-        # Process wsgi modules
-        # wsgi module for Python and Python3 has the same name - wsgi,
-        # thus we cannot rely on the mod name
-        if sys.version_info.major == 2:
-            wsgi_module_enabled = 'wsgi'
-            wsgi_module_disabled = 'wsgi-py3'
-        else:
-            wsgi_module_enabled = 'wsgi-py3'
-            wsgi_module_disabled = 'wsgi'
-
-        ipautil.run(["a2dismod", wsgi_module_disabled], raiseonerr=False)
-        ipautil.run(["a2enmod", wsgi_module_enabled])
-
-        # Disable default ALTLinux site at sites-start.d
-        if os.path.exists(paths.HTTPD_DEFAULT_STARTED_SITE_CONF):
-            # First backup conf
-            self.fstore.backup_file(paths.HTTPD_DEFAULT_STARTED_SITE_CONF)
-
-            with open(paths.HTTPD_DEFAULT_STARTED_SITE_CONF) as input_file, \
-                    open(paths.HTTPD_DEFAULT_STARTED_SITE_CONF, 'r+') as \
-                    output_file:
-                output_file.writelines(line.replace(
-                    "default=yes", "default=no") for line in input_file)
-                output_file.truncate()
-        else:
-            service.print_msg(
-                "WARNING: ALTLinux default started sites conf - %s"
-                " doesn't exist" % paths.HTTPD_DEFAULT_STARTED_SITE_CONF)
-
-        ipautil.run(["a2chkconfig"])
-        ipautil.run(["a2enport", "https"])
-        ipautil.run(["a2ensite", "default_https"])
-        ipautil.run(["a2ensite", "ipa"])
-
     def configure_gssproxy(self):
         tasks.configure_http_gssproxy_conf(IPAAPI_USER)
-        tasks.configure_ipa_gssproxy_dir()
         services.knownservices.gssproxy.restart()
 
     def get_mod_nss_nickname(self):
@@ -296,14 +248,6 @@ class HTTPInstance(service.Service):
 
     def set_mod_ssl_logdir(self):
         tasks.setup_httpd_logging()
-
-    def disable_mod_ssl_alt_defaults(self):
-        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
-                                      'DocumentRoot', None, False)
-        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
-                                      'ServerName', None, False)
-        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
-                                      'ServerAdmin', None, False)
 
     def disable_mod_ssl_ocsp(self):
         if sysupgrade.get_upgrade_state('http', OCSP_ENABLED) is None:
@@ -441,7 +385,7 @@ class HTTPInstance(service.Service):
                     post_command='restart_httpd',
                     storage='FILE',
                     passwd_fname=key_passwd_file,
-                    resubmit_timeout=api.env.replication_wait_timeout
+                    resubmit_timeout=api.env.certmonger_wait_timeout
                 )
             finally:
                 if prev_helper is not None:
@@ -575,22 +519,15 @@ class HTTPInstance(service.Service):
                 ca_iface.Set('org.fedorahosted.certmonger.ca',
                              'external-helper', helper)
 
-        # Disable apache2 ipa configs
-        ipautil.run(["a2dissite", "ipa"], raiseonerr=False)
-
-        for f in [
-            paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF,
-            paths.HTTPD_NSS_CONF, paths.HTTPD_SSL_SITE_CONF,
-            paths.HTTPD_DEFAULT_STARTED_SITE_CONF,
-        ]:
+        for f in [paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF,
+                  paths.HTTPD_SSL_SITE_CONF, paths.HTTPD_NSS_CONF]:
             try:
                 self.fstore.restore_file(f)
             except ValueError as error:
                 logger.debug("%s", error)
 
-        ipautil.run(["a2chkconfig"])
         # Remove the configuration files we create
-        installutils.remove_keytab(self.keytab)
+        ipautil.remove_keytab(self.keytab)
         remove_files = [
             paths.HTTP_CCACHE,
             paths.HTTPD_CERT_FILE,
@@ -614,7 +551,7 @@ class HTTPInstance(service.Service):
             remove_files.append(paths.HTTPD_IPA_WSGI_MODULES_CONF)
 
         for filename in remove_files:
-            installutils.remove_file(filename)
+            ipautil.remove_file(filename)
 
         try:
             os.rmdir(paths.SYSTEMD_SYSTEM_HTTPD_D_DIR)
@@ -648,11 +585,14 @@ class HTTPInstance(service.Service):
                          str(e))
 
     def start_tracking_certificates(self):
+        key_passwd_file = paths.HTTPD_PASSWD_FILE_FMT.format(host=api.env.host)
         cert = x509.load_certificate_from_file(paths.HTTPD_CERT_FILE)
         if certs.is_ipa_issued_cert(api, cert):
             request_id = certmonger.start_tracking(
                 certpath=(paths.HTTPD_CERT_FILE, paths.HTTPD_KEY_FILE),
-                post_command='restart_httpd', storage='FILE'
+                post_command='restart_httpd', storage='FILE',
+                profile=dogtag.DEFAULT_PROFILE,
+                pinfile=key_passwd_file,
             )
             subject = str(DN(cert.subject))
             certmonger.add_principal(request_id, self.principal)
@@ -662,9 +602,6 @@ class HTTPInstance(service.Service):
                          "issued by IPA", cert.subject)
 
     def request_service_keytab(self):
-        ipa_gssproxy_dir = os.path.dirname(paths.HTTP_KEYTAB)
-        if not os.path.isdir(ipa_gssproxy_dir):
-            os.mkdir(ipa_gssproxy_dir)
         super(HTTPInstance, self).request_service_keytab()
 
         if self.master_fqdn is not None:
@@ -715,7 +652,6 @@ class HTTPInstance(service.Service):
         self.configure_mod_ssl_certs()
         self.set_mod_ssl_protocol()
         self.set_mod_ssl_logdir()
-        self.disable_mod_ssl_alt_defaults()
         self.__add_include()
 
         self.cert = x509.load_certificate_from_file(paths.HTTPD_CERT_FILE)

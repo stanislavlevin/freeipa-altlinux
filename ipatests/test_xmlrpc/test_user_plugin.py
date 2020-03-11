@@ -32,6 +32,7 @@ import re
 
 from ipalib import api, errors
 from ipaplatform.constants import constants as platformconstants
+from ipapython import ipautil
 from ipatests.test_xmlrpc import objectclasses
 from ipatests.util import (
     assert_deepequal, assert_equal, assert_not_equal, raises)
@@ -82,32 +83,32 @@ isodate_re = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$')
 
 
 @pytest.fixture(scope='class')
-def user_min(request, xmlrpc_setup):
+def user_min(request):
     """ User tracker fixture for testing user with uid no specified """
     tracker = UserTracker(givenname=u'Testmin', sn=u'Usermin')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def user(request, xmlrpc_setup):
+def user(request):
     tracker = UserTracker(name=u'user1', givenname=u'Test', sn=u'User1')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def user2(request, xmlrpc_setup):
+def user2(request):
     tracker = UserTracker(name=u'user2', givenname=u'Test2', sn=u'User2')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def renameduser(request, xmlrpc_setup):
+def renameduser(request):
     tracker = UserTracker(name=u'ruser1', givenname=u'Ruser', sn=u'Ruser1')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def admin2(request, xmlrpc_setup):
+def admin2(request):
     tracker = UserTracker(name=u'admin2', givenname=u'Second', sn=u'Admin')
     return tracker.make_fixture(request)
 
@@ -141,7 +142,7 @@ def user_npg2(request, group):
 
 
 @pytest.fixture(scope='class')
-def user_radius(request, xmlrpc_setup):
+def user_radius(request):
     """ User tracker fixture for testing users with radius user name """
     tracker = UserTracker(name=u'radiususer', givenname=u'radiususer',
                           sn=u'radiususer1',
@@ -154,7 +155,7 @@ def user_radius(request, xmlrpc_setup):
 
 
 @pytest.fixture(scope='class')
-def group(request, xmlrpc_setup):
+def group(request):
     tracker = GroupTracker(name=u'group1')
     return tracker.make_fixture(request)
 
@@ -460,9 +461,11 @@ class TestUpdate(XMLRPC_test):
             command()
 
     def test_set_ipauserauthtype(self, user):
-        """ Set ipauserauthtype to 'password' and than back to None """
+        """ Set ipauserauthtype to all valid types and than back to None """
         user.ensure_exists()
-        user.update(dict(ipauserauthtype=u'password'))
+        user.update(dict(ipauserauthtype=[
+            u'password', u'radius', u'otp', u'pkinit', u'hardened'
+        ]))
         user.retrieve()
 
         user.update(dict(ipauserauthtype=None))
@@ -785,6 +788,86 @@ class TestUserWithGroup(XMLRPC_test):
 
 
 @pytest.mark.tier1
+class TestUserWithUPGDisabled(XMLRPC_test):
+    """ Tests with UPG plugin disabled """
+
+    @classmethod
+    def managed_entries_upg(cls, action='enable'):
+        """ Change the UPG plugin state """
+        assert action in ('enable', 'disable')
+        ipautil.run(['ipa-managed-entries', '-e', 'UPG Definition', action])
+
+    @classmethod
+    def setup_class(cls):
+        super(TestUserWithUPGDisabled, cls).setup_class()
+        cls.managed_entries_upg(action='disable')
+
+    @classmethod
+    def teardown_class(cls):
+        cls.managed_entries_upg(action='enable')
+        super(TestUserWithUPGDisabled, cls).teardown_class()
+
+    def test_create_without_upg(self):
+        """ Try to create user without User's Primary GID
+
+        As the UPG plugin is disabled, the user gets assigned to the Default
+        Group for new users (ipausers) which is not POSIX and the command
+        is expected to fail
+        """
+        testuser = UserTracker(
+            name=u'tuser1', givenname=u'Test', sn=u'Tuser1'
+        )
+        command = testuser.make_create_command()
+        with raises_exact(errors.NotFound(
+                reason=u'Default group for new users is not POSIX')):
+            command()
+
+    def test_create_without_upg_with_gid_set(self):
+        """ Create user without User's Primary GID with GID set
+
+        The UPG plugin is disabled, but the user is provided with a group
+        """
+        testuser = UserTracker(
+            name=u'tuser1', givenname=u'Test', sn=u'Tuser1',
+            gidnumber=1000
+        )
+        testuser.track_create()
+        del testuser.attrs['mepmanagedentry']
+        testuser.attrs.update(gidnumber=[u'1000'])
+        testuser.attrs.update(
+            description=[],
+            objectclass=add_oc(objectclasses.user_base, u'ipantuserattrs')
+        )
+        command = testuser.make_create_command()
+        result = command()
+        testuser.check_create(result, [u'description'])
+        testuser.delete()
+
+    def test_create_where_managed_group_exists(self, user, group):
+        """ Create a managed group and then try to create user
+        with the same name the group has
+
+        As the UPG plugin is disabled, there is no conflict
+        """
+        group.create()
+        testuser = UserTracker(
+            name=group.cn, givenname=u'Test', sn=u'Tuser1',
+            gidnumber=1000
+        )
+        testuser.track_create()
+        del testuser.attrs['mepmanagedentry']
+        testuser.attrs.update(gidnumber=[u'1000'])
+        testuser.attrs.update(
+            description=[],
+            objectclass=add_oc(objectclasses.user_base, u'ipantuserattrs')
+        )
+        command = testuser.make_create_command()
+        result = command()
+        testuser.check_create(result, [u'description'])
+        testuser.delete()
+
+
+@pytest.mark.tier1
 class TestManagers(XMLRPC_test):
     def test_assign_nonexistent_manager(self, user, user2):
         """ Try to assign user a non-existent manager """
@@ -990,13 +1073,19 @@ class TestValidation(XMLRPC_test):
 class TestDeniedBindWithExpiredPrincipal(XMLRPC_test):
 
     password = u'random'
-    connection = None
 
-    @pytest.fixture(autouse=True, scope="class")
-    def bind_expired_principal(self, request, xmlrpc_setup):
-        request.cls.connection = ldap_initialize(
+    @classmethod
+    def setup_class(cls):
+        super(TestDeniedBindWithExpiredPrincipal, cls).setup_class()
+
+        cls.connection = ldap_initialize(
             'ldap://{host}'.format(host=api.env.host)
         )
+        cls.connection.start_tls_s()
+
+    @classmethod
+    def teardown_class(cls):
+        super(TestDeniedBindWithExpiredPrincipal, cls).teardown_class()
 
     def test_bind_as_test_user(self, user):
         """ Bind as user """

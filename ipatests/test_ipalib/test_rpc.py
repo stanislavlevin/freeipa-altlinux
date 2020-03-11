@@ -23,20 +23,18 @@ Test the `ipalib.rpc` module.
 from __future__ import print_function
 
 import unittest
+from xmlrpc.client import Binary, Fault, dumps, loads
+import urllib
 
 import pytest
 import six
-# pylint: disable=import-error
-from six.moves.xmlrpc_client import Binary, Fault, dumps, loads
-# pylint: enable=import-error
-from six.moves import urllib
 
 from ipatests.util import raises, assert_equal, PluginTester, DummyClass
 from ipatests.util import Fuzzy
 from ipatests.data import binary_bytes, utf8_bytes, unicode_str
 from ipalib.frontend import Command
 from ipalib.request import context, Connection
-from ipalib import rpc, errors, api, request as ipa_request
+from ipalib import rpc, errors, api, request
 from ipapython.version import API_VERSION
 
 if six.PY3:
@@ -263,15 +261,17 @@ class test_xmlclient(PluginTester):
 @pytest.mark.skip_ipaclient_unittest
 @pytest.mark.needs_ipaapi
 class test_xml_introspection:
-    @pytest.fixture(autouse=True, scope="class")
-    def xml_introsp_setup(self, request):
+    @classmethod
+    def setup_class(cls):
         try:
             api.Backend.xmlclient.connect()
         except (errors.NetworkError, IOError):
             raise unittest.SkipTest('%r: Server not available: %r' %
                                 (__name__, api.env.xmlrpc_uri))
 
-        request.addfinalizer(lambda: ipa_request.destroy_context())
+    @classmethod
+    def teardown_class(cls):
+        request.destroy_context()
 
     def test_list_methods(self):
         result = api.Backend.xmlclient.conn.system.listMethods()
@@ -351,18 +351,16 @@ class test_rpcclient_context(PluginTester):
     """
     Test the context in `ipalib.rpc.rpcclient` plugin.
     """
-    @pytest.fixture(autouse=True)
-    def rpcclient_context_fsetup(self, request):
+    def setup(self):
         try:
             api.Backend.rpcclient.connect(ca_certfile='foo')
         except (errors.NetworkError, IOError):
             raise unittest.SkipTest('%r: Server not available: %r' %
                                 (__name__, api.env.xmlrpc_uri))
 
-        def fin():
-            if api.Backend.rpcclient.isconnected():
-                api.Backend.rpcclient.disconnect()
-        request.addfinalizer(fin)
+    def teardown(self):
+        if api.Backend.rpcclient.isconnected():
+            api.Backend.rpcclient.disconnect()
 
     def test_context_cafile(self):
         """

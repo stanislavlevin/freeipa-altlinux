@@ -3442,8 +3442,10 @@ class test_managed_permissions(Declarative):
         ('permission_del', [permission2], {'force': True}),
     ]
 
-    @pytest.fixture(autouse=True, scope="class")
-    def managed_perm_setup(self, declarative_setup):
+    @classmethod
+    def setup_class(cls):
+        super(test_managed_permissions, cls).setup_class()
+
         if not have_ldap2:
             raise unittest.SkipTest('server plugin not available')
 

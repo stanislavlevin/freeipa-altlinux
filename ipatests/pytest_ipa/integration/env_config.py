@@ -28,8 +28,6 @@ import os
 import json
 import collections
 
-import six
-
 from ipapython import ipautil
 from ipatests.pytest_ipa.integration.config import Config, Domain
 from ipalib.constants import MAX_DOMAIN_LEVEL
@@ -65,6 +63,8 @@ _setting_infos = (
     _SettingInfo('domain_level', 'DOMAINLVL', MAX_DOMAIN_LEVEL),
 
     _SettingInfo('log_journal_since', 'LOG_JOURNAL_SINCE', '-1h'),
+    # userspace FIPS mode
+    _SettingInfo('fips_mode', 'IPA_FIPS_MODE', False),
 )
 
 
@@ -134,7 +134,7 @@ def config_from_env(env):
     kwargs['domains'] = []
 
     # $IPv6SETUP needs to be 'TRUE' to enable ipv6
-    if isinstance(kwargs['ipv6'], six.string_types):
+    if isinstance(kwargs['ipv6'], str):
         kwargs['ipv6'] = (kwargs['ipv6'].upper() == 'TRUE')
 
     config = Config(**kwargs)

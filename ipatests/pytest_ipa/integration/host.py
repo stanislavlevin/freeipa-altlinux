@@ -18,15 +18,107 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Host class for integration testing"""
+import re
 import subprocess
+import tempfile
 
+import ldap
 import pytest_multihost.host
 
+from ipaplatform.paths import paths
 from ipapython import ipaldap
+
+from .fips import (
+    is_fips_enabled, enable_userspace_fips, disable_userspace_fips
+)
+
+FIPS_NOISE_RE = re.compile(br"FIPS mode initialized\r?\n?")
+
+
+class LDAPClientWithoutCertCheck(ipaldap.LDAPClient):
+    """Adds an option to disable certificate check for TLS connection
+
+    To disable certificate validity check create client with added option
+    no_certificate_check:
+    client = LDAPClientWithoutCertCheck(..., no_certificate_check=True)
+    """
+    def __init__(self, *args, **kwargs):
+        self._no_certificate_check = kwargs.pop(
+            'no_certificate_check', False)
+        super(LDAPClientWithoutCertCheck, self).__init__(*args, **kwargs)
+
+    def _connect(self):
+        if (self._start_tls and self.protocol == 'ldap' and
+                self._no_certificate_check):
+            with self.error_handler():
+                conn = ipaldap.ldap_initialize(
+                    self.ldap_uri, cacertfile=self._cacert)
+                conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT,
+                                ldap.OPT_X_TLS_NEVER)
+                conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
+                conn.start_tls_s()
+                return conn
+        else:
+            return super(LDAPClientWithoutCertCheck, self)._connect()
 
 
 class Host(pytest_multihost.host.Host):
     """Representation of a remote IPA host"""
+
+    def __init__(self, domain, hostname, role, ip=None,
+                 external_hostname=None, username=None, password=None,
+                 test_dir=None, host_type=None):
+        super().__init__(
+            domain, hostname, role, ip=ip,
+            external_hostname=external_hostname, username=username,
+            password=password, test_dir=test_dir, host_type=host_type
+        )
+        self._fips_mode = None
+        self._userspace_fips = False
+
+    @property
+    def is_fips_mode(self):
+        """Check and cache if a system is in FIPS mode
+        """
+        if self._fips_mode is None:
+            self._fips_mode = is_fips_enabled(self)
+        return self._fips_mode
+
+    @property
+    def is_userspace_fips(self):
+        """Check if host uses fake userspace FIPS
+        """
+        return self._userspace_fips
+
+    def enable_userspace_fips(self):
+        """Enable fake userspace FIPS mode
+
+        The call has no effect if the system is already in FIPS mode.
+
+        :return: True if system was modified, else None
+        """
+        if not self.is_fips_mode:
+            enable_userspace_fips(self)
+            self._fips_mode = True
+            self._userspace_fips = True
+            return True
+        else:
+            return False
+
+    def disable_userspace_fips(self):
+        """Disable fake userspace FIPS mode
+
+        The call has no effect if userspace FIPS mode is not enabled.
+
+        :return: True if system was modified, else None
+        """
+        if self.is_userspace_fips:
+            disable_userspace_fips(self)
+            self._userspace_fips = False
+            self._fips_mode = False
+            return True
+        else:
+            return False
 
     @staticmethod
     def _make_host(domain, hostname, role, ip, external_hostname):
@@ -45,12 +137,25 @@ class Host(pytest_multihost.host.Host):
         """Return an LDAPClient authenticated to this host as directory manager
         """
         self.log.info('Connecting to LDAP at %s', self.external_hostname)
-        ldap_uri = ipaldap.get_ldap_uri(self.external_hostname)
-        ldap = ipaldap.LDAPClient(ldap_uri)
-        binddn = self.config.dirman_dn
-        self.log.info('LDAP bind as %s' % binddn)
-        ldap.simple_bind(binddn, self.config.dirman_password)
-        return ldap
+        # get IPA CA cert to establish a secure connection
+        cacert = self.get_file_contents(paths.IPA_CA_CRT)
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(cacert)
+            f.flush()
+
+            hostnames_mismatch = self.hostname != self.external_hostname
+            conn = LDAPClientWithoutCertCheck.from_hostname_secure(
+                self.external_hostname,
+                cacert=f.name,
+                no_certificate_check=hostnames_mismatch)
+            binddn = self.config.dirman_dn
+            self.log.info('LDAP bind as %s', binddn)
+            conn.simple_bind(binddn, self.config.dirman_password)
+
+            # The CA cert file  has been loaded into the SSL_CTX and is no
+            # longer required.
+
+        return conn
 
     @classmethod
     def from_env(cls, env, domain, hostname, role, index, domain_index):
@@ -63,18 +168,29 @@ class Host(pytest_multihost.host.Host):
 
     def run_command(self, argv, set_env=True, stdin_text=None,
                     log_stdout=True, raiseonerr=True,
-                    cwd=None, bg=False, encoding='utf-8'):
-        # Wrap run_command to log stderr on raiseonerr=True
-        result = super(Host, self).run_command(
+                    cwd=None, bg=False, encoding='utf-8', ok_returncode=0):
+        """Wrapper around run_command to log stderr on raiseonerr=True
+
+        :param ok_returncode: return code considered to be correct,
+                              you can pass an integer or sequence of integers
+        """
+        result = super().run_command(
             argv, set_env=set_env, stdin_text=stdin_text,
             log_stdout=log_stdout, raiseonerr=False, cwd=cwd, bg=bg,
             encoding=encoding
         )
-        if result.returncode and raiseonerr:
+        # in FIPS mode SSH may print noise to stderr, remove the string
+        # "FIPS mode initialized" + optional newline.
+        result.stderr_bytes = FIPS_NOISE_RE.sub(b'', result.stderr_bytes)
+        try:
+            result_ok = result.returncode in ok_returncode
+        except TypeError:
+            result_ok = result.returncode == ok_returncode
+        if not result_ok and raiseonerr:
             result.log.error('stderr: %s', result.stderr_text)
             raise subprocess.CalledProcessError(
                 result.returncode, argv,
-                result.stderr_text
+                result.stdout_text, result.stderr_text
             )
         else:
             return result

@@ -20,6 +20,7 @@
 """Base class for FreeIPA integration tests"""
 
 import pytest
+import subprocess
 
 from ipatests.pytest_ipa.integration import tasks
 from pytest_sourceorder import ordered
@@ -37,6 +38,11 @@ class IntegrationTest:
     required_extra_roles = []
     topology = None
     domain_level = None
+    fips_mode = None
+
+    @classmethod
+    def setup_class(cls):
+        pass
 
     @classmethod
     def host_by_role(cls, role):
@@ -57,11 +63,29 @@ class IntegrationTest:
         return [cls.domain] + cls.ad_domains
 
     @classmethod
+    def enable_fips_mode(cls):
+        for host in cls.get_all_hosts():
+            if not host.is_fips_mode:
+                host.enable_userspace_fips()
+
+    @classmethod
+    def disable_fips_mode(cls):
+        for host in cls.get_all_hosts():
+            if host.is_userspace_fips:
+                host.disable_userspace_fips()
+
+    @classmethod
     def install(cls, mh):
         if cls.domain_level is not None:
             domain_level = cls.domain_level
         else:
             domain_level = cls.master.config.domain_level
+
+        if cls.master.config.fips_mode:
+            cls.fips_mode = True
+        if cls.fips_mode:
+            cls.enable_fips_mode()
+
         if cls.topology is None:
             return
         else:
@@ -69,9 +93,23 @@ class IntegrationTest:
                                cls.master, cls.replicas,
                                cls.clients, domain_level)
     @classmethod
+    def teardown_class(cls):
+        pass
+
+    @classmethod
     def uninstall(cls, mh):
-        tasks.uninstall_master(cls.master)
         for replica in cls.replicas:
+            try:
+                tasks.run_server_del(
+                    cls.master, replica.hostname, force=True,
+                    ignore_topology_disconnect=True, ignore_last_of_role=True)
+            except subprocess.CalledProcessError:
+                # If the master has already been uninstalled,
+                # this call may fail
+                pass
             tasks.uninstall_master(replica)
+        tasks.uninstall_master(cls.master)
         for client in cls.clients:
             tasks.uninstall_client(client)
+        if cls.fips_mode:
+            cls.disable_fips_mode()

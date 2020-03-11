@@ -8,6 +8,7 @@ import errno
 import logging
 import os
 import pickle
+import re
 import shutil
 import sys
 import time
@@ -16,18 +17,20 @@ import textwrap
 
 import six
 
-from ipaclient.install.client import check_ldap_conf
-from ipaclient.install.ipachangeconf import IPAChangeConf
+from ipaclient.install import timeconf
+from ipaclient.install.client import (
+    check_ldap_conf, sync_time, restore_time_sync)
+from ipapython.ipachangeconf import IPAChangeConf
 from ipalib.install import certmonger, sysrestore
-from ipapython import ipautil, version, ntpmethods
-from ipapython.ntpmethods import detect_time_server
+from ipapython import ipautil, version
 from ipapython.ipautil import (
     ipa_generate_password, run, user_input)
+from ipapython import ipaldap
 from ipapython.admintool import ScriptError
 from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
-from ipalib import api, errors, x509, createntp
+from ipalib import api, errors, x509
 from ipalib.constants import DOMAIN_LEVEL_0
 from ipalib.util import (
     validate_domain_name,
@@ -97,6 +100,26 @@ def validate_admin_password(password):
     if any(c in bad_characters for c in password):
         raise ValueError('Password must not contain these characters: %s' %
                          ', '.join('"%s"' % c for c in bad_characters))
+
+
+def get_min_idstart(default_idstart=60000):
+    """Get mininum idstart value from /etc/login.defs
+    """
+    config = {}
+    # match decimal numbers
+    decimal_re = re.compile(r"^([A-Z][A-Z_]+)\s*([1-9]\d*)")
+    try:
+        with open('/etc/login.defs', 'r') as f:
+            for line in f:
+                mo = decimal_re.match(line)
+                if mo is not None:
+                    config[mo.group(1)] = int(mo.group(2))
+    except OSError:
+        return default_idstart
+    idstart = max(config.get("UID_MAX", 0), config.get("GID_MAX", 0))
+    if idstart == 0:
+        idstart = default_idstart
+    return idstart
 
 
 def read_cache(dm_password):
@@ -352,8 +375,8 @@ def install_check(installer):
             "Please uninstall it before configuring the IPA server, "
             "using 'ipa-client-install --uninstall'")
 
-    fstore = sysrestore.FileStore()
-    sstore = sysrestore.StateFile()
+    fstore = sysrestore.FileStore(SYSRESTORE_DIR_PATH)
+    sstore = sysrestore.StateFile(SYSRESTORE_DIR_PATH)
 
     # This will override any settings passed in on the cmdline
     if os.path.isfile(paths.ROOT_IPA_CACHE):
@@ -399,7 +422,7 @@ def install_check(installer):
         print("  * Configure a stand-alone CA (dogtag) for certificate "
               "management")
     if not options.no_ntp:
-        print("  * Configure the NTP client ({})".format(detect_time_server()))
+        print("  * Configure the NTP client (chronyd)")
     print("  * Create and configure an instance of Directory Server")
     print("  * Create and configure a Kerberos Key Distribution Center (KDC)")
     print("  * Configure Apache (httpd)")
@@ -414,7 +437,7 @@ def install_check(installer):
     if options.no_ntp:
         print("")
         print("Excluded by options:")
-        print("  * Configure the NTP client ({})".format(detect_time_server()))
+        print("  * Configure the NTP client (chronyd)")
     if installer.interactive:
         print("")
         print("To accept the default shown in brackets, press the Enter key.")
@@ -426,15 +449,15 @@ def install_check(installer):
 
     if not options.no_ntp:
         try:
-            ntpmethods.check_timedate_services()
-        except ntpmethods.NTPConflictingService as e:
+            timeconf.check_timedate_services()
+        except timeconf.NTPConflictingService as e:
             print(
                 "WARNING: conflicting time&date synchronization service "
-                "'{}' will be disabled in favor of {}\n".format(
-                    e.conflicting_service, detect_time_server()
+                "'{}' will be disabled in favor of chronyd\n".format(
+                    e.conflicting_service
                 )
             )
-        except ntpmethods.NTPConfigurationError:
+        except timeconf.NTPConfigurationError:
             pass
 
     if not options.setup_dns and installer.interactive:
@@ -603,8 +626,7 @@ def install_check(installer):
 
     xmlrpc_uri = 'https://{0}/ipa/xml'.format(
                     ipautil.format_netloc(host_name))
-    ldapi_uri = 'ldapi://%2fvar%2frun%2fslapd-{0}.socket\n'.format(
-                    installutils.realm_to_serverid(realm_name))
+    ldapi_uri = ipaldap.realm_to_ldapi_uri(realm_name)
 
     # [global] section
     gopts = [
@@ -676,7 +698,7 @@ def install_check(installer):
 
     if not options.no_ntp and not options.unattended and not (
             options.ntp_servers or options.ntp_pool):
-        options.ntp_servers, options.ntp_pool = ntpmethods.get_time_source()
+        options.ntp_servers, options.ntp_pool = timeconf.get_time_source()
 
     print()
     print("The IPA Master Server will be configured with:")
@@ -789,18 +811,15 @@ def install(installer):
     if tasks.configure_pkcs11_modules(fstore):
         print("Disabled p11-kit-proxy")
 
-    ntp_role = not options.no_ntp
-
     # Create a directory server instance
     if not options.external_cert_files:
         # We have to sync time before certificate handling on master.
         # As chrony configuration is moved from client here, unconfiguration of
         # chrony will be handled here in uninstall() method as well by invoking
         # the ipa-server-install --uninstall
-        if not options.no_ntp and not createntp.sync_time_server(
-                fstore, sstore, options.ntp_servers, options.ntp_pool):
-            print("Warning: IPA was unable to sync time with {}!"
-                  .format(detect_time_server()))
+        if not options.no_ntp and not sync_time(
+                options.ntp_servers, options.ntp_pool, fstore, sstore):
+            print("Warning: IPA was unable to sync time with chrony!")
             print("         Time synchronization is required for IPA "
                   "to work correctly")
 
@@ -909,7 +928,6 @@ def install(installer):
             subject_base=options.subject_base,
             auto_redirect=not options.no_ui_redirect,
             ca_is_configured=setup_ca)
-    tasks.restore_context(paths.CACHE_IPA_SESSIONS)
 
     ca.set_subject_base_in_config(options.subject_base)
 
@@ -929,7 +947,7 @@ def install(installer):
         kra.install(api, None, options, custodia=custodia)
 
     if options.setup_dns:
-        dns.install(False, False, options, ntp_role=ntp_role)
+        dns.install(False, False, options)
 
     if options.setup_adtrust:
         adtrust.install(False, options, fstore, api)
@@ -1000,10 +1018,10 @@ def install(installer):
           "user-add)")
     print("\t   and the web user interface.")
 
-    if not ntpmethods.is_running():
+    if not services.knownservices.chronyd.is_running():
         print("\t3. Kerberos requires time synchronization between clients")
         print("\t   and servers for correct operation. You should consider "
-              "enabling {}.".format(detect_time_server()))
+              "enabling chronyd.")
 
     print("")
     if setup_ca:
@@ -1030,8 +1048,8 @@ def uninstall_check(installer):
               "If you want to install the\nIPA server, please install "
               "it using 'ipa-server-install'.")
 
-    fstore = sysrestore.FileStore()
-    sstore = sysrestore.StateFile()
+    fstore = sysrestore.FileStore(SYSRESTORE_DIR_PATH)
+    sstore = sysrestore.StateFile(SYSRESTORE_DIR_PATH)
 
     # Configuration for ipalib, we will bootstrap and finalize later, after
     # we are sure we have the configuration file ready.
@@ -1130,7 +1148,7 @@ def uninstall(installer):
         except Exception:
             pass
 
-    createntp.uninstall_server(fstore, sstore)
+    restore_time_sync(sstore, fstore)
 
     kra.uninstall()
 
@@ -1148,6 +1166,7 @@ def uninstall(installer):
     custodiainstance.CustodiaInstance(realm='REALM.INVALID').uninstall()
     otpdinstance.OtpdInstance().uninstall()
     tasks.restore_hostname(fstore, sstore)
+    tasks.restore_pkcs11_modules(fstore)
     fstore.restore_all_files()
     try:
         os.remove(paths.ROOT_IPA_CACHE)
@@ -1162,6 +1181,8 @@ def uninstall(installer):
 
     sstore._load()
 
+    timeconf.restore_forced_timeservices(sstore)
+
     # Clean up group_exists (unused since IPA 2.2, not being set since 4.1)
     sstore.restore_state("install", "group_exists")
 
@@ -1169,8 +1190,6 @@ def uninstall(installer):
 
     # remove upgrade state file
     sysupgrade.remove_upgrade_file()
-
-    tasks.restore_pkcs11_modules(fstore)
 
     if fstore.has_files():
         logger.error('Some files have not been restored, see '
@@ -1194,11 +1213,11 @@ def uninstall(installer):
     else:
         # sysrestore.state has no state left, remove it
         sysrestore = os.path.join(SYSRESTORE_DIR_PATH, 'sysrestore.state')
-        installutils.remove_file(sysrestore)
+        ipautil.remove_file(sysrestore)
 
     # Note that this name will be wrong after the first uninstall.
     dirname = dsinstance.config_dirname(
-        installutils.realm_to_serverid(api.env.realm))
+        ipaldap.realm_to_serverid(api.env.realm))
     dirs = [dirname, paths.PKI_TOMCAT_ALIAS_DIR, paths.HTTPD_ALIAS_DIR]
     ids = certmonger.check_state(dirs)
     if ids:

@@ -43,12 +43,11 @@ if __name__ == '__main__':
             # "ipalib",  # circular dependency
             "ipaplatform",
             "netaddr",
-            "python-ldap",
             "six",
         ],
         extras_require={
-            ":python_version<'3'": ["enum34"],
             "install": ["dbus-python"],  # for certmonger
+            "ldap": ["python-ldap"],  # ipapython.ipaldap
             # CheckedIPAddress.get_matching_interface
             "netifaces": ["netifaces"],
         },

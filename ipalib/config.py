@@ -33,12 +33,10 @@ from __future__ import absolute_import
 import os
 from os import path
 import sys
+from urllib.parse import urlparse, urlunparse
+from configparser import RawConfigParser, ParsingError
 
 import six
-# pylint: disable=import-error
-from six.moves.urllib.parse import urlparse, urlunparse
-from six.moves.configparser import RawConfigParser, ParsingError
-# pylint: enable=import-error
 
 from ipaplatform.tasks import tasks
 from ipapython.dn import DN
@@ -253,7 +251,7 @@ class Env:
             )
         # pylint: enable=no-member
         assert not hasattr(self, key)
-        if isinstance(value, six.string_types):
+        if isinstance(value, str):
             value = value.strip()
             if isinstance(value, bytes):
                 value = value.decode('utf-8')
@@ -635,19 +633,29 @@ class Env:
         # set the best known TLS version if min/max versions are not set
         if 'tls_version_min' not in self:
             self.tls_version_min = TLS_VERSION_DEFAULT_MIN
-        elif self.tls_version_min not in TLS_VERSIONS:
+        if (
+                self.tls_version_min is not None and
+                self.tls_version_min not in TLS_VERSIONS
+        ):
             raise errors.EnvironmentError(
                 "Unknown TLS version '{ver}' set in tls_version_min."
                 .format(ver=self.tls_version_min))
 
         if 'tls_version_max' not in self:
             self.tls_version_max = TLS_VERSION_DEFAULT_MAX
-        elif self.tls_version_max not in TLS_VERSIONS:
+        if (
+                self.tls_version_max is not None and
+                self.tls_version_max not in TLS_VERSIONS
+        ):
             raise errors.EnvironmentError(
                 "Unknown TLS version '{ver}' set in tls_version_max."
                 .format(ver=self.tls_version_max))
 
-        if self.tls_version_max < self.tls_version_min:
+        if (
+                self.tls_version_min is not None and
+                self.tls_version_max is not None and
+                self.tls_version_max < self.tls_version_min
+        ):
             raise errors.EnvironmentError(
                 "tls_version_min is set to a higher TLS version than "
                 "tls_version_max.")

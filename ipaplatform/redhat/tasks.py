@@ -34,7 +34,6 @@ import errno
 import urllib
 import subprocess
 import sys
-import pwd
 import textwrap
 
 from ctypes.util import find_library
@@ -42,7 +41,6 @@ from functools import total_ordering
 from subprocess import CalledProcessError
 
 from pyasn1.error import PyAsn1Error
-from six.moves import urllib
 
 from ipapython import directivesetter
 from ipapython import ipautil
@@ -189,12 +187,6 @@ class RedHatTaskNamespace(BaseTaskNamespace):
                 "this is 'lo' interface. If you do not wish to use IPv6 "
                 "globally, disable it on the specific interfaces in "
                 "sysctl.conf except 'lo' interface.")
-
-        # XXX This is a hack to work around an issue with Travis CI by
-        # skipping IPv6 address test. The Dec 2017 update removed ::1 from
-        # loopback, see https://github.com/travis-ci/travis-ci/issues/8891.
-        if os.environ.get('TRAVIS') == 'true':
-            return
 
         try:
             localhost6 = ipautil.CheckedIPAddress('::1', allow_loopback=True)
@@ -539,30 +531,8 @@ class RedHatTaskNamespace(BaseTaskNamespace):
             )
         )
 
-        pent = pwd.getpwnam(constants.GSSPROXY_USER)
-        if pent.pw_uid == 0:
-            # by default gssproxy user is root
-            mod = 0o600
-        else:
-            # gssproxy user is non-privileged
-            mod = 0o640
-        os.chmod(paths.GSSPROXY_CONF, mod)
-        os.chown(paths.GSSPROXY_CONF, 0, pent.pw_gid)
+        os.chmod(paths.GSSPROXY_CONF, 0o600)
         self.restore_context(paths.GSSPROXY_CONF)
-
-    def configure_ipa_gssproxy_dir(self):
-        ipa_gssproxy_dir = os.path.dirname(paths.HTTP_KEYTAB)
-        pent = pwd.getpwnam(constants.GSSPROXY_USER)
-        if pent.pw_uid == 0:
-            # by default gssproxy user is root
-            mod = 0o700
-        else:
-            # gssproxy user is non-privileged
-            mod = 0o770
-        if not os.path.isdir(ipa_gssproxy_dir):
-            os.mkdir(ipa_gssproxy_dir)
-        os.chmod(ipa_gssproxy_dir, mod)
-        os.chown(ipa_gssproxy_dir, 0, pent.pw_gid)
 
     def configure_httpd_wsgi_conf(self):
         """Configure WSGI for correct Python version (Fedora)
@@ -614,10 +584,10 @@ class RedHatTaskNamespace(BaseTaskNamespace):
         self.systemd_daemon_reload()
 
     def configure_httpd_protocol(self):
-        # TLS 1.3 is not yet supported
-        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
-                                      'SSLProtocol',
-                                      'TLSv1.2', False)
+        # use default crypto policy for SSLProtocol
+        directivesetter.set_directive(
+            paths.HTTPD_SSL_CONF, 'SSLProtocol', None, False
+        )
 
     def set_hostname(self, hostname):
         ipautil.run([paths.BIN_HOSTNAMECTL, 'set-hostname', hostname])
@@ -741,6 +711,7 @@ class RedHatTaskNamespace(BaseTaskNamespace):
                 # see man(5) pkcs11.conf
                 f.write("disable-in: {}\n".format(", ".join(disabled_in)))
                 os.fchmod(f.fileno(), 0o644)
+            self.restore_context(filename)
             logger.debug("Created PKCS#11 module config '%s'.", filename)
             filenames.append(filename)
 
@@ -766,5 +737,31 @@ class RedHatTaskNamespace(BaseTaskNamespace):
                 fstore.restore_file(filename)
 
         return filenames
+
+    def get_pkcs11_modules(self):
+        """Return the list of module config files setup by IPA
+        """
+        return tuple(os.path.join(paths.ETC_PKCS11_MODULES_DIR,
+                                  "{}.module".format(name))
+                     for name, _module, _disabled in PKCS11_MODULES)
+
+    def enable_ldap_automount(self, statestore):
+        """
+        Point automount to ldap in nsswitch.conf.
+        This function is for non-SSSD setups only.
+        """
+        super(RedHatTaskNamespace, self).enable_ldap_automount(statestore)
+
+        authselect_cmd = [paths.AUTHSELECT, "enable-feature",
+                          "with-custom-automount"]
+        ipautil.run(authselect_cmd)
+
+    def disable_ldap_automount(self, statestore):
+        """Disable ldap-based automount"""
+        super(RedHatTaskNamespace, self).disable_ldap_automount(statestore)
+
+        authselect_cmd = [paths.AUTHSELECT, "disable-feature",
+                          "with-custom-automount"]
+        ipautil.run(authselect_cmd)
 
 tasks = RedHatTaskNamespace()

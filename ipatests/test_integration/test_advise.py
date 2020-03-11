@@ -20,8 +20,6 @@
 # FIXME: Pylint errors
 # pylint: disable=no-member
 
-from __future__ import absolute_import
-
 import re
 
 from ipalib.constants import IPAAPI_USER

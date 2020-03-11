@@ -15,14 +15,12 @@
 
 from __future__ import absolute_import
 
-import time
+import os
 import re
+import time
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
-from ipaplatform.paths import paths
-
-import os
 
 # give some time for units to stabilize
 # otherwise we get transient errors
@@ -30,52 +28,18 @@ WAIT_AFTER_INSTALL = 5
 WAIT_AFTER_UNINSTALL = WAIT_AFTER_INSTALL
 
 
-class TestInit(IntegrationTest):
+class TestNFS(IntegrationTest):
 
-    @classmethod
-    def fix_resolv_conf(cls, client, server):
-
-        contents = client.get_file_contents(paths.RESOLV_CONF,
-                                            encoding='utf-8')
-        nameserver = 'nameserver %s\n' % server.ip
-        if not contents.startswith(nameserver):
-            contents = nameserver + contents.replace(nameserver, '')
-            client.run_command([
-                '/usr/bin/cp', paths.RESOLV_CONF,
-                '%s.sav' % paths.RESOLV_CONF
-            ])
-            client.put_file_contents(paths.RESOLV_CONF, contents)
-
-    @classmethod
-    def restore_resolv_conf(cls, client):
-        client.run_command([
-            '/usr/bin/cp',
-            '%s.sav' % paths.RESOLV_CONF,
-            paths.RESOLV_CONF
-        ])
-
-
-class TestNFS(TestInit):
-
-    num_replicas = 2
-    num_clients = 1
-    topology = 'star'
-
-    @classmethod
-    def install(cls, mh):
-
-        tasks.install_master(cls.master, setup_dns=True)
-        clients = (cls.clients[0], cls.replicas[0], cls.replicas[1])
-        for client in clients:
-            cls.fix_resolv_conf(client, cls.master)
-            tasks.install_client(cls.master, client)
-            client.run_command(["cat", "/etc/resolv.conf"])
+    num_clients = 3
+    topology = 'line'
 
     def cleanup(self):
 
         nfssrv = self.clients[0]
-        nfsclt = self.replicas[0]
-        automntclt = self.replicas[1]
+        nfsclt = self.clients[1]
+        automntclt = self.clients[2]
+
+        time.sleep(WAIT_AFTER_UNINSTALL)
 
         nfsclt.run_command(["umount", "-a", "-t", "nfs4"])
         nfsclt.run_command(["systemctl", "stop", "rpc-gssd"])
@@ -89,8 +53,6 @@ class TestNFS(TestInit):
 
         nfssrv.run_command(["rm", "-rf", "/exports"])
 
-        tasks.uninstall_client(nfsclt)
-        tasks.uninstall_client(nfssrv)
         self.master.run_command([
             "ipa", "host-mod", automntclt.hostname,
             "--location", "''"
@@ -101,9 +63,6 @@ class TestNFS(TestInit):
         ])
         nfsclt.run_command(["systemctl", "restart", "nfs-utils"])
         nfssrv.run_command(["systemctl", "restart", "nfs-utils"])
-        for client in (nfssrv, nfsclt, automntclt):
-            self.restore_resolv_conf(client)
-        tasks.uninstall_master(self.master)
 
     def test_prepare_users(self):
 
@@ -166,7 +125,7 @@ class TestNFS(TestInit):
     def test_krb5_nfs_manual_configuration(self):
 
         nfssrv = self.clients[0]
-        nfsclt = self.replicas[0]
+        nfsclt = self.clients[1]
 
         nfsclt.run_command(["systemctl", "restart", "rpc-gssd"])
         time.sleep(WAIT_AFTER_INSTALL)
@@ -194,7 +153,7 @@ class TestNFS(TestInit):
         """
 
         nfssrv = self.clients[0]
-        automntclt = self.replicas[1]
+        automntclt = self.clients[2]
 
         self.master.run_command([
             "ipa", "automountlocation-add", "seattle"
@@ -247,6 +206,8 @@ class TestNFS(TestInit):
         ])
 
         # TODO leverage users
+
+        time.sleep(WAIT_AFTER_UNINSTALL)
 
         automntclt.run_command(["umount", "-a", "-t", "nfs4"])
 
@@ -301,3 +262,73 @@ class TestNFS(TestInit):
         time.sleep(WAIT_AFTER_UNINSTALL)
 
         self.cleanup()
+
+
+class TestIpaClientAutomountFileRestore(IntegrationTest):
+
+    num_clients = 1
+    topology = 'line'
+
+    @classmethod
+    def install(cls, mh):
+        tasks.install_master(cls.master, setup_dns=True)
+
+    def teardown_method(self, method):
+        tasks.uninstall_client(self.clients[0])
+
+    def nsswitch_backup_restore(
+        self,
+        no_sssd=False,
+    ):
+
+        # In order to get a more pure sum, one that ignores the Generated
+        # header and any white space we have to do a bit of work...
+        sha256nsswitch_cmd = \
+            'egrep -v "Generated|^$" /etc/nsswitch.conf | sed "s/\\s//g" ' \
+            '| sort | sha256sum'
+
+        cmd = self.clients[0].run_command(sha256nsswitch_cmd)
+        orig_sha256 = cmd.stdout_text
+
+        grep_automount_command = \
+            "grep automount /etc/nsswitch.conf | cut -d: -f2"
+
+        tasks.install_client(self.master, self.clients[0])
+        cmd = self.clients[0].run_command(grep_automount_command)
+        after_ipa_client_install = cmd.stdout_text.split()
+
+        if no_sssd:
+            ipa_client_automount_command = [
+                "ipa-client-automount", "--no-sssd", "-U"
+            ]
+        else:
+            ipa_client_automount_command = [
+                "ipa-client-automount", "-U"
+            ]
+        self.clients[0].run_command(ipa_client_automount_command)
+        cmd = self.clients[0].run_command(grep_automount_command)
+        after_ipa_client_automount = cmd.stdout_text.split()
+        if no_sssd:
+            assert after_ipa_client_automount == ['files', 'ldap']
+        else:
+            assert after_ipa_client_automount == ['sss', 'files']
+
+        cmd = self.clients[0].run_command(grep_automount_command)
+        assert cmd.stdout_text.split() == after_ipa_client_automount
+
+        self.clients[0].run_command([
+            "ipa-client-automount", "--uninstall", "-U"
+        ])
+
+        cmd = self.clients[0].run_command(grep_automount_command)
+        assert cmd.stdout_text.split() == after_ipa_client_install
+
+        tasks.uninstall_client(self.clients[0])
+        cmd = self.clients[0].run_command(sha256nsswitch_cmd)
+        assert cmd.stdout_text == orig_sha256
+
+    def test_nsswitch_backup_restore_sssd(self):
+        self.nsswitch_backup_restore()
+
+    def test_nsswitch_backup_restore_no_sssd(self):
+        self.nsswitch_backup_restore(no_sssd=True)

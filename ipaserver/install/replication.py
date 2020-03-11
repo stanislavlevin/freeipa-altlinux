@@ -137,8 +137,7 @@ def enable_replication_version_checking(realm, dirman_passwd):
     enabled then enable it and restart 389-ds. If it is enabled
     the do nothing.
     """
-    ldap_uri = ipaldap.get_ldap_uri(protocol='ldapi', realm=realm)
-    conn = ipaldap.LDAPClient(ldap_uri)
+    conn = ipaldap.LDAPClient.from_realm(realm)
     if dirman_passwd:
         conn.simple_bind(bind_dn=ipaldap.DIRMAN_DN,
                          bind_password=dirman_passwd)
@@ -187,7 +186,8 @@ def wait_for_entry(connection, dn, timeout, attr=None, attrvalue='*',
         attrlist.append(attr)
     else:
         filterstr = "(objectclass=*)"
-    log("Waiting for replication (%s) %s %s", connection, dn, filterstr)
+    log("Waiting up to %s seconds for replication (%s) %s %s",
+        timeout, connection, dn, filterstr)
     entry = []
     deadline = time.time() + timeout
     for i in itertools.count(start=1):
@@ -619,8 +619,9 @@ class ReplicationManager:
         """
         self._finalize_replica_settings(self.conn)
 
-        ldap_uri = ipaldap.get_ldap_uri(r_hostname)
-        r_conn = ipaldap.LDAPClient(ldap_uri, cacert=cacert)
+        r_conn = ipaldap.LDAPClient.from_hostname_secure(
+            r_hostname, cacert=cacert
+        )
         if r_bindpw:
             r_conn.simple_bind(r_binddn, r_bindpw)
         else:
@@ -1070,11 +1071,23 @@ class ReplicationManager:
             inprogress = entry.single_value.get('nsds5replicaUpdateInProgress')
             status = entry.single_value.get('nsds5ReplicaLastUpdateStatus')
             try:
-                start = int(entry.single_value['nsds5ReplicaLastUpdateStart'])
+                # nsds5ReplicaLastUpdateStart is either a GMT time
+                # ending with Z or 0 (see 389-ds ticket 47836)
+                # Remove the Z and convert to int
+                start = entry.single_value['nsds5ReplicaLastUpdateStart']
+                if start.endswith('Z'):
+                    start = start[:-1]
+                start = int(start)
             except (ValueError, TypeError, KeyError):
                 start = 0
             try:
-                end = int(entry.single_value['nsds5ReplicaLastUpdateEnd'])
+                # nsds5ReplicaLastUpdateEnd is either a GMT time
+                # ending with Z or 0 (see 389-ds ticket 47836)
+                # Remove the Z and convert to int
+                end = entry.single_value['nsds5ReplicaLastUpdateEnd']
+                if end.endswith('Z'):
+                    end = end[:-1]
+                end = int(end)
             except (ValueError, TypeError, KeyError):
                 end = 0
             # incremental update is done if inprogress is false and end >= start
@@ -1148,12 +1161,7 @@ class ReplicationManager:
             local_port = r_port
         # note - there appears to be a bug in python-ldap - it does not
         # allow connections using two different CA certs
-        ldap_uri = ipaldap.get_ldap_uri(r_hostname, r_port,
-                                        cacert=paths.IPA_CA_CRT,
-                                        protocol='ldap')
-        r_conn = ipaldap.LDAPClient(ldap_uri,
-                                    cacert=paths.IPA_CA_CRT,
-                                    start_tls=True)
+        r_conn = ipaldap.LDAPClient.from_hostname_secure(r_hostname)
 
         if r_bindpw:
             r_conn.simple_bind(r_binddn, r_bindpw)
@@ -1304,9 +1312,7 @@ class ReplicationManager:
             raise RuntimeError("Failed to start replication")
 
     def convert_to_gssapi_replication(self, r_hostname, r_binddn, r_bindpw):
-        ldap_uri = ipaldap.get_ldap_uri(r_hostname, PORT,
-                                        cacert=paths.IPA_CA_CRT)
-        r_conn = ipaldap.LDAPClient(ldap_uri, cacert=paths.IPA_CA_CRT)
+        r_conn = ipaldap.LDAPClient.from_hostname_secure(r_hostname)
         if r_bindpw:
             r_conn.simple_bind(r_binddn, r_bindpw)
         else:
@@ -1334,11 +1340,7 @@ class ReplicationManager:
         Only usable to connect 2 existing replicas (needs existing kerberos
         principals)
         """
-        # note - there appears to be a bug in python-ldap - it does not
-        # allow connections using two different CA certs
-        ldap_uri = ipaldap.get_ldap_uri(r_hostname, PORT,
-                                        cacert=paths.IPA_CA_CRT)
-        r_conn = ipaldap.LDAPClient(ldap_uri, cacert=paths.IPA_CA_CRT)
+        r_conn = ipaldap.LDAPClient.from_hostname_secure(r_hostname)
         if r_bindpw:
             r_conn.simple_bind(r_binddn, r_bindpw)
         else:
@@ -1833,10 +1835,8 @@ class ReplicationManager:
 
     def setup_promote_replication(self, r_hostname, r_binddn=None,
                                   r_bindpw=None, cacert=paths.IPA_CA_CRT):
-        # note - there appears to be a bug in python-ldap - it does not
-        # allow connections using two different CA certs
-        ldap_uri = ipaldap.get_ldap_uri(r_hostname)
-        r_conn = ipaldap.LDAPClient(ldap_uri, cacert=cacert)
+        r_conn = ipaldap.LDAPClient.from_hostname_secure(
+            r_hostname, cacert=cacert)
         if r_bindpw:
             r_conn.simple_bind(r_binddn, r_bindpw)
         else:
@@ -1975,8 +1975,7 @@ class CAReplicationManager(ReplicationManager):
 
     def __init__(self, realm, hostname):
         # Always connect to self over ldapi
-        ldap_uri = ipaldap.get_ldap_uri(protocol='ldapi', realm=realm)
-        conn = ipaldap.LDAPClient(ldap_uri)
+        conn = ipaldap.LDAPClient.from_realm(realm)
         conn.external_bind()
         super(CAReplicationManager, self).__init__(
             realm, hostname, None, port=DEFAULT_PORT, conn=conn)
@@ -1988,8 +1987,7 @@ class CAReplicationManager(ReplicationManager):
         Assumes a promote replica with working GSSAPI for replication
         and unified DS instance.
         """
-        ldap_uri = ipaldap.get_ldap_uri(r_hostname)
-        r_conn = ipaldap.LDAPClient(ldap_uri)
+        r_conn = ipaldap.LDAPClient.from_hostname_secure(r_hostname)
         r_conn.gssapi_bind()
 
         # Setup the first half

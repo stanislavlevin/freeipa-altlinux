@@ -6,15 +6,12 @@ from __future__ import absolute_import
 
 import time
 import re
-from tempfile import NamedTemporaryFile
 import textwrap
-
-import pytest
-
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.tasks import (
     assert_error, replicas_cleanup)
+from ipatests.pytest_ipa.integration.firewall import Firewall
 from ipatests.pytest_ipa.integration.env_config import get_global_config
 from ipalib.constants import (
     DOMAIN_LEVEL_1, IPA_CA_NICKNAME, CA_SUFFIX_NAME)
@@ -64,6 +61,9 @@ class TestReplicaPromotionLevel1(ReplicaPromotionBase):
 
         Test for ticket 6353
         """
+        # Configure firewall first
+        Firewall(self.replicas[0]).enable_services(["freeipa-ldap",
+                                                    "freeipa-ldaps"])
         expected_err = "--password and --admin-password options are " \
                        "mutually exclusive"
         result = self.replicas[0].run_command([
@@ -85,6 +85,9 @@ class TestReplicaPromotionLevel1(ReplicaPromotionBase):
         http://www.freeipa.org/page/V4/Replica_Promotion/Test_plan
         #Test_case:_Replica_can_be_installed_using_one_command
         """
+        # Configure firewall first
+        Firewall(self.replicas[0]).enable_services(["freeipa-ldap",
+                                                    "freeipa-ldaps"])
         self.replicas[0].run_command(['ipa-replica-install', '-w',
                                      self.master.config.admin_password,
                                      '-n', self.master.domain.name,
@@ -140,6 +143,9 @@ class TestUnprivilegedUserPermissions(IntegrationTest):
     def test_replica_promotion_by_unprivileged_user(self):
         replica = self.replicas[0]
         tasks.install_client(self.master, replica)
+        # Configure firewall first
+        Firewall(replica).enable_services(["freeipa-ldap",
+                                           "freeipa-ldaps"])
         result2 = replica.run_command(['ipa-replica-install',
                                        '-P', self.username,
                                        '-p', self.new_password,
@@ -153,6 +159,9 @@ class TestUnprivilegedUserPermissions(IntegrationTest):
         self.master.run_command(['ipa', 'group-add-member', 'admins',
                                  '--users=%s' % self.username])
 
+        # Configure firewall first
+        Firewall(self.replicas[0]).enable_services(["freeipa-ldap",
+                                                    "freeipa-ldaps"])
         self.replicas[0].run_command(['ipa-replica-install',
                                       '-P', self.username,
                                       '-p', self.new_password,
@@ -179,6 +188,8 @@ class TestProhibitReplicaUninstallation(IntegrationTest):
                              " topology" % self.replicas[0].hostname, 1)
         self.replicas[0].run_command(['ipa-server-install', '--uninstall',
                                       '-U', '--ignore-topology-disconnect'])
+        Firewall(self.replicas[0]).disable_services(["freeipa-ldap",
+                                                     "freeipa-ldaps"])
 
 
 class TestWrongClientDomain(IntegrationTest):
@@ -191,20 +202,17 @@ class TestWrongClientDomain(IntegrationTest):
     def install(cls, mh):
         tasks.install_master(cls.master, domain_level=cls.domain_level)
 
-    @pytest.fixture(autouse=True)
-    def wrongclientdom_setup(self, request):
-        def fin():
-            if len(config.domains) == 0:
-                # No YAML config was set
-                return
-            self.replicas[0].run_command(['ipa-client-install',
-                                         '--uninstall', '-U'],
-                                         raiseonerr=False)
-            tasks.kinit_admin(self.master)
-            self.master.run_command(['ipa', 'host-del',
-                                     self.replicas[0].hostname],
+    def teardown_method(self, method):
+        if len(config.domains) == 0:
+            # No YAML config was set
+            return
+        self.replicas[0].run_command(['ipa-client-install',
+                                     '--uninstall', '-U'],
                                     raiseonerr=False)
-        request.addfinalizer(fin)
+        tasks.kinit_admin(self.master)
+        self.master.run_command(['ipa', 'host-del',
+                                 self.replicas[0].hostname],
+                                raiseonerr=False)
 
     def test_wrong_client_domain(self):
         client = self.replicas[0]
@@ -215,6 +223,9 @@ class TestWrongClientDomain(IntegrationTest):
                             '-w', self.master.config.admin_password,
                             '--server', self.master.hostname,
                             '--force-join'])
+        # Configure firewall first
+        Firewall(client).enable_services(["freeipa-ldap",
+                                          "freeipa-ldaps"])
         result = client.run_command(['ipa-replica-install', '-U', '-w',
                                      self.master.config.dirman_password],
                                     raiseonerr=False)
@@ -233,6 +244,9 @@ class TestWrongClientDomain(IntegrationTest):
                                      '--force-join'], raiseonerr=False)
         assert(result.returncode == 0), (
             'Failed to setup client with the upcase domain name')
+        # Configure firewall first
+        Firewall(self.replicas[0]).enable_services(["freeipa-ldap",
+                                                    "freeipa-ldaps"])
         result1 = client.run_command(['ipa-replica-install', '-U', '-w',
                                       self.master.config.dirman_password],
                                      raiseonerr=False)
@@ -375,8 +389,6 @@ class TestReplicaInstallWithExistingEntry(IntegrationTest):
         master = self.master
         tasks.install_master(master)
         replica = self.replicas[0]
-        tf = NamedTemporaryFile()
-        ldif_file = tf.name
         base_dn = "dc=%s" % (",dc=".join(replica.domain.name.split(".")))
         # adding entry for replica on master so that master will have it before
         # replica installtion begins and creates a situation for pagure-7174
@@ -392,14 +404,7 @@ class TestReplicaInstallWithExistingEntry(IntegrationTest):
             memberPrincipal: ldap/{hostname}@{realm}""").format(
             base_dn=base_dn, hostname=replica.hostname,
             realm=replica.domain.name.upper())
-        master.put_file_contents(ldif_file, entry_ldif)
-        arg = ['ldapmodify',
-               '-h', master.hostname,
-               '-p', '389', '-D',
-               str(master.config.dirman_dn),   # pylint: disable=no-member
-               '-w', master.config.dirman_password,
-               '-f', ldif_file]
-        master.run_command(arg)
+        tasks.ldapmodify_dm(master, entry_ldif)
 
         tasks.install_replica(master, replica)
 
@@ -431,6 +436,9 @@ class TestSubCAkeyReplication(IntegrationTest):
 
     SERVER_CERT_NICK = 'Server-Cert cert-pki-ca'
     SERVER_KEY_NICK = 'NSS Certificate DB:Server-Cert cert-pki-ca'
+    SERVER_KEY_NICK_FIPS = (
+        'NSS FIPS 140-2 Certificate DB:Server-Cert cert-pki-ca'
+    )
     EXPECTED_CERTS = {
         IPA_CA_NICKNAME: 'CTu,Cu,Cu',
         'ocspSigningCert cert-pki-ca': 'u,u,u',
@@ -493,10 +501,17 @@ class TestSubCAkeyReplication(IntegrationTest):
             nick = '{} {}'.format(IPA_CA_NICKNAME, auth_id)
             expected_certs[nick] = 'u,u,u'
 
+        if master.is_fips_mode:
+            # Mixed FIPS/non-FIPS installations are not supported
+            assert replica.is_fips_mode
+            key_nick = self.SERVER_KEY_NICK_FIPS
+        else:
+            key_nick = self.SERVER_KEY_NICK
+
         # expected keys, server key has different name
         expected_keys = set(expected_certs)
         expected_keys.remove(self.SERVER_CERT_NICK)
-        expected_keys.add(self.SERVER_KEY_NICK)
+        expected_keys.add(key_nick)
 
         # get certs and keys from Dogtag's NSSDB
         master_certs, master_keys = self.get_certinfo(master)
@@ -509,8 +524,8 @@ class TestSubCAkeyReplication(IntegrationTest):
         assert set(replica_keys) == expected_keys
 
         # server keys are different
-        master_server_key = master_keys.pop(self.SERVER_KEY_NICK)
-        replica_server_key = replica_keys.pop(self.SERVER_KEY_NICK)
+        master_server_key = master_keys.pop(key_nick)
+        replica_server_key = replica_keys.pop(key_nick)
         assert master_server_key != replica_server_key
         # but key ids of other keys are equal
         assert master_keys == replica_keys
@@ -700,6 +715,9 @@ class TestReplicaInForwardZone(IntegrationTest):
             tasks.install_client(self.master, replica,
                                  extra_args=['--hostname', r_new_hostname])
 
+            # Configure firewall first
+            Firewall(replica).enable_services(["freeipa-ldap",
+                                               "freeipa-ldaps"])
             replica.run_command(['ipa-replica-install',
                                  '--principal', replica.config.admin_name,
                                  '--admin-password',
@@ -751,13 +769,16 @@ class TestHiddenReplicaPromotion(IntegrationTest):
             query = resolve_records_from_server(
                 name_abs, rtype, self.master.ip
             )
-            txt = query.to_text()
+            if rtype == 'SRV':
+                records = [q.target.to_text() for q in query]
+            else:
+                records = [q.address for q in query]
             for host in hosts_expected:
-                value = host.hostname if rtype == 'SRV' else host.ip
-                assert value in txt
+                value = host.hostname + "." if rtype == 'SRV' else host.ip
+                assert value in records
             for host in hosts_unexpected:
-                value = host.hostname if rtype == 'SRV' else host.ip
-                assert value not in txt
+                value = host.hostname + "." if rtype == 'SRV' else host.ip
+                assert value not in records
 
     def _check_server_role(self, host, status, kra=True, dns=True):
         roles = [u'IPA master', u'CA server']
@@ -917,3 +938,28 @@ class TestHiddenReplicaPromotion(IntegrationTest):
         # FIXME: restore turns hidden replica into enabled replica
         self._check_config([self.master, self.replicas[0]])
         self._check_server_role(self.replicas[0], 'enabled')
+
+    def test_hidden_replica_automatic_crl(self):
+        """Exercises if automatic CRL configuration works with
+           hidden replica.
+        """
+        # Demoting Replica to be hidden.
+        self.replicas[0].run_command([
+            'ipa', 'server-state',
+            self.replicas[0].hostname, '--state=hidden'
+        ])
+        self._check_server_role(self.replicas[0], 'hidden')
+
+        # check CRL status
+        result = self.replicas[0].run_command([
+            'ipa-crlgen-manage', 'status'])
+        assert "CRL generation: disabled" in result.stdout_text
+
+        # Enbable CRL status on hidden replica
+        self.replicas[0].run_command([
+            'ipa-crlgen-manage', 'enable'])
+
+        # check CRL status
+        result = self.replicas[0].run_command([
+            'ipa-crlgen-manage', 'status'])
+        assert "CRL generation: enabled" in result.stdout_text

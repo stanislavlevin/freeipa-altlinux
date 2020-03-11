@@ -5,14 +5,19 @@
 from __future__ import absolute_import
 
 import logging
+import re
+import subprocess
 import time
 
 import dns.dnssec
 import dns.resolver
 import dns.name
 
+import pytest
+
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.firewall import Firewall
 from ipaplatform.paths import paths
 
 logger = logging.getLogger(__name__)
@@ -95,6 +100,16 @@ def dnszone_add_dnssec(host, test_zone):
     return host.run_command(args)
 
 
+def dnssec_install_master(host):
+    args = [
+        "ipa-dns-install",
+        "--dnssec-master",
+        "--forwarder", host.config.dns_forwarder,
+        "-U",
+    ]
+    return host.run_command(args)
+
+
 class TestInstallDNSSECLast(IntegrationTest):
     """Simple DNSSEC test
 
@@ -111,13 +126,7 @@ class TestInstallDNSSECLast(IntegrationTest):
 
     def test_install_dnssec_master(self):
         """Both master and replica have DNS installed"""
-        args = [
-            "ipa-dns-install",
-            "--dnssec-master",
-            "--forwarder", self.master.config.dns_forwarder,
-            "-U",
-        ]
-        self.master.run_command(args)
+        dnssec_install_master(self.master)
 
     def test_if_zone_is_signed_master(self):
         # add zone with enabled DNSSEC signing on master
@@ -262,6 +271,9 @@ class TestInstallDNSSECFirst(IntegrationTest):
             "-U",
         ]
         cls.master.run_command(args)
+        # Enable dns service on master as it has been installed without dns
+        # support before
+        Firewall(cls.master).enable_services(["dns"])
 
         tasks.install_replica(cls.master, cls.replicas[0], setup_dns=True)
 
@@ -308,6 +320,7 @@ class TestInstallDNSSECFirst(IntegrationTest):
             self.replicas[0].ip, root_zone, timeout=300
         ), "Zone %s is not signed (replica)" % root_zone
 
+    @pytest.mark.xfail(reason='dnspython issue 343', strict=False)
     def test_chain_of_trust(self):
         """
         Validate signed DNS records, using our own signed root zone
@@ -453,7 +466,41 @@ class TestMigrateDNSSECMaster(IntegrationTest):
             "-U",
         ]
         cls.master.run_command(args)
+        # No need to enable dns service in the firewall as master has been
+        # installed with dns support enabled
+        # Firewall(cls.master).enable_services(["dns"])
         tasks.install_replica(cls.master, cls.replicas[0], setup_dns=True)
+
+    @classmethod
+    def uninstall(cls, mh):
+        # For this test, we need to uninstall DNSSEC master last
+        # Find which server is DNSSec master
+        result = cls.master.run_command(["ipa", "config-show"]).stdout_text
+        matches = list(re.finditer('IPA DNSSec key master: (.*)', result))
+        if len(matches) == 1:
+            # Found the DNSSec master
+            dnssec_master_hostname = matches[0].group(1)
+            for replica in cls.replicas + [cls.master]:
+                if replica.hostname == dnssec_master_hostname:
+                    dnssec_master = replica
+        else:
+            # By default consider that the master is DNSSEC
+            dnssec_master = cls.master
+
+        for replica in cls.replicas + [cls.master]:
+            if replica == dnssec_master:
+                # Skip this one
+                continue
+            try:
+                tasks.run_server_del(
+                    dnssec_master, replica.hostname, force=True,
+                    ignore_topology_disconnect=True, ignore_last_of_role=True)
+            except subprocess.CalledProcessError:
+                # If the master has already been uninstalled,
+                # this call may fail
+                pass
+            tasks.uninstall_master(replica)
+        tasks.uninstall_master(dnssec_master)
 
     def test_migrate_dnssec_master(self):
         """Both master and replica have DNS installed"""
@@ -497,6 +544,8 @@ class TestMigrateDNSSECMaster(IntegrationTest):
             "-U",
         ]
         self.replicas[0].run_command(args)
+        # Enable the dns service in the firewall on the replica
+        Firewall(self.replicas[0]).enable_services(["dns"])
 
         # wait until zone is signed
         assert wait_until_record_is_signed(

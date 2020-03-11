@@ -22,8 +22,10 @@ from ipapython.admintool import ScriptError
 from ipapython import ipaldap, ipautil
 from ipapython.dn import DN
 from ipapython.install.core import group, knob
+from ipaserver.install import installutils
 from ipaserver.install import adtrustinstance
 from ipaserver.install import service
+from ipaserver.install.plugins.adtrust import update_host_cifs_keytabs
 
 
 if six.PY3:
@@ -341,8 +343,9 @@ def add_new_adtrust_agents(api, options):
         add_hosts_to_adtrust_agents(api, new_agents)
 
         print("""
-WARNING: you MUST restart (e.g. ipactl restart) the following IPA masters in
-order to activate them to serve information about users from trusted forests:
+WARNING: you MUST restart (both "ipactl restart" and "systemctl restart sssd")
+the following IPA masters in order to activate them to serve information about
+users from trusted forests:
 """)
         for x in new_agents:
             print(x)
@@ -388,15 +391,6 @@ def install_check(standalone, options, api):
                                       default=False,
                                       allow_empty=False):
                 raise ScriptError("Aborting installation.")
-    elif os.path.exists(paths.SMB_CONF):
-        print("WARNING: The smb.conf already exists. Running "
-              "ipa-adtrust-install will break your existing samba "
-              "configuration.\n\n")
-        if not options.unattended:
-            if not ipautil.user_input("Do you wish to continue?",
-                                      default=False,
-                                      allow_empty=False):
-                raise ScriptError("Aborting installation.")
 
     if not options.unattended and not options.enable_compat:
         options.enable_compat = enable_compat_tree()
@@ -425,6 +419,16 @@ def install(standalone, options, fstore, api):
               enable_compat=options.enable_compat)
     smb.find_local_id_range()
     smb.create_instance()
+
+    # Update Samba keytab with host keys
+    ad_update = update_host_cifs_keytabs(api)
+    if ad_update:
+        result = ad_update()
+        # this particular update does not require restarting DS but
+        # the plugin might require that in future
+        if result[0]:
+            logger.debug('Restarting directory server to apply updates')
+            installutils.restart_dirsrv()
 
     if options.add_agents:
         # Find out IPA masters which are not part of the cn=adtrust agents

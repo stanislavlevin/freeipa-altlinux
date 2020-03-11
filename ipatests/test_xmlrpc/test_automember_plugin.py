@@ -58,7 +58,7 @@ hostgroup_exclude_regex3 = u'^webserver5'
 
 
 @pytest.fixture(scope='class')
-def manager1(request, xmlrpc_setup):
+def manager1(request):
     """ User tracker used as a manager account """
     tracker = UserTracker(name=u'mscott', sn=u'Manager1',
                           givenname=u'Automember test manager user1')
@@ -74,49 +74,49 @@ def user1(request, manager1):
 
 
 @pytest.fixture(scope='class')
-def group1(request, xmlrpc_setup):
+def group1(request):
     tracker = GroupTracker(name=u'tgroup1',
                            description=u'Automember test group1')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def defaultgroup1(request, xmlrpc_setup):
+def defaultgroup1(request):
     tracker = GroupTracker(name=u'defaultgroup1',
                            description=u'Automember test defaultgroup1')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def hostgroup1(request, xmlrpc_setup):
+def hostgroup1(request):
     tracker = HostGroupTracker(name=u'thostgroup1',
                                description=u'Automember test hostgroup1')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def hostgroup2(request, xmlrpc_setup):
+def hostgroup2(request):
     tracker = HostGroupTracker(name=u'thostgroup2',
                                description=u'Automember test hostgroup2')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def hostgroup3(request, xmlrpc_setup):
+def hostgroup3(request):
     tracker = HostGroupTracker(name=u'thostgroup3',
                                description=u'Automember test hostgroup3')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def hostgroup4(request, xmlrpc_setup):
+def hostgroup4(request):
     tracker = HostGroupTracker(name=u'thostgroup4',
                                description=u'Automember test hostgroup4')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def defaulthostgroup1(request, xmlrpc_setup):
+def defaulthostgroup1(request):
     tracker = HostGroupTracker(name=u'defaulthostgroup1',
                                description=u'Automember test'
                                            'defaulthostgroup1')
@@ -124,31 +124,31 @@ def defaulthostgroup1(request, xmlrpc_setup):
 
 
 @pytest.fixture(scope='class')
-def host1(request, xmlrpc_setup):
+def host1(request):
     tracker = HostTracker(u'web1')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def host2(request, xmlrpc_setup):
+def host2(request):
     tracker = HostTracker(u'dev1')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def host3(request, xmlrpc_setup):
+def host3(request):
     tracker = HostTracker(u'web5')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def host4(request, xmlrpc_setup):
+def host4(request):
     tracker = HostTracker(u'www5')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def host5(request, xmlrpc_setup):
+def host5(request):
     tracker = HostTracker(u'webserver5')
     return tracker.make_fixture(request)
 
@@ -887,7 +887,6 @@ class TestAutomemberFindOrphans(XMLRPC_test):
 
         hostgroup1.retrieve()
 
-    @pytest.mark.skip(reason="Fails with 389-DS 1.4.0.22, see issue 7902")
     def test_find_orphan_automember_rules(self, hostgroup1):
         """ Remove hostgroup1, find and remove obsolete automember rules. """
         # Remove hostgroup1

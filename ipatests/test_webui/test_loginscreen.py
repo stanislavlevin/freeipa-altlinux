@@ -5,6 +5,7 @@
 """
 Test LoginScreen widget and all it's views
 """
+import urllib
 
 from ipatests.test_webui.ui_driver import UI_driver
 from ipatests.test_webui.ui_driver import screenshot
@@ -18,28 +19,27 @@ except ImportError:
     pass
 
 import pytest
-from six.moves import urllib
 
 
 @pytest.mark.tier1
 class TestLoginScreen(UI_driver):
 
-    @pytest.fixture(autouse=True)
-    def loginscreen_setup(self, request, ui_driver_fsetup):
+    def setup(self, *args, **kwargs):
+        super(TestLoginScreen, self).setup(*args, **kwargs)
         self.init_app()
         self.add_test_user()
         self.logout()
 
-        def fin():
-            # log out first
-            if (self.logged_in()):
-                self.logout()
-            else:
-                self.load_url(self.get_base_url())
-            # log in as administrator
-            self.login()
-            self.delete_test_user()
-        request.addfinalizer(fin)
+    def teardown(self, *args, **kwargs):
+        # log out first
+        if (self.logged_in()):
+            self.logout()
+        else:
+            self.load_url(self.get_base_url())
+        # log in as administrator
+        self.login()
+        self.delete_test_user()
+        super(TestLoginScreen, self).teardown(*args, **kwargs)
 
     def delete_test_user(self):
         """
@@ -124,6 +124,7 @@ class TestLoginScreen(UI_driver):
         WebDriverWait(self.driver, 10).until(
             lambda d: runner.files_loaded()
         )
+        self.wait()
 
     def relogin_with_new_password(self):
         """

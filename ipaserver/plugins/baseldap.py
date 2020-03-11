@@ -564,6 +564,11 @@ class LDAPObject(Object):
         'memberofindirect': (
             'Indirect Member Of', None, 'not_in_indirect_'
         ),
+        'membermanager': (
+            'Group membership managed by',
+            'membermanager_',
+            'not_membermanager_'
+        ),
     }
     label = _('Entry')
     label_singular = _('Entry')
@@ -830,7 +835,7 @@ def _check_single_value_attrs(params, entry_attrs):
 # required, make sure we enforce that.
 def _check_empty_attrs(params, entry_attrs):
     for (a, v) in entry_attrs.items():
-        if v is None or (isinstance(v, six.string_types) and len(v) == 0):
+        if v is None or (isinstance(v, str) and len(v) == 0):
             if a in params and params[a].required:
                 raise errors.RequirementError(name=a)
 
@@ -849,7 +854,11 @@ def _check_limit_object_class(attributes, attrs, allow_only):
     """
     if len(attributes[0]) == 0 and len(attributes[1]) == 0:
         return
-    limitattrs = deepcopy(attrs)
+    # Remove options from the attributes names before validating
+    # LDAP schema does not enforce any of LDAP attribute options
+    # (e.g. attribute;option), thus we should avoid comparing
+    # attribute names with options directly.
+    limitattrs = [x.split(';')[0] for x in attrs]
     # Go through the MUST first
     for attr in attributes[0].values():
         if attr.names[0].lower() in limitattrs:
@@ -1151,9 +1160,9 @@ class LDAPCreate(BaseLDAPCommand, crud.Create):
         entry_attrs = ldap.make_entry(
             dn, self.args_options_2_entry(*keys, **options))
 
-        self.process_attr_options(entry_attrs, None, keys, options)
-
         entry_attrs['objectclass'] = deepcopy(self.obj.object_class)
+
+        self.process_attr_options(entry_attrs, None, keys, options)
 
         if self.obj.object_class_config:
             config = ldap.get_ipa_config()
@@ -1973,7 +1982,7 @@ class LDAPSearch(BaseLDAPCommand, crud.Search):
             config_attrs = config.get(
                 self.obj.search_attributes_config, [])
             if len(config_attrs) == 1 and (
-              isinstance(config_attrs[0], six.string_types)):
+                    isinstance(config_attrs[0], str)):
                 search_attrs = config_attrs[0].split(',')
 
         search_kw = {}

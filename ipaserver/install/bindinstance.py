@@ -41,6 +41,7 @@ from ipaserver.install import installutils
 from ipaserver.install import service
 from ipaserver.install import sysupgrade
 from ipaserver.masters import get_masters
+from ipapython import ipaldap
 from ipapython import ipautil
 from ipapython import dnsutil
 from ipapython.dnsutil import DNSName
@@ -65,7 +66,6 @@ if six.PY3:
     unicode = str
 
 logger = logging.getLogger(__name__)
-
 
 named_conf_section_ipa_start_re = re.compile(r'\s*dyndb\s+"ipa"\s+"[^"]+"\s+{')
 named_conf_section_options_start_re = re.compile(r'\s*options\s+{')
@@ -204,7 +204,7 @@ def named_conf_set_directive(name, value, section=NAMED_SECTION_IPA,
                     if name == match.group('name'):
                         matched = True
                         if value is not None:
-                            if not isinstance(value, six.string_types):
+                            if not isinstance(value, str):
                                 value = str(value)
                             new_conf = named_conf_arg_template \
                                     % dict(indent=last_indent,
@@ -295,6 +295,26 @@ def find_reverse_zone(ip_address, api=api):
     return None
 
 
+def named_add_ext_conf_file(src, dest, t_params={}):
+    """
+    Ensure included file is present, but don't override it.
+
+    :param src: String. Absolute path to source template
+    :param dest: String. Absolute path to destination
+    :param t_params: Dict. Parameters for source template
+    """
+    if not os.path.exists(dest):
+        ipa_ext_txt = ipautil.template_file(src, t_params)
+        gid = pwd.getpwnam(constants.NAMED_USER).pw_gid
+
+        with open(dest, 'w') as ipa_ext:
+            os.fchmod(ipa_ext.fileno(), 0o640)
+            os.fchown(ipa_ext.fileno(), 0, gid)
+            ipa_ext.write(ipa_ext_txt)
+        return True
+    return False
+
+
 def read_reverse_zone(default, ip_address, allow_zone_overlap=False):
     while True:
         zone = ipautil.user_input("Please specify the reverse zone name", default=default)
@@ -307,7 +327,7 @@ def read_reverse_zone(default, ip_address, allow_zone_overlap=False):
         if not allow_zone_overlap:
             try:
                 dnsutil.check_zone_overlap(zone, raise_on_error=False)
-            except ValueError as e:
+            except dnsutil.DNSZoneAlreadyExists as e:
                 logger.error("Reverse zone %s will not be used: %s",
                              zone, e)
                 continue
@@ -637,7 +657,7 @@ class DnsBackup:
 
 
 class BindInstance(service.Service):
-    def __init__(self, fstore=None, api=api, ntp_role=False):
+    def __init__(self, fstore=None, api=api):
         super(BindInstance, self).__init__(
             "named",
             service_desc="DNS",
@@ -655,7 +675,6 @@ class BindInstance(service.Service):
         self.sub_dict = None
         self.reverse_zones = []
         self.named_regular = services.service('named-regular', api)
-        self.ntp_role = ntp_role
 
     suffix = ipautil.dn_attribute_property('_suffix')
 
@@ -722,8 +741,7 @@ class BindInstance(service.Service):
             pass
 
         for ip_address in self.ip_addresses:
-            if (installutils.record_in_hosts(str(ip_address), self.fqdn) is
-                    None):
+            if installutils.record_in_hosts(str(ip_address), self.fqdn) is None:
                 installutils.add_record_to_hosts(str(ip_address), self.fqdn)
 
         # Make sure generate-rndc-key.sh runs before named restart
@@ -739,12 +757,9 @@ class BindInstance(service.Service):
 
         self.step("setting up our own record", self.__add_self)
         if self.first_instance:
-            self.step("setting up records for other masters",
-                      self.__add_others)
+            self.step("setting up records for other masters", self.__add_others)
         # all zones must be created before this step
         self.step("adding NS record to the zones", self.__add_self_ns)
-        if self.ntp_role:
-            self.step("adding dns ntp record", self.__add_ntp_record)
 
         self.step("setting up kerberos principal", self.__setup_principal)
         self.step("setting up named.conf", self.__setup_named_conf)
@@ -755,9 +770,7 @@ class BindInstance(service.Service):
         # self.step("restarting named", self.__start)
 
         self.step("configuring named to start on boot", self.__enable)
-        self.step("changing resolv.conf to point to ourselves",
-                  self.__setup_resolv_conf)
-        self.step("disable chroot for bind", self.__disable_chroot)
+        self.step("changing resolv.conf to point to ourselves", self.__setup_resolv_conf)
         self.start_creation()
 
     def start_named(self):
@@ -814,7 +827,7 @@ class BindInstance(service.Service):
 
         self.sub_dict = dict(
             FQDN=self.fqdn,
-            SERVER_ID=installutils.realm_to_serverid(self.realm),
+            SERVER_ID=ipaldap.realm_to_serverid(self.realm),
             SUFFIX=self.suffix,
             BINDKEYS_FILE=paths.NAMED_BINDKEYS_FILE,
             MANAGED_KEYS_DIR=paths.NAMED_MANAGED_KEYS_DIR,
@@ -825,6 +838,7 @@ class BindInstance(service.Service):
             NAMED_VAR_DIR=paths.NAMED_VAR_DIR,
             BIND_LDAP_SO=paths.BIND_LDAP_SO,
             INCLUDE_CRYPTO_POLICY=crypto_policy,
+            CUSTOM_CONFIG=paths.NAMED_CUSTOM_CONFIG,
             NAMED_DATA_DIR=constants.NAMED_DATA_DIR,
             NAMED_ZONE_COMMENT=constants.NAMED_ZONE_COMMENT,
         )
@@ -878,11 +892,6 @@ class BindInstance(service.Service):
             logger.debug("adding self NS to zone %s apex", zone)
             add_ns_rr(zone, ns_hostname, self.dns_backup, force=True,
                       api=self.api)
-
-    def __add_ntp_record(self):
-        record_args = {"srvrecord": unicode("0 100 123 {}.".format(self.fqdn))}
-        api.Command.dnsrecord_add(unicode(self.domain), unicode('_ntp._udp'),
-                                  **record_args)
 
     def __setup_reverse_zone(self):
         # Always use force=True as named is not set up yet
@@ -987,6 +996,9 @@ class BindInstance(service.Service):
         named_fd.write(named_txt)
         named_fd.close()
 
+        named_add_ext_conf_file(paths.NAMED_CUSTOM_CFG_SRC,
+                                paths.NAMED_CUSTOM_CONFIG)
+
         if self.no_dnssec_validation:
             # disable validation
             named_conf_set_directive("dnssec-validation", "no",
@@ -1040,11 +1052,6 @@ class BindInstance(service.Service):
             # python DNS might have global resolver cached in this variable
             # we have to re-initialize it because resolv.conf has changed
             dns.resolver.reset_default_resolver()
-
-    def __disable_chroot(self):
-        result = ipautil.run(['control', 'bind-chroot'], capture_output=True)
-        self.sstore.backup_state('control', 'bind-chroot', result.output)
-        ipautil.run(['control', 'bind-chroot', 'disabled'])
 
     def __generate_rndc_key(self):
         installutils.check_entropy()
@@ -1234,17 +1241,13 @@ class BindInstance(service.Service):
         except Exception:
             logger.exception("Failed to unconfigure DNS resolver")
 
-        installutils.rmtree(paths.BIND_LDAP_DNS_IPA_WORKDIR)
+        ipautil.rmtree(paths.BIND_LDAP_DNS_IPA_WORKDIR)
 
         # disabled by default, by ldap_configure()
         if enabled:
             self.enable()
         else:
             self.disable()
-
-        value = self.sstore.restore_state('control', 'bind-chroot')
-        if value is not None:
-            ipautil.run(['control', 'bind-chroot', value])
 
         if running:
             self.restart()
@@ -1258,5 +1261,6 @@ class BindInstance(service.Service):
         if named_regular_running:
             self.named_regular.start()
 
-        installutils.remove_keytab(self.keytab)
-        installutils.remove_ccache(run_as=self.service_user)
+        ipautil.remove_file(paths.NAMED_CUSTOM_CONFIG)
+        ipautil.remove_keytab(self.keytab)
+        ipautil.remove_ccache(run_as=self.service_user)

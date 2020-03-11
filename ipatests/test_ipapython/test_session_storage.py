@@ -17,8 +17,7 @@ class test_session_storage:
     Test the session storage interface
     """
 
-    @pytest.fixture(autouse=True)
-    def session_storage_setup(self):
+    def setup(self):
         # TODO: set up test user and kinit to it
         # tmpdir = tempfile.mkdtemp(prefix = "tmp-")
         # os.environ['KRB5CCNAME'] = 'FILE:%s/ccache' % tmpdir

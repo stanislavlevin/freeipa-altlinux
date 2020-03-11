@@ -22,12 +22,13 @@ from ipapython.install import typing
 from ipapython.install.core import group, knob, extend_knob
 from ipaserver.install import cainstance, bindinstance, dsinstance
 from ipapython import ipautil, certdb
+from ipapython import ipaldap
 from ipapython.admintool import ScriptError
 from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaserver.install import installutils, certs
 from ipaserver.install.replication import replica_conn_check
-from ipalib import api, errors
+from ipalib import api, errors, x509
 from ipapython.dn import DN
 
 from . import conncheck, dogtag, cainstance
@@ -84,7 +85,7 @@ def lookup_ca_subject(api, subject_base):
         # installutils.default_ca_subject_dn is NOT used here in
         # case the default changes in the future.
         ca_subject = DN(('CN', 'Certificate Authority'), subject_base)
-    return six.text_type(ca_subject)
+    return str(ca_subject)
 
 
 def set_subject_base_in_config(subject_base):
@@ -161,7 +162,7 @@ def install_check(standalone, replica_config, options):
         _api = api if standalone else options._remote_api
 
         # for replica-install the knobs cannot be written, hence leading '_'
-        options._subject_base = six.text_type(replica_config.subject_base)
+        options._subject_base = str(replica_config.subject_base)
         options._ca_subject = lookup_ca_subject(_api, options._subject_base)
 
     if replica_config is not None and not replica_config.setup_ca:
@@ -215,8 +216,7 @@ def install_check(standalone, replica_config, options):
                 paths.ROOT_IPA_CSR)
 
         if not options.external_ca_type:
-            options.external_ca_type = \
-                cainstance.ExternalCAType.GENERIC.value
+            options.external_ca_type = x509.ExternalCAType.GENERIC.value
 
         if options.external_ca_profile is not None:
             # check that profile is valid for the external ca type
@@ -240,7 +240,7 @@ def install_check(standalone, replica_config, options):
 
     if standalone:
         dirname = dsinstance.config_dirname(
-            installutils.realm_to_serverid(realm_name))
+            ipaldap.realm_to_serverid(realm_name))
         cadb = certs.CertDB(realm_name, nssdir=paths.PKI_TOMCAT_ALIAS_DIR,
                             subject_base=options._subject_base)
         dsdb = certs.CertDB(
@@ -328,25 +328,32 @@ def install_step_0(standalone, replica_config, options, custodia):
         'certmap.conf', 'subject_base', str(subject_base))
     dsinstance.write_certmap_conf(realm_name, ca_subject)
 
+    # use secure ldaps when installing a replica or upgrading to CA-ful
+    # In both cases, 389-DS is already configured to have a trusted cert.
+    use_ldaps = standalone or replica_config is not None
+
     ca = cainstance.CAInstance(
         realm=realm_name, host_name=host_name, custodia=custodia
     )
-    ca.configure_instance(host_name, dm_password, dm_password,
-                          subject_base=subject_base,
-                          ca_subject=ca_subject,
-                          ca_signing_algorithm=ca_signing_algorithm,
-                          ca_type=ca_type,
-                          external_ca_profile=external_ca_profile,
-                          csr_file=csr_file,
-                          cert_file=cert_file,
-                          cert_chain_file=cert_chain_file,
-                          pkcs12_info=pkcs12_info,
-                          master_host=master_host,
-                          master_replication_port=master_replication_port,
-                          ra_p12=ra_p12,
-                          ra_only=ra_only,
-                          promote=promote,
-                          use_ldaps=standalone)
+    ca.configure_instance(
+        host_name, dm_password, dm_password,
+        subject_base=subject_base,
+        ca_subject=ca_subject,
+        ca_signing_algorithm=ca_signing_algorithm,
+        ca_type=ca_type,
+        external_ca_profile=external_ca_profile,
+        csr_file=csr_file,
+        cert_file=cert_file,
+        cert_chain_file=cert_chain_file,
+        pkcs12_info=pkcs12_info,
+        master_host=master_host,
+        master_replication_port=master_replication_port,
+        ra_p12=ra_p12,
+        ra_only=ra_only,
+        promote=promote,
+        use_ldaps=use_ldaps,
+        pki_config_override=options.pki_config_override,
+    )
 
 
 def install_step_1(standalone, replica_config, options, custodia):
@@ -374,7 +381,7 @@ def install_step_1(standalone, replica_config, options, custodia):
     #
     ca.setup_lightweight_ca_key_retrieval()
 
-    serverid = installutils.realm_to_serverid(realm_name)
+    serverid = ipaldap.realm_to_serverid(realm_name)
 
     if standalone and replica_config is None:
         dirname = dsinstance.config_dirname(serverid)
@@ -419,8 +426,8 @@ def install_step_1(standalone, replica_config, options, custodia):
 def uninstall():
     ca_instance = cainstance.CAInstance(api.env.realm)
     ca_instance.stop_tracking_certificates()
-    installutils.remove_file(paths.RA_AGENT_PEM)
-    installutils.remove_file(paths.RA_AGENT_KEY)
+    ipautil.remove_file(paths.RA_AGENT_PEM)
+    ipautil.remove_file(paths.RA_AGENT_KEY)
     if ca_instance.is_configured():
         ca_instance.uninstall()
 
@@ -470,13 +477,11 @@ class CAInstallInterface(dogtag.DogtagInstallInterface,
     external_ca = master_install_only(external_ca)
 
     external_ca_type = knob(
-        cainstance.ExternalCAType, None,
-        description="Type of the external CA",
-    )
+        x509.ExternalCAType, None, description="Type of the external CA")
     external_ca_type = master_install_only(external_ca_type)
 
     external_ca_profile = knob(
-        type=cainstance.ExternalCAProfile,
+        type=x509.ExternalCAProfile,
         default=None,
         description=(
             "Specify the certificate profile/template to use at the "

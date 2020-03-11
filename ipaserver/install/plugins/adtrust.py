@@ -1,16 +1,19 @@
 # Copyright (C) 2012-2019  FreeIPA Contributors see COPYING for license
 
-from __future__ import absolute_import
 import logging
+from collections import namedtuple
+from textwrap import dedent
 
 from ipalib import Registry, errors
 from ipalib import Updater
 from ipapython.dn import DN
 from ipapython import ipautil
 from ipaplatform.paths import paths
+from ipaserver.install import service
 from ipaserver.install import sysupgrade
 from ipaserver.install.adtrustinstance import (
     ADTRUSTInstance, map_Guests_to_nobody)
+
 from ipaserver.dcerpc_common import TRUST_BIDIRECTIONAL
 
 try:
@@ -23,11 +26,16 @@ except ImportError:
     def ndr_unpack(x):
         raise NotImplementedError
 
+    drsblobs = None
+
 logger = logging.getLogger(__name__)
 
 register = Registry()
 
 DEFAULT_ID_RANGE_SIZE = 200000
+trust_read_keys_template = \
+    ["cn=adtrust agents,cn=sysaccounts,cn=etc,{basedn}",
+     "cn=trust admins,cn=groups,cn=accounts,{basedn}"]
 
 
 @register()
@@ -575,8 +583,15 @@ class update_tdo_to_new_layout(Updater):
                     'krbprincipalkey')
                 entry_data['krbextradata'] = en.single_value.get(
                     'krbextradata')
-                entry_data['ipaAllowedToPerform;read_keys'] = en.get(
-                    'ipaAllowedToPerform;read_keys', [])
+                read_keys = en.get('ipaAllowedToPerform;read_keys', [])
+                if not read_keys:
+                    # Old style, no ipaAllowedToPerform;read_keys in the entry,
+                    # use defaults that ipasam should have set when creating a
+                    # trust
+                    read_keys = list(map(
+                        lambda x: x.format(basedn=self.api.env.basedn),
+                        trust_read_keys_template))
+                entry_data['ipaAllowedToPerform;read_keys'] = read_keys
 
         entry.update(entry_data)
         try:
@@ -620,6 +635,10 @@ class update_tdo_to_new_layout(Updater):
         # First, see if trusts are enabled on the server
         if not self.api.Command.adtrust_is_enabled()['result']:
             logger.debug('AD Trusts are not enabled on this server')
+            return False, []
+
+        # If we have no Samba bindings, this master is not a trust controller
+        if drsblobs is None:
             return False, []
 
         ldap = self.api.Backend.ldap2
@@ -715,5 +734,206 @@ class update_tdo_to_new_layout(Updater):
                                    flags=self.KRB_PRINC_CREATE_DEFAULT |
                                    self.KRB_PRINC_CREATE_AGENT_PERMISSION |
                                    self.KRB_PRINC_CREATE_DISABLED)
+
+        return False, []
+
+
+KeyEntry = namedtuple('KeyEntry',
+                      ['kvno', 'principal', 'etype', 'key'])
+
+
+@register()
+class update_host_cifs_keytabs(Updater):
+    """Synchronize host keytab and Samba keytab
+
+    Samba needs access to host/domain.controller principal keys to allow
+    validation of DCE RPC requests sent by domain members since those use a
+    service ticket to host/domain.controller principal because in Active
+    Directory service keys are the same as the machine account credentials
+    and services are just aliases to the machine account object.
+    """
+
+    host_princ_template = "host/{master}@{realm}"
+    valid_etypes = ['aes256-cts-hmac-sha1-96', 'aes128-cts-hmac-sha1-96']
+
+    def extract_key_refs(self, keytab):
+        host_princ = self.host_princ_template.format(
+            master=self.api.env.host, realm=self.api.env.realm)
+        result = ipautil.run([paths.KLIST, "-eK", "-k", keytab],
+                             capture_output=True, raiseonerr=False,
+                             nolog_output=True)
+        if result.returncode != 0:
+            return None
+
+        keys_to_sync = []
+        for l in result.output.splitlines():
+            if (host_princ in l and any(e in l for e in self.valid_etypes)):
+
+                els = l.split()
+                els[-2] = els[-2].strip('()')
+                els[-1] = els[-1].strip('()')
+                keys_to_sync.append(KeyEntry._make(els))
+
+        return keys_to_sync
+
+    def copy_key(self, keytab, keyentry):
+        # keyentry.key is a hex value of the actual key
+        # prefixed with 0x, as produced by klist -K -k.
+        # However, ktutil accepts hex value without 0x, so
+        # we should strip first two characters.
+        stdin = dedent("""\
+        rkt {keytab}
+        addent -key -p {principal} -k {kvno} -e {etype}
+        {key}
+        wkt {keytab}
+        """).format(keytab=keytab, principal=keyentry.principal,
+                    kvno=keyentry.kvno, etype=keyentry.etype,
+                    key=keyentry.key[2:])
+
+        result = ipautil.run([paths.KTUTIL], stdin=stdin, raiseonerr=False,
+                             umask=0o077, nolog_output=True)
+
+        if result.returncode != 0:
+            logger.warning('Unable to update %s with new keys', keytab)
+
+    def execute(self, **options):
+        # First, see if trusts are enabled on the server
+        if not self.api.Command.adtrust_is_enabled()['result']:
+            logger.debug('AD Trusts are not enabled on this server')
+            return False, []
+
+        # Extract keys from the host and samba keytabs
+        hostkeys = self.extract_key_refs(paths.KRB5_KEYTAB)
+        cifskeys = self.extract_key_refs(paths.SAMBA_KEYTAB)
+        if any([hostkeys is None, cifskeys is None]):
+            logger.warning('Either %s or %s are missing or unreadable',
+                           paths.KRB5_KEYTAB, paths.SAMBA_KEYTAB)
+            return False, []
+
+        # If there are missing host keys in the samba keytab, copy them over
+        # Also copy those keys that differ in the content and/or KVNO
+        for hostkey in hostkeys:
+            copied = False
+            uptodate = False
+            for cifskey in cifskeys:
+                if all([cifskey.principal == hostkey.principal,
+                        cifskey.etype == hostkey.etype]):
+                    if any([cifskey.key != hostkey.key,
+                            cifskey.kvno != hostkey.kvno]):
+                        self.copy_key(paths.SAMBA_KEYTAB, hostkey)
+                        copied = True
+                        break
+                    uptodate = True
+            if not (copied or uptodate):
+                self.copy_key(paths.SAMBA_KEYTAB, hostkey)
+
+        return False, []
+
+
+@register()
+class update_tdo_default_read_keys_permissions(Updater):
+    trust_filter = \
+        "(&(objectClass=krbPrincipal)(krbPrincipalName=krbtgt/{nbt}@*))"
+
+    def execute(self, **options):
+        ldap = self.api.Backend.ldap2
+
+        # First, see if trusts are enabled on the server
+        if not self.api.Command.adtrust_is_enabled()['result']:
+            logger.debug('AD Trusts are not enabled on this server')
+            return False, []
+
+        result = self.api.Command.trustconfig_show()['result']
+        our_nbt_name = result.get('ipantflatname', [None])[0]
+        if not our_nbt_name:
+            return False, []
+
+        trusts_dn = self.api.env.container_adtrusts + self.api.env.basedn
+        trust_filter = self.trust_filter.format(nbt=our_nbt_name)
+
+        # We might be in a situation when no trusts exist yet
+        # In such case there is nothing to upgrade but we have to catch
+        # an exception or it will abort the whole upgrade process
+        try:
+            tdos = ldap.get_entries(
+                base_dn=trusts_dn,
+                scope=ldap.SCOPE_SUBTREE,
+                filter=trust_filter,
+                attrs_list=['*'])
+        except errors.EmptyResult:
+            tdos = []
+
+        for tdo in tdos:
+            updates = dict()
+            oc = tdo.get('objectClass', [])
+            if 'ipaAllowedOperations' not in oc:
+                updates['objectClass'] = oc + ['ipaAllowedOperations']
+
+            read_keys = tdo.get('ipaAllowedToPerform;read_keys', [])
+            if not read_keys:
+                read_keys_values = list(map(
+                    lambda x: x.format(basedn=self.api.env.basedn),
+                    trust_read_keys_template))
+                updates['ipaAllowedToPerform;read_keys'] = read_keys_values
+
+            tdo.update(updates)
+            try:
+                ldap.update_entry(tdo)
+            except errors.EmptyModlist:
+                logger.debug("No update was required for TDO %s",
+                             tdo.single_value.get('krbCanonicalName'))
+
+        return False, []
+
+
+@register()
+class update_adtrust_agents_members(Updater):
+    """ Ensure that each adtrust agent is a member of the adtrust agents group
+
+    cn=adtrust agents,cn=sysaccounts,cn=etc,$BASEDN must contain:
+    - member: krbprincipalname=cifs/master@realm,cn=services,cn=accounts,base
+    - member: fqdn=master,cn=computers,cn=accounts,base
+    """
+    def execute(self, **options):
+        ldap = self.api.Backend.ldap2
+
+        # First, see if trusts are enabled on the server
+        if not self.api.Command.adtrust_is_enabled()['result']:
+            logger.debug('AD Trusts are not enabled on this server')
+            return False, []
+
+        agents_dn = DN(
+            ('cn', 'adtrust agents'), ('cn', 'sysaccounts'),
+            ('cn', 'etc'), self.api.env.basedn)
+
+        try:
+            agents_entry = ldap.get_entry(agents_dn, ['member'])
+        except errors.NotFound:
+            logger.error("No adtrust agents group found")
+            return False, []
+
+        # Build a list of agents from the cifs/.. members
+        agents_list = []
+        members = agents_entry.get('member', [])
+        suffix = '@{}'.format(self.api.env.realm).lower()
+
+        for amember in members:
+            if amember[0].attr.lower() == 'krbprincipalname':
+                # Extract krbprincipalname=cifs/hostname@realm from the DN
+                value = amember[0].value
+                if (value.lower().startswith('cifs/') and
+                        value.lower().endswith(suffix)):
+                    # 5 = length of 'cifs/'
+                    hostname = value[5:-len(suffix)]
+                    agents_list.append(DN(('fqdn', hostname),
+                                       self.api.env.container_host,
+                                       self.api.env.basedn))
+
+        # Add the fqdn=hostname... to the group
+        service.add_principals_to_group(
+            ldap,
+            agents_dn,
+            "member",
+            agents_list)
 
         return False, []

@@ -41,13 +41,13 @@ external_sid1 = u'S-1-1-123456-789-1'
 
 
 @pytest.fixture(scope='class')
-def group(request, xmlrpc_setup):
+def group(request):
     tracker = GroupTracker(name=u'testgroup1', description=u'Test desc1')
     return tracker.make_fixture(request)
 
 
 @pytest.fixture(scope='class')
-def group2(request, xmlrpc_setup):
+def group2(request):
     tracker = GroupTracker(name=u'testgroup2', description=u'Test desc2')
     return tracker.make_fixture(request)
 
@@ -65,7 +65,7 @@ def managed_group(request, user):
 
 
 @pytest.fixture(scope='class')
-def user(request, xmlrpc_setup):
+def user(request):
     tracker = UserTracker(name=u'user1', givenname=u'Test', sn=u'User1')
     return tracker.make_fixture(request)
 
@@ -85,7 +85,7 @@ def user_npg2(request, group):
 
 
 @pytest.fixture(scope='class')
-def admins(request, xmlrpc_setup):
+def admins(request):
     # Track the admins group
     tracker = GroupTracker(
         name=u'admins', description=u'Account administrators group'
@@ -97,7 +97,7 @@ def admins(request, xmlrpc_setup):
 
 
 @pytest.fixture(scope='class')
-def trustadmins(request, xmlrpc_setup):
+def trustadmins(request):
     # Track the 'trust admins' group
     tracker = GroupTracker(
         name=u'trust admins', description=u'Trusts administrators group'
@@ -757,3 +757,35 @@ class TestTrustAdminGroup(XMLRPC_test):
                           key=trustadmins.cn,
                           reason='Cannot support external non-IPA members')):
             command()
+
+
+@pytest.mark.tier1
+class TestGroupMemberManager(XMLRPC_test):
+    def test_add_member_manager_user(self, user, group):
+        user.ensure_exists()
+        group.ensure_exists()
+        group.add_member_manager({"user": user.uid})
+
+    def test_remove_member_manager_user(self, user, group):
+        user.ensure_exists()
+        group.ensure_exists()
+        group.remove_member_manager({"user": user.uid})
+
+    def test_add_member_manager_group(self, group, group2):
+        group.ensure_exists()
+        group2.ensure_exists()
+        group.add_member_manager({"group": group2.cn})
+
+    def test_remove_member_manager_group(self, group, group2):
+        group.ensure_exists()
+        group2.ensure_exists()
+        group.remove_member_manager({"group": group2.cn})
+
+    def test_member_manager_delete_user(self, user, group):
+        user.ensure_exists()
+        group.ensure_exists()
+        group.add_member_manager({"user": user.uid})
+        user.delete()
+        # deleting a user also deletes member manager reference
+        group.attrs.pop("membermanager_user")
+        group.retrieve()

@@ -4,6 +4,7 @@ from __future__ import print_function, absolute_import
 
 import contextlib
 import os
+import secrets
 from base64 import b64encode
 
 
@@ -13,7 +14,6 @@ from custodia.message.kem import KEMClient, KEY_USAGE_SIG, KEY_USAGE_ENC
 from jwcrypto.common import json_decode
 from jwcrypto.jwk import JWK
 from ipalib.krb_utils import krb5_format_service_principal_name
-from ipaserver.install.installutils import realm_to_ldapi_uri
 from ipaserver.secrets.kem import IPAKEMKeys
 from ipaserver.secrets.store import IPASecStore
 from ipaplatform.paths import paths
@@ -35,7 +35,7 @@ def ccache_env(ccache):
             os.environ['KRB5CCNAME'] = orig_ccache
 
 
-class CustodiaClient():
+class CustodiaClient:
     def __init__(self, client_service, keyfile, keytab, server, realm,
                  ldap_uri=None, auth_type=None):
         if client_service.endswith(realm) or "@" not in client_service:
@@ -47,20 +47,14 @@ class CustodiaClient():
         self.keytab = keytab
         self.server = server
         self.realm = realm
-        self.ldap_uri = ldap_uri or realm_to_ldapi_uri(realm)
+        self.ldap_uri = ldap_uri
         self.auth_type = auth_type
         self.service_name = gssapi.Name(
             'HTTP@{}'.format(server), gssapi.NameType.hostbased_service
         )
-
-        config = {'ldap_uri': self.ldap_uri}
-        if auth_type is not None:
-            config['auth_type'] = auth_type
-        self.keystore = IPASecStore(config)
-
+        self.keystore = IPASecStore()
         # use in-process MEMORY ccache. Handler process don't need a TGT.
-        token = b64encode(os.urandom(8)).decode('ascii')
-        self.ccache = 'MEMORY:Custodia_{}'.format(token)
+        self.ccache = 'MEMORY:Custodia_{}'.format(secrets.token_hex())
 
         with ccache_env(self.ccache):
             # Init creds immediately to make sure they are valid.  Creds

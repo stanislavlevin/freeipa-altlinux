@@ -28,6 +28,7 @@ import random
 import math
 import os
 import sys
+import errno
 import copy
 import shutil
 import socket
@@ -40,13 +41,13 @@ import grp
 from contextlib import contextmanager
 import locale
 import collections
+import urllib
 
 from dns import resolver, reversename
 from dns.exception import DNSException
 
 import six
 from six.moves import input
-from six.moves import urllib
 
 try:
     import netifaces
@@ -54,6 +55,7 @@ except ImportError:
     netifaces = None
 
 from ipapython.dn import DN
+from ipaplatform.paths import paths
 
 logger = logging.getLogger(__name__)
 
@@ -389,7 +391,8 @@ class CalledProcessError(subprocess.CalledProcessError):
 def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
         capture_output=False, skip_output=False, cwd=None,
         runas=None, suplementary_groups=[],
-        capture_error=False, encoding=None, redirect_output=False, umask=None):
+        capture_error=False, encoding=None, redirect_output=False,
+        umask=None, nolog_output=False, nolog_error=False):
     """
     Execute an external command.
 
@@ -421,6 +424,8 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
         suplementary groups for subporcess.
         The option runas must be specified together with this option.
     :param capture_error: Capture stderr
+    :param nolog_output: do not log stdout even if it is being captured
+    :param nolog_error: do not log stderr even if it is being captured
     :param encoding: For Python 3, the encoding to use for output,
         error_output, and (if it's not bytes) stdin.
         If None, the current encoding according to locale is used.
@@ -453,7 +458,7 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
     p_out = None
     p_err = None
 
-    if isinstance(nolog, six.string_types):
+    if isinstance(nolog, str):
         # We expect a tuple (or list, or other iterable) of nolog strings.
         # Passing just a single string is bad: strings are iterable, so this
         # would result in every individual character of that string being
@@ -510,14 +515,18 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
             for group, gid in zip(suplementary_groups, suplementary_gids):
                 logger.debug('suplementary_group=%s (GID %d)', group, gid)
 
-    def preexec_fn():
-        if runas is not None:
-            os.setgroups(suplementary_gids)
-            os.setregid(pent.pw_gid, pent.pw_gid)
-            os.setreuid(pent.pw_uid, pent.pw_uid)
+    if runas is not None or umask is not None:
+        # preexec function is not supported in WSGI environment
+        def preexec_fn():
+            if runas is not None:
+                os.setgroups(suplementary_gids)
+                os.setregid(pent.pw_gid, pent.pw_gid)
+                os.setreuid(pent.pw_uid, pent.pw_uid)
 
-        if umask:
-            os.umask(umask)
+            if umask is not None:
+                os.umask(umask)
+    else:
+        preexec_fn = None
 
     try:
         # pylint: disable=subprocess-popen-preexec-fn
@@ -549,15 +558,24 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
                                        errors='replace')
         else:
             output_log = stdout
+
         if six.PY3:
             error_log = stderr.decode(locale.getpreferredencoding(),
                                       errors='replace')
         else:
             error_log = stderr
+
         output_log = nolog_replace(output_log, nolog)
-        logger.debug('stdout=%s', output_log)
+        if nolog_output:
+            logger.debug('stdout=<REDACTED>')
+        else:
+            logger.debug('stdout=%s', output_log)
+
         error_log = nolog_replace(error_log, nolog)
-        logger.debug('stderr=%s', error_log)
+        if nolog_error:
+            logger.debug('stderr=<REDACTED>')
+        else:
+            logger.debug('stderr=%s', error_log)
 
     if capture_output:
         if six.PY2:
@@ -591,7 +609,7 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
 def nolog_replace(string, nolog):
     """Replace occurences of strings given in `nolog` with XXXXXXXX"""
     for value in nolog:
-        if not value or not isinstance(value, six.string_types):
+        if not value or not isinstance(value, str):
             continue
 
         quoted = urllib.parse.quote(value)
@@ -960,7 +978,7 @@ def user_input(prompt, default = None, allow_empty = True):
                     return ''
                 raise RuntimeError("Failed to get user input")
 
-    if isinstance(default, six.string_types):
+    if isinstance(default, str):
         while True:
             try:
                 ret = input("%s [%s]: " % (prompt, default))
@@ -1452,14 +1470,14 @@ if six.PY2:
         Decode argument using the file system encoding, as returned by
         `sys.getfilesystemencoding()`.
         """
-        if isinstance(value, six.binary_type):
+        if isinstance(value, bytes):
             return value.decode(sys.getfilesystemencoding())
-        elif isinstance(value, six.text_type):
+        elif isinstance(value, str):
             return value
         else:
             raise TypeError("expect {0} or {1}, not {2}".format(
-                six.binary_type.__name__,
-                six.text_type.__name__,
+                bytes.__name__,
+                str.__name__,
                 type(value).__name__))
 else:
     fsdecode = os.fsdecode  #pylint: disable=no-member
@@ -1535,7 +1553,7 @@ def decode_json(data):
         # default
         return 'utf-8'
 
-    if isinstance(data, six.text_type):
+    if isinstance(data, str):
         return data
 
     return data.decode(detect_encoding(data), 'surrogatepass')
@@ -1571,3 +1589,61 @@ class APIVersion(tuple):
     @property
     def minor(self):
         return self[1]
+
+
+def remove_keytab(keytab_path):
+    """
+    Remove Kerberos keytab and issue a warning if the procedure fails
+
+    :param keytab_path: path to the keytab file
+    """
+    try:
+        logger.debug("Removing service keytab: %s", keytab_path)
+        os.remove(keytab_path)
+    except OSError as e:
+        if e.errno != errno.ENOENT:
+            logger.warning("Failed to remove Kerberos keytab '%s': %s",
+                           keytab_path, e)
+            logger.warning("You may have to remove it manually")
+
+
+def remove_ccache(ccache_path=None, run_as=None):
+    """
+    remove Kerberos credential cache, essentially a wrapper around kdestroy.
+
+    :param ccache_path: path to the ccache file
+    :param run_as: run kdestroy as this user
+    """
+    logger.debug("Removing service credentials cache")
+    kdestroy_cmd = [paths.KDESTROY]
+    if ccache_path is not None:
+        logger.debug("Ccache path: '%s'", ccache_path)
+        kdestroy_cmd.extend(['-c', ccache_path])
+
+    try:
+        run(kdestroy_cmd, runas=run_as, env={})
+    except CalledProcessError as e:
+        logger.warning(
+            "Failed to clear Kerberos credentials cache: %s", e)
+
+
+def remove_file(filename):
+    """Remove a file and log any exceptions raised.
+    """
+    try:
+        os.unlink(filename)
+    except Exception as e:
+        # ignore missing file
+        if getattr(e, 'errno', None) != errno.ENOENT:
+            logger.error('Error removing %s: %s', filename, str(e))
+
+
+def rmtree(path):
+    """
+    Remove a directory structure and log any exceptions raised.
+    """
+    try:
+        if os.path.exists(path):
+            shutil.rmtree(path)
+    except Exception as e:
+        logger.error('Error removing %s: %s', path, str(e))

@@ -24,9 +24,7 @@ import os
 import tempfile
 import shutil
 
-# pylint: disable=import-error
-from six.moves.urllib.parse import urlsplit
-# pylint: enable=import-error
+from urllib.parse import urlsplit
 
 from ipalib.install import certmonger, certstore, sysrestore
 from ipalib.install.kinit import kinit_keytab
@@ -72,8 +70,7 @@ def run_with_args(api):
 
     """
     server = urlsplit(api.env.jsonrpc_uri).hostname
-    ldap_uri = ipaldap.get_ldap_uri(server)
-    ldap = ipaldap.LDAPClient(ldap_uri)
+    ldap = ipaldap.LDAPClient.from_hostname_secure(server)
 
     tmpdir = tempfile.mkdtemp(prefix="tmp-")
     ccache_name = os.path.join(tmpdir, 'ccache')
@@ -107,7 +104,7 @@ def run_with_args(api):
             os.environ['KRB5CCNAME'] = old_krb5ccname
         shutil.rmtree(tmpdir)
 
-    server_fstore = sysrestore.FileStore()
+    server_fstore = sysrestore.FileStore(paths.SYSRESTORE)
     if server_fstore.has_files():
         update_server(certs)
         try:

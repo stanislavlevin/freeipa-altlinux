@@ -19,13 +19,13 @@ AM_INIT_AUTOMAKE([foreign 1.9 tar-pax])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
 
 dnl enable C11 extensions for features like memset_s()
-CFLAGS+=" -D__STDC_WANT_LIB_EXT1__=1"
+CFLAGS="$CFLAGS -D__STDC_WANT_LIB_EXT1__=1"
 dnl enable features like htole16()
-CFLAGS+=" -D_DEFAULT_SOURCE=1"
+CFLAGS="$CFLAGS -D_DEFAULT_SOURCE=1"
 dnl Enable features like strndup()
-CFLAGS+=" -D_POSIX_C_SOURCE=200809L"
+CFLAGS="$CFLAGS -D_POSIX_C_SOURCE=200809L"
 dnl fail hard when includes statements are missing
-CFLAGS+=" -Werror=implicit-function-declaration"
+CFLAGS="$CFLAGS -Werror=implicit-function-declaration"
 
 AC_PROG_CC_C99
 AC_DISABLE_STATIC
@@ -105,9 +105,8 @@ dnl ---------------------------------------------------------------------------
 PKG_CHECK_MODULES([CRYPTO], [libcrypto])
 
 dnl ---------------------------------------------------------------------------
-dnl - Check for Python
+dnl - Check for Python 3
 dnl - Check for platform Python interpreter
-dnl - Check for Python 2/3 for devcheck
 dnl ---------------------------------------------------------------------------
 
 AS_IF([test "x${PYTHON}" != "x"], [
@@ -116,34 +115,15 @@ AS_IF([test "x${PYTHON}" != "x"], [
 
 AC_MSG_NOTICE([Checking for platform Python])
 AC_PATH_PROG(PLATFORM_PYTHON, platform-python, [], [/usr/libexec$PATH_SEPARATOR$PATH])
-AC_MSG_NOTICE([Checking for Python 3])
-AC_PATH_PROGS(PYTHON3, python3)
 
 dnl Only use platform-python when there is no override
 if test \( "x${PLATFORM_PYTHON}" != "x" -a "x${PYTHON}" = "x" \); then
     dnl platform-python executable detected (it's always Python 3)
     AC_MSG_NOTICE([Using platform Python as default Python 3 interpreter])
-    PYTHON3=${PLATFORM_PYTHON}
     PYTHON=${PLATFORM_PYTHON}
 fi
 
-AC_SUBST([PYTHON3])
-AM_CONDITIONAL([WITH_PYTHON3], [test "x${PYTHON3}" != "x"])
-
-AC_MSG_NOTICE([Checking for Python 2])
-AC_PATH_PROG(PYTHON2, python2)
-AC_SUBST([PYTHON2])
-AM_CONDITIONAL([WITH_PYTHON2], [test "x${PYTHON2}" != "x"])
-
-if test \( "x${PYTHON3}" = "x" -o "x${PYTHON}" != "x" \); then
-    dnl Python 3 is not available *or* user has set PYTHON variable.
-    dnl Accept Python >= 2.7 as default Python. We also accept any Python 3
-    dnl version from PYTHON environment variable.
-    AM_PATH_PYTHON(2.7)
-elif test "x${PYTHON3}" != "x"; then
-    dnl Found Python 3, but no user override. Use Python >= 3.6 as default.
-    AM_PATH_PYTHON(3.6)
-fi
+AM_PATH_PYTHON(3.6)
 
 
 dnl ---------------------------------------------------------------------------
@@ -251,6 +231,9 @@ AM_COND_IF([BUILD_IPA_CERTAUTH_PLUGIN], [
                [AC_MSG_WARN([Cannot build IPA KDB certauth plugin])])
 ])
 
+AM_CONDITIONAL([BUILD_IPA_KDCPOLICY_PLUGIN],
+               [test x$have_kdcpolicy_plugin = xyes])
+
 dnl ---------------------------------------------------------------------------
 dnl - Check for program paths
 dnl ---------------------------------------------------------------------------
@@ -337,11 +320,6 @@ if test "x${IPAPLATFORM}" == "xdebian"; then
     ODS_USER="opendnssec"
     # see https://www.debian.org/doc/packaging-manuals/python-policy/ap-packaging_tools.html
     PYTHON_INSTALL_EXTRA_OPTIONS="--install-layout=deb"
-elif test "x${IPAPLATFORM}" == "xaltlinux"; then
-    KRB5KDC_SERVICE="krb5kdc.service"
-    NAMED_GROUP="named"
-    ODS_USER="_opendnssec"
-    PYTHON_INSTALL_EXTRA_OPTIONS=""
 else
     KRB5KDC_SERVICE="krb5kdc.service"
     NAMED_GROUP="named"
@@ -564,6 +542,7 @@ AC_CONFIG_FILES([
     init/Makefile
     install/Makefile
     install/certmonger/Makefile
+    install/custodia/Makefile
     install/html/Makefile
     install/migration/Makefile
     install/share/Makefile
@@ -621,9 +600,7 @@ echo "
         source code location:     ${srcdir}
         compiler:                 ${CC}
         cflags:                   ${CFLAGS}
-        Default Python:           ${PYTHON} (${PYTHON_VERSION})
-        Python 2:                 ${PYTHON2}
-        Python 3:                 ${PYTHON3}
+        Python:                   ${PYTHON} (${PYTHON_VERSION})
         pylint:                   ${PYLINT}
         jslint:                   ${JSLINT}
         LDAP libs:                ${LDAP_LIBS}

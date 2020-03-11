@@ -29,12 +29,12 @@ from ipatests.test_xmlrpc.tracker.host_plugin import HostTracker
 from ipatests.test_xmlrpc.tracker.user_plugin import UserTracker
 from ipatests.test_xmlrpc.xmlrpc_test import XMLRPC_test
 
-host_fqdn = 'iptest.{}'.format(api.env.domain)
-host_princ = 'host/{}'.format(host_fqdn)
-host_ptr = '{}.'.format(host_fqdn)
+host_fqdn = f'iptest.{api.env.domain}'
+host_princ = f'host/{host_fqdn}'
+host_ptr = f'{host_fqdn}.'
 
-other_fqdn = 'other.{}'.format(api.env.domain)
-other_ptr = '{}.'.format(other_fqdn)
+other_fqdn = f'other.{api.env.domain}'
+other_ptr = f'{other_fqdn}.'
 
 ipv4_address = '169.254.0.42'
 ipv4_revzone_s = '0.254.169.in-addr.arpa.'
@@ -81,42 +81,36 @@ def _record_setup(host, zone, record, **kwargs):
 
 @yield_fixture(scope='class')
 def ipv4_revzone(host):
-    for x in _zone_setup(host, ipv4_revzone_s):
-        yield x
+    yield from _zone_setup(host, ipv4_revzone_s)
 
 
 @yield_fixture(scope='class')
 def ipv6_revzone(host):
-    for x in _zone_setup(host, ipv6_revzone_s):
-        yield x
+    yield from _zone_setup(host, ipv6_revzone_s)
 
 
 @yield_fixture(scope='class')
 def ipv4_ptr(host, ipv4_revzone):
-    for x in _record_setup(
-            host, ipv4_revzone, ipv4_revrec_s, ptrrecord=host_ptr):
-        yield x
+    yield from _record_setup(
+        host, ipv4_revzone, ipv4_revrec_s, ptrrecord=host_ptr)
 
 
 @yield_fixture(scope='class')
 def ipv6_ptr(host, ipv6_revzone):
-    for x in _record_setup(
-            host, ipv6_revzone, ipv6_revrec_s, ptrrecord=host_ptr):
-        yield x
+    yield from _record_setup(
+        host, ipv6_revzone, ipv6_revrec_s, ptrrecord=host_ptr)
 
 
 @yield_fixture(scope='class')
 def ipv4_a(host):
-    for x in _record_setup(
-            host, api.env.domain, 'iptest', arecord=ipv4_address):
-        yield x
+    yield from _record_setup(
+        host, api.env.domain, 'iptest', arecord=ipv4_address)
 
 
 @yield_fixture(scope='class')
 def ipv6_aaaa(host):
-    for x in _record_setup(
-            host, api.env.domain, 'iptest', aaaarecord=ipv6_address):
-        yield x
+    yield from _record_setup(
+        host, api.env.domain, 'iptest', aaaarecord=ipv6_address)
 
 
 @yield_fixture(scope='class')
@@ -126,31 +120,27 @@ def other_forward_records(host):
     the name "other.{domain}.".
 
     """
-    for x in _record_setup(
-            host, api.env.domain, 'other',
-            arecord=ipv4_address, aaaarecord=ipv6_address):
-        yield x
+    yield from _record_setup(
+        host, api.env.domain, 'other',
+        arecord=ipv4_address, aaaarecord=ipv6_address)
 
 
 @yield_fixture(scope='function')
 def ipv4_ptr_other(host, ipv4_revzone):
-    for x in _record_setup(
-            host, ipv4_revzone, ipv4_revrec_s, ptrrecord=other_ptr):
-        yield x
+    yield from _record_setup(
+        host, ipv4_revzone, ipv4_revrec_s, ptrrecord=other_ptr)
 
 
 @yield_fixture(scope='class')
 def cname1(host):
-    for x in _record_setup(
-            host, api.env.domain, 'cname1', cnamerecord='iptest'):
-        yield x
+    yield from _record_setup(
+        host, api.env.domain, 'cname1', cnamerecord='iptest')
 
 
 @yield_fixture(scope='class')
 def cname2(host):
-    for x in _record_setup(
-            host, api.env.domain, 'cname2', cnamerecord='cname1'):
-        yield x
+    yield from _record_setup(
+        host, api.env.domain, 'cname2', cnamerecord='cname1')
 
 
 @pytest.fixture(scope='module')
@@ -214,11 +204,11 @@ csr_iptest_other = csr([
     x509.IPAddress(ipaddress.ip_address(ipv4_address)),
 ])
 csr_cname1 = csr([
-    x509.DNSName('cname1.{}'.format(api.env.domain)),
+    x509.DNSName(f'cname1.{api.env.domain}'),
     x509.IPAddress(ipaddress.ip_address(ipv4_address)),
 ])
 csr_cname2 = csr([
-    x509.DNSName('cname2.{}'.format(api.env.domain)),
+    x509.DNSName(f'cname2.{api.env.domain}'),
     x509.IPAddress(ipaddress.ip_address(ipv4_address)),
 ])
 
@@ -416,8 +406,7 @@ class TestIPAddressPTRLoopback(XMLRPC_test):
     def test_host_exists(self, host):
         host.ensure_exists()
         host.run_command(
-            'host_add_principal', host.fqdn,
-            'host/other.{}'.format(api.env.domain))
+            'host_add_principal', host.fqdn, f'host/other.{api.env.domain}')
 
     def test_failure(self, host, ipv4_a, ipv4_ptr_other, csr_iptest_other):
         """The A and PTR records are not symmetric."""
@@ -451,11 +440,9 @@ class TestIPAddressCNAME(XMLRPC_test):
         # record fixtures, which have class scope
         host.ensure_exists()
         host.run_command(
-            'host_add_principal', host.fqdn,
-            'host/cname1.{}'.format(api.env.domain))
+            'host_add_principal', host.fqdn, f'host/cname1.{api.env.domain}')
         host.run_command(
-            'host_add_principal', host.fqdn,
-            'host/cname2.{}'.format(api.env.domain))
+            'host_add_principal', host.fqdn, f'host/cname2.{api.env.domain}')
 
     def test_one_level(self, host, csr_cname1):
         host.run_command('cert_request', csr_cname1, principal=host_princ)

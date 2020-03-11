@@ -20,7 +20,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
-import errno
 import logging
 import socket
 import getpass
@@ -34,29 +33,22 @@ import tempfile
 import shutil
 import traceback
 import textwrap
+import warnings
 from contextlib import contextmanager
+from configparser import ConfigParser as SafeConfigParser
+from configparser import NoOptionError
 
 from dns import resolver, rdatatype
 from dns.exception import DNSException
 import ldap
-import ldapurl
 import six
-# pylint: disable=import-error
-if six.PY3:
-    # The SafeConfigParser class has been renamed to ConfigParser in Py3
-    from configparser import ConfigParser as SafeConfigParser
-else:
-    from ConfigParser import SafeConfigParser
-from six.moves.configparser import NoOptionError
-# pylint: enable=import-error
 
 from ipalib.install import sysrestore
 from ipalib.install.kinit import kinit_password
 import ipaplatform
-from ipapython import ipautil, admintool, version
+from ipapython import ipautil, admintool, version, ipaldap
 from ipapython.admintool import ScriptError, SERVER_NOT_CONFIGURED  # noqa: E402
 from ipapython.certdb import EXTERNAL_CA_TRUST_FLAGS
-from ipapython.ipaldap import DIRMAN_DN, LDAPClient
 from ipalib.constants import MAXHOSTNAMELEN
 from ipalib.util import validate_hostname
 from ipalib import api, errors, x509
@@ -345,9 +337,9 @@ def validate_dm_password_ldap(password):
     Validate DM password by attempting to connect to LDAP. api.env has to
     contain valid ldap_uri.
     """
-    client = LDAPClient(api.env.ldap_uri, cacert=paths.IPA_CA_CRT)
+    client = ipaldap.LDAPClient(api.env.ldap_uri, cacert=paths.IPA_CA_CRT)
     try:
-        client.simple_bind(DIRMAN_DN, password)
+        client.simple_bind(ipaldap.DIRMAN_DN, password)
     except errors.ACIError:
         raise ValueError("Invalid Directory Manager password")
     else:
@@ -677,7 +669,7 @@ def check_server_configuration():
     Most convenient use case for the function is in install tools that require
     configured IPA for its function.
     """
-    server_fstore = sysrestore.FileStore()
+    server_fstore = sysrestore.FileStore(paths.SYSRESTORE)
     if not server_fstore.has_files():
         raise ScriptError("IPA is not configured on this system.",
                           rval=SERVER_NOT_CONFIGURED)
@@ -686,23 +678,24 @@ def check_server_configuration():
 def remove_file(filename):
     """Remove a file and log any exceptions raised.
     """
-    try:
-        os.unlink(filename)
-    except Exception as e:
-        # ignore missing file
-        if getattr(e, 'errno', None) != errno.ENOENT:
-            logger.error('Error removing %s: %s', filename, str(e))
+    warnings.warn(
+        "Use 'ipapython.ipautil.remove_file'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return ipautil.remove_file(filename)
 
 
 def rmtree(path):
     """
     Remove a directory structure and log any exceptions raised.
     """
-    try:
-        if os.path.exists(path):
-            shutil.rmtree(path)
-    except Exception as e:
-        logger.error('Error removing %s: %s', path, str(e))
+    warnings.warn(
+        "Use 'ipapython.ipautil.rmtree'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return ipautil.rmtree(path)
 
 
 def is_ipa_configured():
@@ -712,8 +705,8 @@ def is_ipa_configured():
     """
     installed = False
 
-    sstore = sysrestore.StateFile()
-    fstore = sysrestore.FileStore()
+    sstore = sysrestore.StateFile(paths.SYSRESTORE)
+    fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
     for module in IPA_MODULES:
         if sstore.has_state(module):
@@ -1119,14 +1112,23 @@ def check_version():
     else:
         raise UpgradeMissingVersionError("no data_version stored")
 
+
 def realm_to_serverid(realm_name):
-    return "-".join(realm_name.split("."))
+    warnings.warn(
+        "Use 'ipapython.ipaldap.realm_to_serverid'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return ipaldap.realm_to_serverid(realm_name)
 
 
 def realm_to_ldapi_uri(realm_name):
-    serverid = realm_to_serverid(realm_name)
-    socketname = paths.SLAPD_INSTANCE_SOCKET_TEMPLATE % (serverid,)
-    return 'ldapi://' + ldapurl.ldapUrlEscape(socketname)
+    warnings.warn(
+        "Use 'ipapython.ipaldap.realm_to_ldapi_uri'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return ipaldap.realm_to_ldapi_uri(realm_name)
 
 
 def check_creds(options, realm_name):
@@ -1347,14 +1349,12 @@ def remove_keytab(keytab_path):
 
     :param keytab_path: path to the keytab file
     """
-    try:
-        logger.debug("Removing service keytab: %s", keytab_path)
-        os.remove(keytab_path)
-    except OSError as e:
-        if e.errno != errno.ENOENT:
-            logger.warning("Failed to remove Kerberos keytab '%s': %s",
-                           keytab_path, e)
-            logger.warning("You may have to remove it manually")
+    warnings.warn(
+        "Use 'ipapython.ipautil.remove_keytab'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return ipautil.remove_keytab(keytab_path)
 
 
 def remove_ccache(ccache_path=None, run_as=None):
@@ -1364,17 +1364,12 @@ def remove_ccache(ccache_path=None, run_as=None):
     :param ccache_path: path to the ccache file
     :param run_as: run kdestroy as this user
     """
-    logger.debug("Removing service credentials cache")
-    kdestroy_cmd = [paths.KDESTROY]
-    if ccache_path is not None:
-        logger.debug("Ccache path: '%s'", ccache_path)
-        kdestroy_cmd.extend(['-c', ccache_path])
-
-    try:
-        ipautil.run(kdestroy_cmd, runas=run_as, env={})
-    except ipautil.CalledProcessError as e:
-        logger.warning(
-            "Failed to clear Kerberos credentials cache: %s", e)
+    warnings.warn(
+        "Use 'ipapython.ipautil.remove_ccache'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return ipautil.remove_ccache(ccache_path=ccache_path, run_as=run_as)
 
 
 def restart_dirsrv(instance_name="", capture_output=True):

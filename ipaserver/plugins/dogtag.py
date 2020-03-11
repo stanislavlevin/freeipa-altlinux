@@ -1208,6 +1208,7 @@ def parse_updateCRL_xml(doc):
 
     return response
 
+
 #-------------------------------------------------------------------------------
 
 from ipalib import Registry, errors, SkipPluginModule

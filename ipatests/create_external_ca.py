@@ -26,35 +26,52 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
 import datetime
-import six
 
 ISSUER_CN = 'example.test'
 
 
 class ExternalCA:
+    """Provide external CA for testing
     """
-    Provide external CA for testing
-    """
+
     def __init__(self, days=365, key_size=None):
         self.now = datetime.datetime.utcnow()
         self.delta = datetime.timedelta(days=days)
+        self.ca_key = None
+        self.ca_public_key = None
+        self.issuer = None
         self.key_size = key_size or 2048
 
-    def create_ca(self, cn=ISSUER_CN, path_length=None):
-        """Create root CA.
+    def create_ca_key(self):
+        """Create private and public key for CA
 
-        :returns: bytes -- Root CA in PEM format.
+        Note: The test still creates 2048 although IPA CA uses 3072 bit RSA
+        by default. This also tests that IPA supports an external signing CA
+        with weaker keys than the IPA base CA.
         """
         self.ca_key = rsa.generate_private_key(
             public_exponent=65537,
             key_size=self.key_size,
             backend=default_backend(),
         )
-
         self.ca_public_key = self.ca_key.public_key()
 
+    def sign(self, builder):
+        return builder.sign(
+            private_key=self.ca_key,
+            algorithm=hashes.SHA256(),
+            backend=default_backend(),
+        )
+
+    def create_ca(self, cn=ISSUER_CN, path_length=None, extensions=()):
+        """Create root CA.
+
+        :returns: bytes -- Root CA in PEM format.
+        """
+        if self.ca_key is None:
+            self.create_ca_key()
         subject = self.issuer = x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, six.text_type(cn)),
+            x509.NameAttribute(NameOID.COMMON_NAME, str(cn)),
         ])
 
         builder = x509.CertificateBuilder()
@@ -96,6 +113,9 @@ class ExternalCA:
                  ),
             critical=False,
         )
+
+        for extension in extensions:
+            builder = builder.add_extension(extension, critical=False)
 
         cert = builder.sign(self.ca_key, hashes.SHA256(), default_backend())
 
@@ -153,11 +173,7 @@ class ExternalCA:
             critical=True,
         )
 
-        cert = builder.sign(
-            private_key=self.ca_key,
-            algorithm=hashes.SHA256(),
-            backend=default_backend(),
-        )
+        cert = self.sign(builder)
 
         return cert.public_bytes(serialization.Encoding.PEM)
 

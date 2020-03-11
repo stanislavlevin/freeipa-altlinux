@@ -20,7 +20,6 @@
 '''
 This base platform module exports default filesystem paths.
 '''
-from __future__ import print_function
 
 import os
 
@@ -34,9 +33,6 @@ class BasePathNamespace:
     SYSTEMD_DETECT_VIRT = "/usr/bin/systemd-detect-virt"
     TAR = "/bin/tar"
     AUTOFS_LDAP_AUTH_CONF = "/etc/autofs_ldap_auth.conf"
-    ETC_DIRSRV = "/etc/dirsrv"
-    DS_KEYTAB = "/etc/dirsrv/ds.keytab"
-    ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE = "/etc/dirsrv/slapd-%s"
     ETC_FEDORA_RELEASE = "/etc/fedora-release"
     GROUP = "/etc/group"
     ETC_HOSTNAME = "/etc/hostname"
@@ -57,7 +53,6 @@ class BasePathNamespace:
     HTTPD_CERT_FILE = "/var/lib/ipa/certs/httpd.crt"
     HTTPD_KEY_FILE = "/var/lib/ipa/private/httpd.key"
     HTTPD_PASSWD_FILE_FMT = "/var/lib/ipa/passwds/{host}-443-RSA"
-    HTTPD_DEFAULT_STARTED_SITE_CONF = None
     # only used on Fedora
     HTTPD_IPA_WSGI_MODULES_CONF = None
     OLD_IPA_KEYTAB = "/etc/httpd/conf/ipa.keytab"
@@ -79,10 +74,13 @@ class BasePathNamespace:
     COMMON_KRB5_CONF_DIR = "/etc/krb5.conf.d/"
     KRB5_CONF = "/etc/krb5.conf"
     KRB5_FREEIPA = COMMON_KRB5_CONF_DIR + "freeipa"
+    KRB5_FREEIPA_SERVER = COMMON_KRB5_CONF_DIR + "freeipa-server"
     KRB5_KEYTAB = "/etc/krb5.keytab"
     LDAP_CONF = "/etc/ldap.conf"
     LIBNSS_LDAP_CONF = "/etc/libnss-ldap.conf"
     NAMED_CONF = "/etc/named.conf"
+    NAMED_CUSTOM_CONFIG = "/etc/named/ipa-ext.conf"
+    NAMED_CUSTOM_CFG_SRC = '/usr/share/ipa/bind.ipa-ext.conf'
     NAMED_VAR_DIR = "/var/named"
     NAMED_KEYTAB = "/etc/named.keytab"
     NAMED_RFC1912_ZONES = "/etc/named.rfc1912.zones"
@@ -94,8 +92,6 @@ class BasePathNamespace:
     NSS_LDAP_CONF = "/etc/nss_ldap.conf"
     NSSWITCH_CONF = "/etc/nsswitch.conf"
     CHRONY_CONF = "/etc/chrony.conf"
-    ONTPD_CONF = "/etc/ntpd.conf"
-    NTPD_CONF = "/etc/ntp.conf"
     NTP_CONF = "/etc/ntp.conf"
     NTP_STEP_TICKERS = "/etc/ntp/step-tickers"
     ETC_OPENDNSSEC_DIR = "/etc/opendnssec"
@@ -183,6 +179,7 @@ class BasePathNamespace:
     KDESTROY = "/usr/bin/kdestroy"
     KINIT = "/usr/bin/kinit"
     KLIST = "/usr/bin/klist"
+    KTUTIL = "/usr/bin/ktutil"
     BIN_KVNO = "/usr/bin/kvno"
     LDAPMODIFY = "/usr/bin/ldapmodify"
     LDAPPASSWD = "/usr/bin/ldappasswd"
@@ -206,13 +203,11 @@ class BasePathNamespace:
     BIND_LDAP_SO = "/usr/lib/bind/ldap.so"
     BIND_LDAP_DNS_IPA_WORKDIR = "/var/named/dyndb-ldap/ipa/"
     BIND_LDAP_DNS_ZONE_WORKDIR = "/var/named/dyndb-ldap/ipa/master/"
-    USR_LIB_DIRSRV = "/usr/lib/dirsrv"
     LIB_FIREFOX = "/usr/lib/firefox"
     LIBSOFTHSM2_SO = "/usr/lib/pkcs11/libsofthsm2.so"
     PAM_KRB5_SO = "/usr/lib/security/pam_krb5.so"
     LIB_SYSTEMD_SYSTEMD_DIR = "/usr/lib/systemd/system/"
     BIND_LDAP_SO_64 = "/usr/lib64/bind/ldap.so"
-    USR_LIB_DIRSRV_64 = "/usr/lib64/dirsrv"
     LIB64_FIREFOX = "/usr/lib64/firefox"
     LIBSOFTHSM2_SO_64 = "/usr/lib64/pkcs11/libsofthsm2.so"
     PAM_KRB5_SO_64 = "/usr/lib64/security/pam_krb5.so"
@@ -246,15 +241,12 @@ class BasePathNamespace:
     NAMED_PKCS11 = "/usr/sbin/named-pkcs11"
     CHRONYC = "/usr/bin/chronyc"
     CHRONYD = "/usr/sbin/chronyd"
-    NTPD = "/usr/sbin/ntpd"
     PKIDESTROY = "/usr/sbin/pkidestroy"
     PKISPAWN = "/usr/sbin/pkispawn"
     PKI = "/usr/bin/pki"
-    REMOVE_DS_PL = "/usr/sbin/remove-ds.pl"
     RESTORECON = "/usr/sbin/restorecon"
     SELINUXENABLED = "/usr/sbin/selinuxenabled"
     SETSEBOOL = "/usr/sbin/setsebool"
-    SETUP_DS_PL = "/usr/sbin/setup-ds.pl"
     SMBD = "/usr/sbin/smbd"
     USERADD = "/usr/sbin/useradd"
     FONTS_DIR = "/usr/share/fonts"
@@ -275,7 +267,6 @@ class BasePathNamespace:
     IPA_JS_PLUGINS_DIR = "/usr/share/ipa/ui/js/plugins"
     UPDATES_DIR = "/usr/share/ipa/updates/"
     DICT_WORDS = "/usr/share/dict/words"
-    CACHE_IPA_SESSIONS = "/var/cache/ipa/sessions"
     VAR_KERBEROS_KRB5KDC_DIR = "/var/kerberos/krb5kdc/"
     VAR_KRB5KDC_K5_REALM = "/var/kerberos/krb5kdc/.k5."
     CACERT_PEM = "/var/kerberos/krb5kdc/cacert.pem"
@@ -292,11 +283,6 @@ class BasePathNamespace:
     CERTMONGER_REQUESTS_DIR = "/var/lib/certmonger/requests/"
     VAR_LIB_DIRSRV = "/var/lib/dirsrv"
     DIRSRV_BOOT_LDIF = "/var/lib/dirsrv/boot.ldif"
-    VAR_LIB_DIRSRV_INSTANCE_SCRIPTS_TEMPLATE = "/var/lib/dirsrv/scripts-%s"
-    VAR_LIB_SLAPD_INSTANCE_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s"
-    SLAPD_INSTANCE_BACKUP_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s/bak/%s"
-    SLAPD_INSTANCE_DB_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s/db/%s"
-    SLAPD_INSTANCE_LDIF_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s/ldif"
     VAR_LIB_IPA = "/var/lib/ipa"
     IPA_CLIENT_SYSRESTORE = "/var/lib/ipa-client/sysrestore"
     SYSRESTORE_INDEX = "/var/lib/ipa-client/sysrestore/sysrestore.index"
@@ -332,15 +318,13 @@ class BasePathNamespace:
     SSSD_PUBCONF_KNOWN_HOSTS = "/var/lib/sss/pubconf/known_hosts"
     SSSD_PUBCONF_KRB5_INCLUDE_D_DIR = "/var/lib/sss/pubconf/krb5.include.d/"
     VAR_LOG_AUDIT = "/var/log/audit/audit.log"
-    DIRSRV_LOCK_DIR = "/var/lock/dirsrv"
-    VAR_LOG_DIRSRV_INSTANCE_TEMPLATE = "/var/log/dirsrv/slapd-%s"
-    SLAPD_INSTANCE_ACCESS_LOG_TEMPLATE = "/var/log/dirsrv/slapd-%s/access"
-    SLAPD_INSTANCE_ERROR_LOG_TEMPLATE = "/var/log/dirsrv/slapd-%s/errors"
     VAR_LOG_HTTPD_DIR = "/var/log/httpd"
     VAR_LOG_HTTPD_ERROR = "/var/log/httpd/error_log"
     IPABACKUP_LOG = "/var/log/ipabackup.log"
     IPACLIENT_INSTALL_LOG = "/var/log/ipaclient-install.log"
     IPACLIENT_UNINSTALL_LOG = "/var/log/ipaclient-uninstall.log"
+    IPACLIENTSAMBA_INSTALL_LOG = "/var/log/ipaclientsamba-install.log"
+    IPACLIENTSAMBA_UNINSTALL_LOG = "/var/log/ipaclientsamba-uninstall.log"
     IPAREPLICA_CA_INSTALL_LOG = "/var/log/ipareplica-ca-install.log"
     IPAREPLICA_CONNCHECK_LOG = "/var/log/ipareplica-conncheck.log"
     IPAREPLICA_INSTALL_LOG = "/var/log/ipareplica-install.log"
@@ -375,13 +359,8 @@ class BasePathNamespace:
     SVC_LIST_FILE = "/var/run/ipa/services.list"
     KRB5CC_SAMBA = "/var/run/samba/krb5cc_samba"
     SLAPD_INSTANCE_SOCKET_TEMPLATE = "/var/run/slapd-%s.socket"
-    ALL_SLAPD_INSTANCE_SOCKETS = "/var/run/slapd-*.socket"
     ADMIN_CERT_PATH = '/root/.dogtag/pki-tomcat/ca_admin.cert'
     ENTROPY_AVAIL = '/proc/sys/kernel/random/entropy_avail'
-    LDIF2DB = '/usr/sbin/ldif2db'
-    DB2LDIF = '/usr/sbin/db2ldif'
-    BAK2DB = '/usr/sbin/bak2db'
-    DB2BAK = '/usr/sbin/db2bak'
     KDCPROXY_CONFIG = '/etc/ipa/kdcproxy/kdcproxy.conf'
     CERTMONGER = '/usr/sbin/certmonger'
     NETWORK_MANAGER_CONFIG_DIR = '/etc/NetworkManager/conf.d'
@@ -391,6 +370,7 @@ class BasePathNamespace:
     IPA_CUSTODIA_KEYS = '/etc/ipa/custodia/server.keys'
     IPA_CUSTODIA_SOCKET = '/run/httpd/ipa-custodia.sock'
     IPA_CUSTODIA_AUDIT_LOG = '/var/log/ipa-custodia.audit.log'
+    IPA_CUSTODIA_HANDLER = "/usr/libexec/ipa/custodia"
     IPA_GETKEYTAB = '/usr/sbin/ipa-getkeytab'
     EXTERNAL_SCHEMA_DIR = '/usr/share/ipa/schema.d'
     GSSPROXY_CONF = '/etc/gssproxy/10-ipa.conf'
@@ -401,6 +381,26 @@ class BasePathNamespace:
     AUTHSELECT = None
     SYSCONF_NETWORK = None
     ETC_PKCS11_MODULES_DIR = "/etc/pkcs11/modules"
+    # 389 DS related commands.
+    DSCREATE = '/usr/sbin/dscreate'
+    DSCTL = '/usr/sbin/dsctl'
+    DSCONF = '/usr/sbin/dsconf'
+    # DS related constants
+    ETC_DIRSRV = "/etc/dirsrv"
+    DS_KEYTAB = "/etc/dirsrv/ds.keytab"
+    ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE = "/etc/dirsrv/slapd-%s"
+    USR_LIB_DIRSRV = "/usr/lib/dirsrv"
+    USR_LIB_DIRSRV_64 = "/usr/lib64/dirsrv"
+    VAR_LIB_DIRSRV_INSTANCE_SCRIPTS_TEMPLATE = "/var/lib/dirsrv/scripts-%s"
+    VAR_LIB_SLAPD_INSTANCE_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s"
+    SLAPD_INSTANCE_BACKUP_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s/bak/%s"
+    SLAPD_INSTANCE_DB_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s/db/%s"
+    SLAPD_INSTANCE_LDIF_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s/ldif"
+    DIRSRV_LOCK_DIR = "/var/lock/dirsrv"
+    ALL_SLAPD_INSTANCE_SOCKETS = "/var/run/slapd-*.socket"
+    VAR_LOG_DIRSRV_INSTANCE_TEMPLATE = "/var/log/dirsrv/slapd-%s"
+    SLAPD_INSTANCE_ACCESS_LOG_TEMPLATE = "/var/log/dirsrv/slapd-%s/access"
+    SLAPD_INSTANCE_ERROR_LOG_TEMPLATE = "/var/log/dirsrv/slapd-%s/errors"
     SLAPD_INSTANCE_SYSTEMD_IPA_ENV_TEMPLATE = \
         "/etc/systemd/system/dirsrv@%s.service.d/ipa-env.conf"
     IPA_SERVER_UPGRADE = '/usr/sbin/ipa-server-upgrade'
@@ -409,6 +409,8 @@ class BasePathNamespace:
     SSHD = '/usr/sbin/sshd'
     SSSCTL = '/usr/sbin/sssctl'
     LIBARCH = "64"
+    TDBTOOL = '/usr/bin/tdbtool'
+    SECRETS_TDB = '/var/lib/samba/private/secrets.tdb'
 
     def check_paths(self):
         """Check paths for missing files

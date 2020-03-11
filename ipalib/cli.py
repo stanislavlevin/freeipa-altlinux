@@ -23,6 +23,7 @@ Functionality for Command Line Interface.
 from __future__ import print_function
 
 import atexit
+import builtins
 import importlib
 import logging
 import textwrap
@@ -53,9 +54,6 @@ from ipalib.util import (
 
 if six.PY3:
     unicode = str
-    import builtins  # pylint: disable=import-error
-else:
-    import __builtin__ as builtins  # pylint: disable=import-error
 
 if six.PY2:
     reload(sys)  # pylint: disable=reload-builtin, undefined-variable
@@ -311,7 +309,7 @@ class textui(backend.Backend):
           objectClass: top
           objectClass: someClass
         """
-        assert isinstance(attr, six.string_types)
+        assert isinstance(attr, str)
         if not isinstance(value, (list, tuple)):
             # single-value attribute
             self.print_indented(format % (attr, self.encode_binary(value)), indent)
@@ -450,7 +448,7 @@ class textui(backend.Backend):
         ------------------
         Only dashed above.
         """
-        assert isinstance(dash, six.string_types)
+        assert isinstance(dash, str)
         assert len(dash) == 1
         dashes = dash * len(string)
         if above:
@@ -971,7 +969,7 @@ class console(frontend.Command):
         history = os.path.join(api.env.dot_ipa, "console.history")
         try:
             readline.read_history_file(history)
-        except IOError:
+        except OSError:
             pass
 
         def save_history():
@@ -981,7 +979,7 @@ class console(frontend.Command):
             readline.set_history_length(50)
             try:
                 readline.write_history_file(history)
-            except IOError:
+            except OSError:
                 logger.exception("Unable to store history %s", history)
 
         atexit.register(save_history)

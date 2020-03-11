@@ -89,6 +89,8 @@ clean-local:
 	rm -rf "$(top_builddir)/.tox"
 	rm -rf "$(top_srcdir)/__pycache__"
 	rm -f "$(top_builddir)"/$(PACKAGE)-*.tar.gz
+	rm -rf "$(top_srcdir)/cov-int"
+	rm -f "$(top_srcdir)/freeipa.tgz"
 
 # convenience targets for RPM build
 .PHONY: rpmroot rpmdistdir version-update _dist-version-bakein _rpms-prep \
@@ -179,7 +181,7 @@ endif WITH_PYLINT
 if WITH_JSLINT
 JSLINT_TARGET = jslint
 endif WITH_JSLINT
-lint: acilint apilint $(POLINT_TARGET) $(PYLINT_TARGET) $(JSLINT_TARGET) yamllint
+lint: acilint apilint $(POLINT_TARGET) $(PYLINT_TARGET) $(JSLINT_TARGET) rpmlint yamllint
 
 .PHONY: devcheck
 devcheck: all
@@ -192,47 +194,24 @@ endif
 if ! WITH_JSLINT
 	@echo "ERROR: jslint not available"; exit 1
 endif
-if ! WITH_PYTHON2
-	@echo "ERROR: python2 not available"; exit 1
-endif
-	@ # run all linters, tests, and check with Python 2
-	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON2) ipatests/ipa-run-tests \
-	    --ipaclient-unittests
-	$(MAKE) $(AM_MAKEFLAGS) acilint apilint polint jslint check
-	$(MAKE) $(AM_MAKEFLAGS) PYTHON=$(PYTHON2) pylint
-if WITH_PYTHON3
 	@ # just tests, aci, api and pylint on Python 3
-	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON3) ipatests/ipa-run-tests \
+	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON) ipatests/ipa-run-tests \
 	    --ipaclient-unittests
-	$(MAKE) $(AM_MAKEFLAGS) PYTHON=$(PYTHON3) acilint apilint polint pylint jslint yamllint check
-else
-	@echo "WARNING: python3 not available"
-endif
+	$(MAKE) $(AM_MAKEFLAGS) acilint apilint polint pylint jslint rpmlint yamllint check
 	@echo "All tests passed."
 
 .PHONY: fastcheck fasttest fastlint
 fastcheck:
-if WITH_PYTHON2
-	@$(MAKE) -j1 $(AM_MAKEFLAGS) PYTHON=$(PYTHON2) \
-	    fastlint fasttest apilint acilint
-endif
-if WITH_PYTHON3
-	@$(MAKE) -j1 $(AM_MAKEFLAGS) PYTHON=$(PYTHON3) \
-	     fastlint fasttest apilint acilint yamllint
-endif
+	@$(MAKE) -j1 $(AM_MAKEFLAGS) fastlint rpmlint yamllint fasttest apilint acilint
 
 fasttest: $(GENERATED_PYTHON_FILES) ipasetup.py
 	@ # --ignore doubles speed of total test run compared to pytest.skip()
 	@ # on module.
-	@ # __init__.py breaks import of existing namespace packages:
-	@ # there could be installed python ipa on system
-	mv -f ipaplatform/__init__.py ipaplatform/__init__.py.backup ||: ; \
 	PATH=$(abspath ipatests):$$PATH PYTHONPATH=$(abspath $(top_srcdir)) \
-	    $(PYTHON3) ipatests/ipa-run-tests \
+	    $(PYTHON) ipatests/ipa-run-tests \
 	    --skip-ipaapi \
 	    --ignore $(abspath $(top_srcdir))/ipatests/test_integration \
 	    --ignore $(abspath $(top_srcdir))/ipatests/test_xmlrpc
-	mv -f ipaplatform/__init__.py.backup ipaplatform/__init__.py ||:
 
 fastlint: $(GENERATED_PYTHON_FILES) ipasetup.py
 if ! WITH_PYLINT
@@ -241,8 +220,19 @@ endif
 	@echo "Fast linting with $(PYTHON) from branch '$(GIT_BRANCH)'"
 
 	@MERGEBASE=$$(git merge-base --fork-point $(GIT_BRANCH)); \
-	FILES=$$(git diff --name-only --diff-filter=d $${MERGEBASE} \
-	    | grep -E '\.py$$'); \
+	PYFILES=$$(git diff --name-only --diff-filter=d $${MERGEBASE} \
+	    | grep -E '\.py$$' ); \
+	INFILES=$$(git diff --name-only --diff-filter=d $${MERGEBASE} \
+	    | grep -E '\.in$$' \
+	    | xargs -n1 file 2>/dev/null | grep Python \
+	    | cut -d':' -f1; ); \
+	if [ -n "$${PYFILES}" ] && [ -n "$${INFILES}" ]; then \
+	    FILES="$$( printf $${PYFILES}\\n$${INFILES} )" ; \
+	elif [ -n "$${PYFILES}" ]; then \
+	    FILES="$${PYFILES}" ; \
+	else \
+	    FILES="$${INFILES}" ; \
+	fi ; \
 	if [ -n "$${FILES}" ]; then \
 	    echo -e "Fast linting files:\n$${FILES}\n"; \
 	    echo "pycodestyle"; \
@@ -285,33 +275,16 @@ polint:
 rpmlint: freeipa.spec
 	rpmlint ./$<
 
-# Try to load yml/yaml files via safe_load, which recognizes only standard
-# YAML tags and cannot construct an arbitrary Python object.
-# There are Jinja yaml templates, which differ from reqular ones. These
-# files should be placed on skip list (YAML_TEMPL_FILES), otherwise
-# safe_load fails.
+YAML_FILES = \
+	$(top_srcdir)/.lgtm.yml \
+	$(wildcard $(top_srcdir)/.*.yaml) \
+	$(wildcard $(top_srcdir)/ipatests/prci_definitions/*.yaml)
+
 .PHONY: yamllint
-yamllint:
-	YAML_TEMPL_FILES="\
-		$(top_srcdir)/ipatests/azure/templates/ipa-test-config-template.yaml \
-	"; \
-	echo "jinja template files:"; \
-	for YAML in $${YAML_TEMPL_FILES}; do \
-		echo $${YAML}; \
-		$(PYTHON) -c "import yaml; f = open('$${YAML}'); yaml.safe_load(f); f.close()" >/dev/null 2>&1 \
-		&& { echo Unexpected PASS of parsing yaml: $${YAML}. This file is a regular yaml.; exit 1; }; \
-	done; \
-	YAML_FILES=`find $(top_srcdir) \
-		\( -name '*.yaml' -o \
-		-name '*.yml' \) \
-		$$(printf '! -path %s ' $${YAML_TEMPL_FILES})`; \
-	echo -e "\nlint yaml files"; \
-	echo "-----------"; \
-	for YAML in $${YAML_FILES}; do \
-		echo $${YAML}; \
+yamllint: $(YAML_FILES)
+	@for YAML in $^; do \
 		$(PYTHON) -c "import yaml; f = open('$${YAML}'); yaml.safe_load(f); f.close()" || exit 1; \
-	done; \
-	echo "-----------"
+	done
 
 # Run pylint for all python files. Finds all python files/packages, skips
 # folders rpmbuild, freeipa-* and dist. Skip (match, but don't print) .*,
@@ -437,6 +410,31 @@ python_scripts:
 .PHONY:
 strip-po:
 	$(MAKE) -C po strip-po
+
+.PHONY: cov-scan
+cov-scan:
+	$(MAKE) clean
+	@# analyse C code with workaround for missing _Float types
+	@# https://stackoverflow.com/questions/50434236/coverity-scan-fails-to-build-stdlib-h-with-gnu-source-defined
+	cov-build --dir cov-int $(MAKE) all \
+	    CFLAGS="-D_Float32=float -D_Float32x=double -D_Float64=double -D_Float64x='long double' -D_Float128='long double'"
+	@# remove build directories and analyse Python
+	rm -rf ipa*/build
+	cov-build --dir cov-int --no-command \
+		$(foreach d,$(PYTHON_SUBDIRS),--fs-capture-search $(d))
+	@# analyze JS files
+	cov-build --dir cov-int --no-command --fs-capture-search install/ui
+	@# compress and upload
+	tar czvf freeipa.tgz cov-int
+	if [ -n "$${COVERITY_SCAN_TOKEN}" ]; then \
+	    curl --progress-bar --output /dev/null \
+	        --form token=$${COVERITY_SCAN_TOKEN} \
+	        --form email=scan@mg.freeipa.org \
+	        --form file=@freeipa.tgz \
+	        --form version="$(VERSION)" \
+	        --form description="FreeIPA" \
+	        "https://scan.coverity.com/builds?project=freeipa%2Ffreeipa"; \
+	fi
 
 PYTHON_SHEBANG = 					\
 	ipa	\

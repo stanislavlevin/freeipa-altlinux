@@ -99,7 +99,7 @@ aci: (targetattr = "ipaexternalmember")(targetfilter = "(objectclass=ipaexternal
 dn: cn=groups,cn=accounts,dc=ipa,dc=example
 aci: (targetattr = "member")(targetfilter = "(&(!(cn=admins))(objectclass=ipausergroup))")(version 3.0;acl "permission:System: Modify Group Membership";allow (write) groupdn = "ldap:///cn=System: Modify Group Membership,cn=permissions,cn=pbac,dc=ipa,dc=example";)
 dn: cn=groups,cn=accounts,dc=ipa,dc=example
-aci: (targetattr = "cn || description || gidnumber || ipauniqueid || mepmanagedby || objectclass")(targetfilter = "(|(objectclass=ipausergroup)(objectclass=posixgroup))")(version 3.0;acl "permission:System: Modify Groups";allow (write) groupdn = "ldap:///cn=System: Modify Groups,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+aci: (targetattr = "cn || description || gidnumber || ipauniqueid || membermanager || mepmanagedby || objectclass")(targetfilter = "(|(objectclass=ipausergroup)(objectclass=posixgroup))")(version 3.0;acl "permission:System: Modify Groups";allow (write) groupdn = "ldap:///cn=System: Modify Groups,cn=permissions,cn=pbac,dc=ipa,dc=example";)
 dn: cn=groups,cn=accounts,dc=ipa,dc=example
 aci: (targetattr = "ipaexternalmember")(targetfilter = "(|(objectclass=ipausergroup)(objectclass=posixgroup))")(version 3.0;acl "permission:System: Read External Group Membership";allow (compare,read,search) userdn = "ldap:///all";)
 dn: dc=ipa,dc=example
@@ -109,7 +109,7 @@ aci: (targetattr = "member || memberhost || memberof || memberuid || memberuser"
 dn: dc=ipa,dc=example
 aci: (targetattr = "cn || createtimestamp || entryusn || gidnumber || memberuid || modifytimestamp || objectclass")(target = "ldap:///cn=groups,cn=*,cn=views,cn=compat,dc=ipa,dc=example")(version 3.0;acl "permission:System: Read Group Views Compat Tree";allow (compare,read,search) userdn = "ldap:///anyone";)
 dn: cn=groups,cn=accounts,dc=ipa,dc=example
-aci: (targetattr = "businesscategory || cn || createtimestamp || description || entryusn || gidnumber || ipaexternalmember || ipantsecurityidentifier || ipauniqueid || mepmanagedby || modifytimestamp || o || objectclass || ou || owner || seealso")(targetfilter = "(|(objectclass=ipausergroup)(objectclass=posixgroup))")(version 3.0;acl "permission:System: Read Groups";allow (compare,read,search) userdn = "ldap:///anyone";)
+aci: (targetattr = "businesscategory || cn || createtimestamp || description || entryusn || gidnumber || ipaexternalmember || ipantsecurityidentifier || ipauniqueid || membermanager || mepmanagedby || modifytimestamp || o || objectclass || ou || owner || seealso")(targetfilter = "(|(objectclass=ipausergroup)(objectclass=posixgroup))")(version 3.0;acl "permission:System: Read Groups";allow (compare,read,search) userdn = "ldap:///anyone";)
 dn: cn=groups,cn=accounts,dc=ipa,dc=example
 aci: (targetfilter = "(|(objectclass=ipausergroup)(objectclass=posixgroup))")(version 3.0;acl "permission:System: Remove Groups";allow (delete) groupdn = "ldap:///cn=System: Remove Groups,cn=permissions,cn=pbac,dc=ipa,dc=example";)
 dn: cn=hbac,dc=ipa,dc=example
@@ -169,11 +169,11 @@ aci: (targetfilter = "(objectclass=ipahostgroup)")(version 3.0;acl "permission:S
 dn: cn=hostgroups,cn=accounts,dc=ipa,dc=example
 aci: (targetattr = "member")(targetfilter = "(&(!(cn=ipaservers))(objectclass=ipahostgroup))")(version 3.0;acl "permission:System: Modify Hostgroup Membership";allow (write) groupdn = "ldap:///cn=System: Modify Hostgroup Membership,cn=permissions,cn=pbac,dc=ipa,dc=example";)
 dn: cn=hostgroups,cn=accounts,dc=ipa,dc=example
-aci: (targetattr = "cn || description")(targetfilter = "(objectclass=ipahostgroup)")(version 3.0;acl "permission:System: Modify Hostgroups";allow (write) groupdn = "ldap:///cn=System: Modify Hostgroups,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+aci: (targetattr = "cn || description || membermanager")(targetfilter = "(objectclass=ipahostgroup)")(version 3.0;acl "permission:System: Modify Hostgroups";allow (write) groupdn = "ldap:///cn=System: Modify Hostgroups,cn=permissions,cn=pbac,dc=ipa,dc=example";)
 dn: cn=hostgroups,cn=accounts,dc=ipa,dc=example
 aci: (targetattr = "member || memberhost || memberof || memberuser")(targetfilter = "(objectclass=ipahostgroup)")(version 3.0;acl "permission:System: Read Hostgroup Membership";allow (compare,read,search) userdn = "ldap:///all";)
 dn: cn=hostgroups,cn=accounts,dc=ipa,dc=example
-aci: (targetattr = "businesscategory || cn || createtimestamp || description || entryusn || ipauniqueid || modifytimestamp || o || objectclass || ou || owner || seealso")(targetfilter = "(objectclass=ipahostgroup)")(version 3.0;acl "permission:System: Read Hostgroups";allow (compare,read,search) userdn = "ldap:///all";)
+aci: (targetattr = "businesscategory || cn || createtimestamp || description || entryusn || ipauniqueid || membermanager || modifytimestamp || o || objectclass || ou || owner || seealso")(targetfilter = "(objectclass=ipahostgroup)")(version 3.0;acl "permission:System: Read Hostgroups";allow (compare,read,search) userdn = "ldap:///all";)
 dn: cn=hostgroups,cn=accounts,dc=ipa,dc=example
 aci: (targetfilter = "(objectclass=ipahostgroup)")(version 3.0;acl "permission:System: Remove Hostgroups";allow (delete) groupdn = "ldap:///cn=System: Remove Hostgroups,cn=permissions,cn=pbac,dc=ipa,dc=example";)
 dn: cn=views,cn=accounts,dc=ipa,dc=example
@@ -185,9 +185,9 @@ aci: (targetattr = "cn || createtimestamp || entryusn || ipabaseid || ipabaserid
 dn: cn=views,cn=accounts,dc=ipa,dc=example
 aci: (targetattr = "cn || createtimestamp || description || entryusn || ipadomainresolutionorder || modifytimestamp || objectclass")(targetfilter = "(objectclass=nsContainer)")(version 3.0;acl "permission:System: Read ID Views";allow (compare,read,search) userdn = "ldap:///all";)
 dn: cn=IPA.EXAMPLE,cn=kerberos,dc=ipa,dc=example
-aci: (targetattr = "createtimestamp || entryusn || krbdefaultencsalttypes || krbmaxrenewableage || krbmaxticketlife || krbsupportedencsalttypes || modifytimestamp || objectclass")(targetfilter = "(objectclass=krbticketpolicyaux)")(version 3.0;acl "permission:System: Read Default Kerberos Ticket Policy";allow (compare,read,search) groupdn = "ldap:///cn=System: Read Default Kerberos Ticket Policy,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+aci: (targetattr = "createtimestamp || entryusn || krbauthindmaxrenewableage || krbauthindmaxticketlife || krbdefaultencsalttypes || krbmaxrenewableage || krbmaxticketlife || krbsupportedencsalttypes || modifytimestamp || objectclass")(targetfilter = "(objectclass=krbticketpolicyaux)")(version 3.0;acl "permission:System: Read Default Kerberos Ticket Policy";allow (compare,read,search) groupdn = "ldap:///cn=System: Read Default Kerberos Ticket Policy,cn=permissions,cn=pbac,dc=ipa,dc=example";)
 dn: cn=users,cn=accounts,dc=ipa,dc=example
-aci: (targetattr = "krbmaxrenewableage || krbmaxticketlife")(targetfilter = "(objectclass=krbticketpolicyaux)")(version 3.0;acl "permission:System: Read User Kerberos Ticket Policy";allow (compare,read,search) groupdn = "ldap:///cn=System: Read User Kerberos Ticket Policy,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+aci: (targetattr = "krbauthindmaxrenewableage || krbauthindmaxticketlife || krbmaxrenewableage || krbmaxticketlife")(targetfilter = "(objectclass=krbticketpolicyaux)")(version 3.0;acl "permission:System: Read User Kerberos Ticket Policy";allow (compare,read,search) groupdn = "ldap:///cn=System: Read User Kerberos Ticket Policy,cn=permissions,cn=pbac,dc=ipa,dc=example";)
 dn: cn=locations,cn=etc,dc=ipa,dc=example
 aci: (targetfilter = "(objectclass=ipaLocationObject)")(version 3.0;acl "permission:System: Add IPA Locations";allow (add) groupdn = "ldap:///cn=System: Add IPA Locations,cn=permissions,cn=pbac,dc=ipa,dc=example";)
 dn: cn=locations,cn=etc,dc=ipa,dc=example
@@ -272,6 +272,8 @@ dn: cn=services,cn=accounts,dc=ipa,dc=example
 aci: (targetattr = "krbcanonicalname || krbprincipalname")(targetfilter = "(objectclass=ipaservice)")(version 3.0;acl "permission:System: Manage Service Principals";allow (write) groupdn = "ldap:///cn=System: Manage Service Principals,cn=permissions,cn=pbac,dc=ipa,dc=example";)
 dn: cn=services,cn=accounts,dc=ipa,dc=example
 aci: (targetattr = "krbprincipalauthind || usercertificate")(targetfilter = "(objectclass=ipaservice)")(version 3.0;acl "permission:System: Modify Services";allow (write) groupdn = "ldap:///cn=System: Modify Services,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+dn: cn=services,cn=accounts,dc=ipa,dc=example
+aci: (targetattr = "cn || createtimestamp || entryusn || gecos || gidnumber || homedirectory || ipantsecurityidentifier || loginshell || modifytimestamp || objectclass || uid || uidnumber")(targetfilter = "(objectclass=ipaservice)")(version 3.0;acl "permission:System: Read POSIX details of SMB services";allow (compare,read,search) userdn = "ldap:///all";)
 dn: cn=services,cn=accounts,dc=ipa,dc=example
 aci: (targetattr = "createtimestamp || entryusn || ipakrbauthzdata || ipakrbprincipalalias || ipauniqueid || krbcanonicalname || krblastpwdchange || krbobjectreferences || krbpasswordexpiration || krbprincipalaliases || krbprincipalauthind || krbprincipalexpiration || krbprincipalname || managedby || memberof || modifytimestamp || objectclass || usercertificate")(targetfilter = "(objectclass=ipaservice)")(version 3.0;acl "permission:System: Read Services";allow (compare,read,search) userdn = "ldap:///all";)
 dn: cn=services,cn=accounts,dc=ipa,dc=example

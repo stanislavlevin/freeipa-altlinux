@@ -77,7 +77,7 @@ def _is_master():
 
 
 def _disable_dnssec():
-    fstore = sysrestore.FileStore()
+    fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
     ods = opendnssecinstance.OpenDNSSECInstance(fstore)
     ods.realm = api.env.realm
@@ -114,7 +114,7 @@ def _disable_dnssec():
 def install_check(standalone, api, replica, options, hostname):
     global ip_addresses
     global reverse_zones
-    fstore = sysrestore.FileStore()
+    fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
     if not os.path.isfile(paths.IPA_DNS_INSTALL):
         raise RuntimeError("Integrated DNS requires '%s' package" %
@@ -130,20 +130,22 @@ def install_check(standalone, api, replica, options, hostname):
         domain = dnsutil.DNSName(util.normalize_zone(api.env.domain))
         try:
             dnsutil.check_zone_overlap(domain, raise_on_error=False)
-        except ValueError as e:
+        except dnsutil.DNSZoneAlreadyExists as e:
             if options.force or options.allow_zone_overlap:
                 logger.warning("%s Please make sure that the domain is "
                                "properly delegated to this IPA server.",
                                e)
-            else:
-                raise e
+
+            hst = dnsutil.DNSName(hostname).make_absolute().to_text()
+            if hst not in e.kwargs['ns']:
+                raise ValueError(str(e))
 
     for reverse_zone in options.reverse_zones:
         try:
             dnsutil.check_zone_overlap(reverse_zone)
         except ValueError as e:
             if options.force or options.allow_zone_overlap:
-                logger.warning('%s', six.text_type(e))
+                logger.warning('%s', str(e))
             else:
                 raise e
 
@@ -318,14 +320,14 @@ def install_check(standalone, api, replica, options, hostname):
         print("Using reverse zone(s) %s" % ', '.join(reverse_zones))
 
 
-def install(standalone, replica, options, api=api, ntp_role=False):
-    fstore = sysrestore.FileStore()
+def install(standalone, replica, options, api=api):
+    fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
     if standalone:
         # otherwise this is done by server/replica installer
         update_hosts_file(ip_addresses, api.env.host, fstore)
 
-    bind = bindinstance.BindInstance(fstore, api=api, ntp_role=ntp_role)
+    bind = bindinstance.BindInstance(fstore, api=api)
     bind.setup(api.env.host, ip_addresses, api.env.realm, api.env.domain,
                options.forwarders, options.forward_policy,
                reverse_zones, zonemgr=options.zonemgr,
@@ -396,7 +398,7 @@ def uninstall_check(options):
 
 
 def uninstall():
-    fstore = sysrestore.FileStore()
+    fstore = sysrestore.FileStore(paths.SYSRESTORE)
     ods = opendnssecinstance.OpenDNSSECInstance(fstore)
     if ods.is_configured():
         ods.uninstall()

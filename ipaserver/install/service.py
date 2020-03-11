@@ -295,12 +295,12 @@ class Service:
         if sstore:
             self.sstore = sstore
         else:
-            self.sstore = sysrestore.StateFile()
+            self.sstore = sysrestore.StateFile(paths.SYSRESTORE)
 
         if fstore:
             self.fstore = fstore
         else:
-            self.fstore = sysrestore.FileStore()
+            self.fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
         self.realm = realm_name
         self.suffix = DN()
@@ -691,7 +691,7 @@ class Service:
 
         # case insensitive
         for value in entry.get('ipaConfigString', []):
-            if value.lower() == ENABLED_SERVICE:
+            if value.lower() == ENABLED_SERVICE.lower():
                 entry['ipaConfigString'].remove(value)
                 break
 
@@ -735,7 +735,7 @@ class Service:
         if keytab is None:
             keytab = self.keytab
         if owner is None:
-            owner = self.keytab_user
+            owner = self.service_user
 
         pent = pwd.getpwnam(owner)
         os.chown(keytab, pent.pw_uid, pent.pw_gid)

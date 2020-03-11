@@ -45,12 +45,14 @@ dist_app_DATA =				\
 	domainlevel.ldif			\
 	kerberos.ldif			\
 	indices.ldif			\
+	bind.ipa-ext.conf		\
 	bind.named.conf.template	\
 	certmap.conf.template		\
 	kdc.conf.template		\
 	kdc_extensions.template		\
 	kdc_req.conf.template		\
 	krb5.conf.template		\
+	freeipa-server.template		\
 	krb5.ini.template		\
 	krb.con.template		\
 	krbrealm.con.template		\
@@ -66,7 +68,6 @@ dist_app_DATA =				\
 	opendnssec_conf.template	\
 	opendnssec_kasp.template	\
 	unique-attributes.ldif		\
-	ldapi.ldif			\
 	wsgi.py				\
 	repoint-managed-entries.ldif	\
 	managed-entries.ldif		\
@@ -96,6 +97,9 @@ dist_app_DATA =				\
 	ipa-kdc-proxy.conf.template	\
 	ipa-pki-proxy.conf.template	\
 	ipa-rewrite.conf.template	\
+	ipaca_default.ini		\
+	ipaca_customize.ini		\
+	ipaca_softhsm2.ini		\
 	$(NULL)
 
 kdcproxyconfdir = $(IPA_SYSCONF_DIR)/kdcproxy

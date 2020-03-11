@@ -5,18 +5,18 @@
 # Pavel Vomacka <pvomacka@redhat.com>, 2017. #zanata
 msgid ""
 msgstr ""
-"Project-Id-Version: freeipa 4.7.2.dev201904240756+gita2b40ab0e\n"
+"Project-Id-Version: freeipa 4.8.0\n"
 "Report-Msgid-Bugs-To: https://fedorahosted.org/freeipa/newticket\n"
-"POT-Creation-Date: 2019-04-24 11:14+0300\n"
-"MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2019-08-14 10:13+0300\n"
 "PO-Revision-Date: 2017-07-12 04:16+0000\n"
 "Last-Translator: Pavel Vomacka <pvomacka@redhat.com>\n"
 "Language-Team: French\n"
 "Language: fr\n"
-"X-Generator: Zanata 4.6.2\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1)\n"
+"X-Generator: Zanata 4.6.2\n"
 
 msgid ""
 "\n"
@@ -8357,11 +8357,6 @@ msgstr "DN de connexion"
 msgid "Bind failed: %s\n"
 msgstr "Échec de « bind » : %s\n"
 
-#, c-format
-msgid "Bind password required when using a bind DN.\n"
-msgstr ""
-"Mot de passe de laison requis lors de l'utilisation d'un DN de liaison.\n"
-
 msgid "Bind rule type"
 msgstr "Type de règle liée"
 
@@ -11658,15 +11653,6 @@ msgstr "Requête JSON-RPC invalide : %(error)s"
 
 msgid "Invalid LDAP URI."
 msgstr "URI LDAP invalide."
-
-msgid ""
-"Invalid MCS value, must match c[0-1023].c[0-1023] and/or c[0-1023]-c[0-c0123]"
-msgstr ""
-"Valeur pour MLS invalide, doit correspondre à c[0-1023].c[0-1023] et/ou "
-"c[0-1023]-c[0-c0123]"
-
-msgid "Invalid MLS value, must match s[0-15](-s[0-15])"
-msgstr "Valeur pour MLS invalide, doit correspondre à s[0-15](-s[0-15])"
 
 #, c-format
 msgid "Invalid Service Principal Name\n"
@@ -16896,9 +16882,6 @@ msgstr ""
 
 msgid "cannot be empty"
 msgstr "ne peut pas être vide"
-
-msgid "cannot be longer that 255 characters"
-msgstr "ne peut pas dépasser 255 caractères."
 
 #, python-format
 msgid "cannot connect to '%(uri)s': %(error)s"
