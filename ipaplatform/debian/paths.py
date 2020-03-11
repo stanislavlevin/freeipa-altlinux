@@ -90,7 +90,6 @@ class DebianPathNamespace(BasePathNamespace):
     IPA_HTTPD_PASSWD_READER = "/usr/lib/ipa/ipa-httpd-pwdreader"
     IPA_PKI_WAIT_RUNNING = "/usr/lib/ipa/ipa-pki-wait-running"
     HTTPD = "/usr/sbin/apache2ctl"
-    FONTS_DIR = "/usr/share/fonts/truetype"
     FONTS_OPENSANS_DIR = "/usr/share/fonts/truetype/open-sans"
     FONTS_FONTAWESOME_DIR = "/usr/share/fonts/truetype/font-awesome"
     VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/krb5kdc/"
