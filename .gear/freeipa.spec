@@ -304,7 +304,6 @@ Group: System/Base
 # Requires: authselect >= 0.4-2
 Requires: libsasl2-plugin-gssapi
 Requires: curl
-Requires: sssd
 Requires: sssd-krb5
 Requires: sssd-ipa >= %sssd_version
 Requires: sssd-tools >= %sssd_version
