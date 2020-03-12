@@ -578,6 +578,9 @@ touch %buildroot%etc_systemd_dir/httpd2.service.d/ipa.conf
 
 mkdir -p %buildroot%_sysconfdir/cron.d
 
+mkdir -p %buildroot%_sysconfdir/bind
+touch %buildroot%_sysconfdir/bind/ipa-ext.conf
+
 mkdir -p %buildroot%_sharedstatedir/ipa/backup
 mkdir -p %buildroot%_sharedstatedir/ipa/gssproxy
 mkdir -p %buildroot%_sharedstatedir/ipa/sysrestore
@@ -873,6 +876,7 @@ fi
 %_datadir/ipa/*.ldif
 %_datadir/ipa/*.uldif
 %_datadir/ipa/*.template
+%_datadir/ipa/bind.ipa-ext.conf
 %_datadir/ipa/advise/
 %_datadir/ipa/profiles/
 %dir %_datadir/ipa/html
@@ -890,6 +894,7 @@ fi
 %ghost %attr(0644,root,root) %config(noreplace) %apache2_extra_enabled/ipa-pki-proxy.conf
 %ghost %attr(0644,root,root) %config(noreplace) %_sysconfdir/ipa/kdcproxy/ipa-kdc-proxy.conf
 %ghost %attr(0644,root,root) %config(noreplace) %_datadir/ipa/html/ca.crt
+%ghost %attr(0640,root,named) %config(noreplace) %_sysconfdir/bind/ipa-ext.conf
 %ghost %attr(0644,root,root) %_datadir/ipa/html/krb.con
 %ghost %attr(0644,root,root) %_datadir/ipa/html/krb5.ini
 %ghost %attr(0644,root,root) %_datadir/ipa/html/krbrealm.con
