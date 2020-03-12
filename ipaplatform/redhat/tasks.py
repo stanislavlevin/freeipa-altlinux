@@ -244,7 +244,7 @@ class RedHatTaskNamespace(BaseTaskNamespace):
         with open(paths.SYSCONF_NETWORK, 'w') as f:
             f.writelines(content)
 
-    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore,
+    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, fstore, statestore,
                                   sudo=True):
         auth_config = get_auth_tool()
         auth_config.configure(sssd, mkhomedir, statestore, sudo)
