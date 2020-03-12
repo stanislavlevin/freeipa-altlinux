@@ -512,14 +512,10 @@ export PYTHON=%_bindir/python3
            --disable-server \
            --without-ipatests \
 %endif
-	   --with-ipaplatform=altlinux \
-	   IPA_VERSION_IS_GIT_SNAPSHOT=no \
            %linter_options
 %make_build
 
 %install
-%make python_install DESTDIR=%buildroot INSTALL="install -p"
-
 %makeinstall_std
 
 # remove files which are useful only for make uninstall
@@ -599,12 +595,8 @@ printf '%_libdir/krb5/plugins/libkrb5/winbind_krb5_locator.so\t/dev/null\t90\n' 
 
 /bin/touch %buildroot%_sysconfdir/ipa/{default.conf,ca.crt}
 # NSS
-# old dbm format
-touch %buildroot%_sysconfdir/ipa/nssdb/cert8.db
-touch %buildroot%_sysconfdir/ipa/nssdb/key3.db
-touch %buildroot%_sysconfdir/ipa/nssdb/secmod.db
-touch %buildroot%_sysconfdir/ipa/nssdb/pwdfile.txt
 ## new sql format
+touch %buildroot%_sysconfdir/ipa/nssdb/pwdfile.txt
 touch %buildroot%_sysconfdir/ipa/nssdb/cert9.db
 touch %buildroot%_sysconfdir/ipa/nssdb/key4.db
 touch %buildroot%_sysconfdir/ipa/nssdb/pkcs11.txt
@@ -971,10 +963,6 @@ fi
 %ghost %attr(0644,root,root) %config(noreplace) %_sysconfdir/ipa/default.conf
 %ghost %attr(0644,root,root) %config(noreplace) %_sysconfdir/ipa/ca.crt
 %dir %attr(0755,root,root) %_sysconfdir/ipa/nssdb
-# old dbm format
-%ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/cert8.db
-%ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/key3.db
-%ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/secmod.db
 # new sql format
 %ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/cert9.db
 %ghost %attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/nssdb/key4.db
