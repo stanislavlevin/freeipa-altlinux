@@ -332,6 +332,25 @@ This package provides command-line tools for IPA administrators.
 
 ###############################################################################
 
+%package client-samba
+Summary: Tools to configure Samba on IPA client
+Group: System/Base
+Requires: %name-client = %EVR
+Requires: python3-module-samba
+Requires: samba-client
+Requires: samba-winbind
+Requires: samba-common-tools
+Requires: samba
+Requires: sssd-winbind-idmap
+Requires: tdb-utils
+Requires: cifs-utils
+
+%description client-samba
+This package provides command-line tools to deploy Samba domain member
+on the machine enrolled into a FreeIPA environment
+
+###############################################################################
+
 %package client-automount
 Summary: IPA Automount for use on clients
 Group: System/Base
@@ -945,6 +964,10 @@ fi
 %_mandir/man1/ipa-client-install.1*
 %_mandir/man1/ipa-certupdate.1*
 %_mandir/man1/ipa-join.1*
+
+%files client-samba
+%_sbindir/ipa-client-samba
+%_man1dir/ipa-client-samba.1*
 
 %files client-automount
 %_sbindir/ipa-client-automount
