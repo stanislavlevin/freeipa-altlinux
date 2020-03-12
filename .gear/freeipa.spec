@@ -845,6 +845,7 @@ fi
 %ghost %attr(644,root,root) %etc_systemd_dir/httpd2.service.d/ipa.conf
 %_datadir/ipa/wsgi.py
 %_datadir/ipa/kdcproxy.wsgi
+%_datadir/ipa/ipaca*.ini
 %_datadir/ipa/*.ldif
 %_datadir/ipa/*.uldif
 %_datadir/ipa/*.template
