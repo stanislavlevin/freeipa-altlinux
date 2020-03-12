@@ -501,7 +501,7 @@ git commit -am 'with our changes'
 
 %build
 
-export PYTHON=%_bindir/python3
+export PYTHON=%__python3
 %autoreconf
 %configure --with-vendor-suffix=-%release \
 %if_without only_client
@@ -697,7 +697,7 @@ if [ $1 -gt 1 ] ; then
     fi
 
     if [ $restore -ge 2 ]; then
-        python3 -c 'from ipaclient.install.client import update_ipa_nssdb; update_ipa_nssdb()' >/var/log/ipaupgrade.log 2>&1
+        %__python3 -c 'from ipaclient.install.client import update_ipa_nssdb; update_ipa_nssdb()' >/var/log/ipaupgrade.log 2>&1
     fi
 fi
 
