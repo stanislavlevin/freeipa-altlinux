@@ -27,6 +27,7 @@
 %define etc_systemd_dir %_sysconfdir/systemd/system
 
 # versions defines
+%define apache_version 2.4.41
 %define bind_version 9.11
 %define bind_dyndb_ldap_version 11.1-alt7
 %define certmonger_version 0.79.7
@@ -75,7 +76,7 @@ BuildRequires: libsss_nss_idmap-devel >= %sssd_version
 BuildRequires: libunistring-devel
 BuildRequires: libsystemd-devel
 
-BuildRequires: apache2-base
+BuildRequires: apache2-base >= %apache_version
 BuildRequires: 389-ds-base-devel >= %ds_version
 BuildRequires: samba-devel >= %samba_version
 BuildRequires: node-uglify-js
@@ -243,7 +244,7 @@ If you are installing an IPA server, you need to install this package.
 Summary: Common files used by IPA server
 Group: System/Base
 Requires: %name-client-common = %EVR
-Requires: apache2-base
+Requires: apache2-base >= %apache_version
 Requires: custodia
 %add_python3_path %_datadir/ipa/
 %add_python3_compile_exclude %_datadir/ipa/
