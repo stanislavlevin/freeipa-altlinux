@@ -193,7 +193,7 @@ endif WITH_PYLINT
 if WITH_JSLINT
 JSLINT_TARGET = jslint
 endif WITH_JSLINT
-lint: acilint apilint $(POLINT_TARGET) $(PYLINT_TARGET) $(JSLINT_TARGET) rpmlint yamllint
+lint: acilint apilint $(POLINT_TARGET) $(PYLINT_TARGET) $(JSLINT_TARGET) yamllint
 
 .PHONY: devcheck
 devcheck: all
@@ -209,12 +209,12 @@ endif
 	@ # just tests, aci, api and pylint on Python 3
 	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON) ipatests/ipa-run-tests \
 	    --ipaclient-unittests
-	$(MAKE) $(AM_MAKEFLAGS) acilint apilint polint pylint jslint rpmlint yamllint check
+	$(MAKE) $(AM_MAKEFLAGS) acilint apilint polint pylint jslint yamllint check
 	@echo "All tests passed."
 
 .PHONY: fastcheck fasttest fastlint
 fastcheck:
-	@$(MAKE) -j1 $(AM_MAKEFLAGS) fastlint rpmlint yamllint fasttest apilint acilint
+	@$(MAKE) -j1 $(AM_MAKEFLAGS) fastlint yamllint fasttest apilint acilint
 
 fasttest: $(GENERATED_PYTHON_FILES) ipasetup.py
 	@ # --ignore doubles speed of total test run compared to pytest.skip()
