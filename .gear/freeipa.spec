@@ -223,7 +223,6 @@ Requires: %name-server-common = %EVR
 Requires: python3-module-augeas
 Requires: python3-module-gssapi
 Requires: python3-module-ipaclient = %EVR
-Requires: python3-module-ipaserver-ntp = %EVR
 Requires: python3-module-kdcproxy
 Requires: python3-module-ldap >= %python_ldap_version
 Requires: python3-module-pki-base >= %pki_version
@@ -377,7 +376,6 @@ Summary: Python libraries used by IPA client
 Group: System/Libraries
 Requires: %name-client-common = %EVR
 Requires: python3-module-freeipa = %EVR
-Requires: python3-module-ipaclient-ntp = %EVR
 Requires: python3-module-dns
 
 %description -n python3-module-ipaclient
@@ -437,24 +435,6 @@ hosts, services), Authentication (SSO, 2FA), and Authorization
 features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If you are using IPA with Python 3, you need to install this package.
-
-###############################################################################
-
-%package -n python3-module-ipaserver-ntp
-Summary: Python3 IPA libraries for ntp services in IPA server
-Group: Development/Python3
-
-%description -n python3-module-ipaserver-ntp
-IPA python3 libraries for synchronization IPA server with time&data servers.
-
-###############################################################################
-
-%package -n python3-module-ipaclient-ntp
-Summary: Python3 IPA libraries for ntp services in IPA client
-Group: Development/Python3
-
-%description -n python3-module-ipaclient-ntp
-IPA python3 libraries for synchronization IPA client with time&data servers.
 
 ###############################################################################
 
@@ -864,13 +844,6 @@ fi
 %python3_sitelibdir/ipaserver/
 %python3_sitelibdir/ipaserver-*.egg-info/
 
-%exclude %python3_sitelibdir/ipaserver/install/servntpconf*
-%exclude %python3_sitelibdir/ipaserver/install/servntplib*
-
-%files -n python3-module-ipaserver-ntp
-%python3_sitelibdir/ipaserver/install/servntpconf*
-%python3_sitelibdir/ipaserver/install/servntplib*
-
 %files server-common
 %dir %attr(0700,root,root) %_runtimedir/ipa
 %dir %attr(0700,root,root) %_runtimedir/ipa/ccaches
@@ -993,13 +966,6 @@ fi
 %python3_sitelibdir/ipaclient/
 %exclude %python3_sitelibdir/ipaclient/install/ipa_client_automount.py
 %python3_sitelibdir/ipaclient-*.egg-info/
-
-%exclude %python3_sitelibdir/ipaclient/install/clientntpconf*
-%exclude %python3_sitelibdir/ipaclient/install/clintplib*
-
-%files -n python3-module-ipaclient-ntp
-%python3_sitelibdir/ipaclient/install/clientntpconf*
-%python3_sitelibdir/ipaclient/install/clintplib*
 
 %files client-common
 %dir %attr(0755,root,root) %_sysconfdir/ipa/
