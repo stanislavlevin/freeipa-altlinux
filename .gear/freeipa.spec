@@ -43,8 +43,8 @@
 %define openldap_version 2.4.47-alt2
 
 Name: freeipa
-Version: 4.7.4
-Release: alt3
+Version: 4.8.6
+Release: alt1
 
 Summary: The Identity, Policy and Audit system
 License: GPLv3+
@@ -999,6 +999,9 @@ fi
 %python3_sitelibdir/ipaplatform-*-nspkg.pth
 
 %changelog
+* Tue Apr 07 2020 Stanislav Levin <slev@altlinux.org> 4.8.6-alt1
+- 4.7.4 -> 4.8.6.
+
 * Thu Feb 06 2020 Evgeny Sinelnikov <sin@altlinux.org> 4.7.4-alt3
 - Fixed compatibility with Samba 4.11
 - Backported fix Pylint with python3: Remove subclassing from object
