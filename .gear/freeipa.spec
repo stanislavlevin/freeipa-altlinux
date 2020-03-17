@@ -246,7 +246,6 @@ Summary: Common files used by IPA server
 Group: System/Base
 Requires: %name-client-common = %EVR
 Requires: apache2-base >= %apache_version
-Requires: custodia
 %add_python3_path %_datadir/ipa/
 %add_python3_compile_exclude %_datadir/ipa/
 
