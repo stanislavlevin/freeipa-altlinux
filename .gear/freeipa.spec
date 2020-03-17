@@ -897,7 +897,7 @@ fi
 %ghost %attr(0644,root,root) %config(noreplace) %apache2_sites_available/ipa.conf
 %ghost %attr(0644,root,root) %config(noreplace) %apache2_extra_enabled/ipa-rewrite.conf
 %ghost %attr(0644,root,root) %config(noreplace) %apache2_extra_enabled/ipa-kdc-proxy.conf
-%ghost %attr(0644,root,root) %config(noreplace) %apache2_extra_enabled/ipa-pki-proxy.conf
+%ghost %attr(0640,root,root) %config(noreplace) %apache2_extra_enabled/ipa-pki-proxy.conf
 %ghost %attr(0644,root,root) %config(noreplace) %_sysconfdir/ipa/kdcproxy/ipa-kdc-proxy.conf
 %ghost %attr(0644,root,root) %config(noreplace) %_datadir/ipa/html/ca.crt
 %ghost %attr(0640,root,named) %config(noreplace) %_sysconfdir/bind/ipa-ext.conf
