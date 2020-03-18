@@ -186,7 +186,6 @@ Requires: 389-ds-base >= %ds_version
 Requires: openldap-clients >= %openldap_version
 Requires: nss-utils
 Requires: krb5-kdc >= %krb5_version
-Requires: krb5-kinit >= %krb5_version
 Requires: libsasl2-plugin-gssapi
 Requires: fonts-font-awesome
 Requires: fonts-ttf-open-sans
@@ -412,6 +411,7 @@ Requires: %name-common = %EVR
 Requires: gnupg2
 Requires: keyutils
 Requires: less
+Requires: krb5-kinit >= %krb5_version
 Requires: python3-module-cffi
 Requires: python3-module-ipa_hbac
 Requires: python3-module-ldap >= %python_ldap_version
