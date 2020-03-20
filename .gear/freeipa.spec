@@ -76,7 +76,6 @@ BuildRequires: libsss_nss_idmap-devel >= %sssd_version
 BuildRequires: libunistring-devel
 BuildRequires: libsystemd-devel
 
-BuildRequires: apache2-base >= %apache_version
 BuildRequires: 389-ds-base-devel >= %ds_version
 BuildRequires: samba-devel >= %samba_version
 BuildRequires: node-uglify-js
