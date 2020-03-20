@@ -978,6 +978,9 @@ class TestIPACommand(IntegrationTest):
         This is the regression test for issue
         https://pagure.io/freeipa/issue/7995.
         """
+        platform = tasks.get_platform(self.master)
+        if platform == 'altlinux':
+            pytest.skip("Crypto policy is not supported on ALTLinux")
         def is_tls_version_enabled(tls_version):
             res = self.master.run_command(
                 ['openssl', 's_client',
