@@ -987,9 +987,11 @@ fi
 %files client-automount
 %_sbindir/ipa-client-automount
 %_mandir/man1/ipa-client-automount.1*
+%python3_sitelibdir/ipaclient/install/ipa_client_automount.py
 
 %files -n python3-module-ipaclient
 %python3_sitelibdir/ipaclient/
+%exclude %python3_sitelibdir/ipaclient/install/ipa_client_automount.py
 %python3_sitelibdir/ipaclient-*.egg-info/
 
 %exclude %python3_sitelibdir/ipaclient/install/clientntpconf*
