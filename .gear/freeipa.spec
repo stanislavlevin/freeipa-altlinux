@@ -481,6 +481,8 @@ Requires: tar
 Requires: xz
 Requires: python3-module-coverage
 Requires: python3-module-sssdconfig >= %sssd_version
+Requires: openssh-clients
+Requires: sshpass
 Requires: iptables
 # Tests have a huge amount useless Provides
 %set_findprov_skiplist %python3_sitelibdir/ipatests/*
