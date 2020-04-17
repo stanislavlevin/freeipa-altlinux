@@ -123,6 +123,7 @@ class BaseConstantsNamespace:
     NAMED_ZONE_COMMENT = ""
     PKI_USER = User("pkiuser")
     PKI_GROUP = Group("pkiuser")
+    CHECK_PACKAGE_OPT = "-q"
     # ntpd init variable used for daemon options
     NTPD_OPTS_VAR = "OPTIONS"
     # quote used for daemon options
@@ -177,6 +178,20 @@ class BaseConstantsNamespace:
     TLS_HIGH_CIPHERS = "HIGH:!aNULL:!eNULL:!MD5:!RC4:!3DES:!PSK:!SRP:!aDSS"
     HTTPD_IPA_MODULES = None
     HTTPD_IPA_CONFL_MODULES = None
+    TIME_SERVER_STRUCTURE = {
+        'CHRONY': {
+            'package_name': 'chrony',
+            'class_name': 'Chrony',
+        },
+        'NTPD': {
+            'package_name': 'ntpd',
+            'class_name': 'NTPD',
+        },
+        'OPENNTPD': {
+            'package_name': 'openntpd',
+            'class_name': 'OpenNTPD',
+        },
+    }
 
 
 constants = BaseConstantsNamespace()
