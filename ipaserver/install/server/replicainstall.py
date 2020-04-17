@@ -21,10 +21,10 @@ from pkg_resources import parse_version
 import six
 
 from ipaclient.install.client import check_ldap_conf, sssd_enable_ifp
-import ipaclient.install.timeconf
 from ipalib.install import certstore, sysrestore
 from ipalib.install.kinit import kinit_keytab
-from ipapython import ipaldap, ipautil
+from ipapython import ipaldap, ipautil, ntpmethods
+from ipapython.ntpmethods import TIME_SERVER
 from ipapython.dn import DN
 from ipapython.dnsutil import DNSResolver
 from ipapython.admintool import ScriptError
@@ -591,12 +591,12 @@ def common_check(no_ntp, skip_mem_check, setup_ca):
 
     if not no_ntp:
         try:
-            ipaclient.install.timeconf.check_timedate_services()
-        except ipaclient.install.timeconf.NTPConflictingService as e:
+            ntpmethods.check_timedate_services()
+        except ntpmethods.NTPConflictingService as e:
             print("WARNING: conflicting time&date synchronization service "
-                  "'{svc}' will\nbe disabled in favor of chronyd\n"
-                  .format(svc=e.conflicting_service))
-        except ipaclient.install.timeconf.NTPConfigurationError:
+                  "'{svc}' will\nbe disabled in favor of {ts}\n"
+                  .format(svc=e.conflicting_service, ts=TIME_SERVER))
+        except ntpmethods.NTPConfigurationError:
             pass
 
 
