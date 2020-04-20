@@ -58,7 +58,8 @@ class ALTLinuxServices(redhat_services.RedHatServices):
 
 # System may support more time&date services. FreeIPA supports ntpd only, other
 # services will be disabled during IPA installation
-timedate_services = ['ntpd', 'chronyd', 'openntpd']
+# In alt distribution openntpd service name equal ntp service name
+timedate_services = ['ntpd', 'chronyd']
 
 service = altlinux_service_class_factory
 knownservices = ALTLinuxServices()
