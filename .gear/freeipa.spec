@@ -23,6 +23,7 @@
 %define _libexecdir /usr/libexec
 %define plugin_dir %_libdir/dirsrv/plugins
 %define _localstatedir %_var
+%define _runtimedir /run
 %define plugin_dir %_libdir/dirsrv/plugins
 %define etc_systemd_dir %_sysconfdir/systemd/system
 
