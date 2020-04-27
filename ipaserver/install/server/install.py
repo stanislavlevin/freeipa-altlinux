@@ -439,7 +439,7 @@ def install_check(installer):
         print("  * Configure a stand-alone CA (dogtag) for certificate "
               "management")
     if not options.no_ntp:
-        print("  * Configure the NTP client (chronyd)")
+        print("  * Configure the NTP client ({})".format(TIME_SERVER))
     print("  * Create and configure an instance of Directory Server")
     print("  * Create and configure a Kerberos Key Distribution Center (KDC)")
     print("  * Configure Apache (httpd)")
