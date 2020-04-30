@@ -23,16 +23,25 @@ class TestNTPoptions(IntegrationTest):
     ntp_server1 = "1.pool.ntp.org"
     ntp_server2 = "2.pool.ntp.org"
 
-    print_chrony_conf = ['cat', paths.CHRONY_CONF]
+    # Override in ntpserver_install fixture
+    ntp_config_file = None
+    time_server = None
+
+    base_ntp = 'chrony'
+
+    exp_configure_msg_srv = None
+    exp_msg_srv_success = None
+
+    exp_msg_cli_success = \
+        "Time successfully synchronized with IPA server"
+
+    exp_exclude_msg = "Excluded by options:"
 
     exp_records_msg = "No SRV records of NTP servers found and " \
                       "no NTP server or pool address was provided."
-    exp_chrony_msg = "Using default chrony configuration."
 
-    exp_exclude_msg = "Excluded by options:"
-    exp_default_msg = "Using default chrony configuration."
-
-    exp_change_msg = "Configuration of chrony was changed by installer."
+    exp_exclude_msg_cli_fail = "Warning: IPA client was unable to sync time " \
+                               "with IPA server!"
 
     exp_srv_err = "error: --ntp-server cannot be used " \
                   "together with --no-ntp"
@@ -50,27 +59,60 @@ class TestNTPoptions(IntegrationTest):
             tasks.uninstall_client(self.client)
             tasks.uninstall_master(self.replica)
             tasks.uninstall_master(self.master)
+
         request.addfinalizer(fin)
+
+    @pytest.fixture(scope='class', params=["chrony", "ntpd", "openntpd"])
+    def ntpserver_install(self, request):
+        request.cls.time_server = request.param
+
+        request.cls.exp_configure_msg_srv = \
+            "  * Configure the NTP client ({})".format(
+                self.time_server.upper()
+            )
+        request.cls.exp_msg_srv_success = \
+            "Successfully synchronized time with {}".format(
+                self.time_server.upper()
+            )
+
+        ntp_struct = {
+            'chrony': {
+                'config_file': paths.CHRONY_CONF,
+            },
+            'ntpd': {
+                'config_file': paths.NTPD_CONF,
+            },
+            'openntpd': {
+                'config_file': paths.ONTPD_CONF,
+            },
+        }
+
+        request.cls.ntp_config_file = \
+            ntp_struct[self.time_server].get('config_file')
 
     @classmethod
     def install(cls, mh):
         cls.client = cls.clients[0]
         cls.replica = cls.replicas[0]
 
+    @pytest.mark.usefixtures("ntpserver_install")
     def test_server_client_install_without_options(self):
         """
         test to verify that ipa-server and ipa-client install uses
         default chrony configuration without any NTP options specified
         """
 
-        server_install = tasks.install_master(self.master, setup_dns=False)
-        assert self.exp_records_msg in server_install.stderr_text
-        assert self.exp_chrony_msg in server_install.stdout_text
+        tasks.install_packages(self.master, [self.time_server])
+
+        server_install = tasks.install_master(self.master, setup_dns=True)
+        assert self.exp_configure_msg_srv in server_install.stdout_text
+        assert self.exp_msg_srv_success in server_install.stdout_text
+
+        tasks.install_packages(self.client, [self.time_server])
 
         client_install = tasks.install_client(self.master, self.client)
-
-        assert self.exp_records_msg in client_install.stderr_text
-        assert self.exp_chrony_msg in client_install.stdout_text
+        assert self.exp_records_msg not in client_install.stderr_text
+        assert self.exp_msg_cli_success in client_install.stdout_text
 
     def test_server_client_install_no_ntp(self):
         """
@@ -78,95 +120,121 @@ class TestNTPoptions(IntegrationTest):
         option -N uses system defined NTP daemon configuration
         """
 
-        server_install = tasks.install_master(self.master, setup_dns=False,
+        tasks.install_packages(self.master, [self.base_ntp])
+
+        server_install = tasks.install_master(self.master, setup_dns=True,
                                               extra_args=['-N'])
         assert self.exp_exclude_msg in server_install.stdout_text
-        assert self.exp_default_msg not in server_install.stdout_text
+        assert "  * Configure the NTP client ({})" \
+               "".format(self.base_ntp.upper()) in server_install.stdout_text
 
         client_install = tasks.install_client(self.master, self.client,
                                               extra_args=['--no-ntp'])
-        assert self.exp_default_msg not in client_install.stdout_text
+        assert self.exp_exclude_msg_cli_fail not in client_install.stdout_text
+        assert self.exp_msg_cli_success not in client_install.stdout_text
 
+    @pytest.mark.usefixtures("ntpserver_install")
     def test_server_client_install_with_multiple_ntp_srv(self):
         """
         test to verify that ipa-server-install passes with multiple
         --ntp-server option used
         """
 
+        tasks.install_packages(self.master, [self.time_server])
+
         args = ['--ntp-server=%s' % self.ntp_server1,
                 '--ntp-server=%s' % self.ntp_server2]
 
-        server_install = tasks.install_master(self.master, setup_dns=False,
+        server_install = tasks.install_master(self.master, setup_dns=True,
                                               extra_args=args)
-        assert self.exp_change_msg in server_install.stderr_text
-        cmd = self.master.run_command(['cat', paths.CHRONY_CONF])
+        assert self.exp_configure_msg_srv in server_install.stdout_text
+        assert self.exp_msg_srv_success in server_install.stdout_text
+        cmd = self.master.run_command(['cat', self.ntp_config_file])
         assert self.ntp_server1 in cmd.stdout_text
         assert self.ntp_server2 in cmd.stdout_text
+
+        tasks.install_packages(self.client, [self.time_server])
 
         client_install = tasks.install_client(self.master, self.client,
                                               extra_args=args)
-        assert self.exp_change_msg in client_install.stderr_text
-        cmd = self.client.run_command(['cat', paths.CHRONY_CONF])
+        assert self.exp_msg_cli_success in client_install.stdout_text
+        cmd = self.client.run_command(['cat', self.ntp_config_file])
         assert self.ntp_server1 in cmd.stdout_text
         assert self.ntp_server2 in cmd.stdout_text
 
+    @pytest.mark.usefixtures("ntpserver_install")
     def test_server_replica_client_install_with_pool_and_srv(self):
         """
         test to verify that ipa-server, ipa-replica and ipa-client install
         passes with options --ntp-pool and --ntp-server together
         """
+
         args = ['--ntp-pool=%s' % self.ntp_pool,
                 '--ntp-server=%s' % self.ntp_server1]
 
-        server_install = tasks.install_master(self.master, setup_dns=False,
+        tasks.install_packages(self.master, [self.time_server])
+
+        server_install = tasks.install_master(self.master, setup_dns=True,
                                               extra_args=args)
-        assert self.exp_change_msg in server_install.stderr_text
-        cmd = self.master.run_command(['cat', paths.CHRONY_CONF])
+        assert self.exp_configure_msg_srv in server_install.stdout_text
+        assert self.exp_msg_srv_success in server_install.stdout_text
+        cmd = self.master.run_command(['cat', self.ntp_config_file])
         assert self.ntp_pool in cmd.stdout_text
         assert self.ntp_server1 in cmd.stdout_text
+
+        tasks.install_packages(self.replica, [self.time_server])
 
         replica_install = tasks.install_replica(self.master, self.replica,
                                                 extra_args=args,
                                                 promote=False)
-        assert self.exp_change_msg in replica_install.stderr_text
-
-        cmd = self.replica.run_command(['cat', paths.CHRONY_CONF])
+        assert self.exp_msg_cli_success in replica_install.stdout_text
+        cmd = self.replica.run_command(['cat', self.ntp_config_file])
         assert self.ntp_pool in cmd.stdout_text
         assert self.ntp_server1 in cmd.stdout_text
+
+        tasks.install_packages(self.client, [self.time_server])
 
         client_install = tasks.install_client(self.master, self.client,
                                               extra_args=args)
-        assert self.exp_change_msg in client_install.stderr_text
-        cmd = self.client.run_command(['cat', paths.CHRONY_CONF])
+        assert self.exp_msg_cli_success in client_install.stdout_text
+        cmd = self.client.run_command(['cat', self.ntp_config_file])
         assert self.ntp_pool in cmd.stdout_text
         assert self.ntp_server1 in cmd.stdout_text
 
+    @pytest.mark.usefixtures("ntpserver_install")
     def test_server_promoted_replica_client_install_with_srv(self):
         """
         test to verify that ipa-server, promotion of ipa-replica and
         ipa-client install passes with options --ntp-server
         """
+
         args = ['--ntp-server=%s' % self.ntp_server1]
 
-        server_install = tasks.install_master(self.master, setup_dns=False,
+        tasks.install_packages(self.master, [self.time_server])
+
+        server_install = tasks.install_master(self.master, setup_dns=True,
                                               extra_args=args)
-        assert self.exp_change_msg in server_install.stderr_text
-        cmd = self.master.run_command(['cat', paths.CHRONY_CONF])
+        assert self.exp_configure_msg_srv in server_install.stdout_text
+        assert self.exp_msg_srv_success in server_install.stdout_text
+        cmd = self.master.run_command(['cat', self.ntp_config_file])
         assert self.ntp_server1 in cmd.stdout_text
+
+        tasks.install_packages(self.replica, [self.time_server])
 
         replica_install = tasks.install_replica(self.master, self.replica,
                                                 extra_args=args,
                                                 promote=True)
         # while promoting with tasks expected_msg will not be in output
-        assert self.exp_change_msg not in replica_install.stderr_text
-
-        cmd = self.replica.run_command(['cat', paths.CHRONY_CONF])
+        assert self.exp_msg_cli_success not in replica_install.stdout_text
+        cmd = self.replica.run_command(['cat', self.ntp_config_file])
         assert self.ntp_server1 in cmd.stdout_text
+
+        tasks.install_packages(self.client, [self.time_server])
 
         client_install = tasks.install_client(self.master, self.client,
                                               extra_args=args)
-        assert self.exp_change_msg in client_install.stderr_text
-        cmd = self.client.run_command(['cat', paths.CHRONY_CONF])
+        assert self.exp_msg_cli_success in client_install.stdout_text
+        cmd = self.client.run_command(['cat', self.ntp_config_file])
         assert self.ntp_server1 in cmd.stdout_text
 
     def test_server_client_install_mixed_options(self):
@@ -176,7 +244,6 @@ class TestNTPoptions(IntegrationTest):
         """
         args1 = ['ipa-server-install', '-N',
                  '--ntp-server=%s' % self.ntp_server1]
-
         server_install = self.master.run_command(args1, raiseonerr=False)
         assert server_install.returncode == 2
         assert self.exp_srv_err in server_install.stderr_text
@@ -198,7 +265,7 @@ class TestNTPoptions(IntegrationTest):
         test to verify that replica promotion with ntp --ntp-server,
         --ntp-pool and -N or --no-ntp option would fail
         """
-        tasks.install_master(self.master, setup_dns=False)
+        tasks.install_master(self.master, setup_dns=True)
         tasks.install_client(self.master, self.replica)
 
         replica_install = self.replica.run_command(
@@ -219,6 +286,7 @@ class TestNTPoptions(IntegrationTest):
         assert replica_install.returncode == 1
         assert self.exp_prom_err in replica_install.stderr_text
 
+    @pytest.mark.usefixtures("ntpserver_install")
     def test_replica_promotion_without_ntp(self):
         """
         test to verify that replica promotion without ntp options
@@ -226,24 +294,33 @@ class TestNTPoptions(IntegrationTest):
         - ipa-replica-install without ntp option
         will be successful
         """
+
         ntp_args = ['--ntp-pool=%s' % self.ntp_pool]
 
-        server_install = tasks.install_master(self.master, setup_dns=False,
+        tasks.install_packages(self.master, [self.time_server])
+
+        server_install = tasks.install_master(self.master, setup_dns=True,
                                               extra_args=ntp_args)
-        assert self.exp_change_msg in server_install.stderr_text
+        assert self.exp_configure_msg_srv in server_install.stdout_text
+        assert self.exp_msg_srv_success in server_install.stdout_text
+
+        tasks.install_packages(self.client, [self.time_server])
 
         client_install = tasks.install_client(self.master, self.replica,
                                               extra_args=ntp_args)
-        assert self.exp_change_msg in client_install.stderr_text
+        assert self.exp_msg_cli_success in client_install.stdout_text
+
+        tasks.install_packages(self.replica, [self.time_server])
 
         replica_install = tasks.install_replica(self.master, self.replica,
                                                 promote=False)
         assert "ipa-replica-install command was successful" in \
-            replica_install.stderr_text
+               replica_install.stderr_text
 
-        cmd = self.replica.run_command(['cat', paths.CHRONY_CONF])
+        cmd = self.replica.run_command(['cat', self.ntp_config_file])
         assert self.ntp_pool in cmd.stdout_text
 
+    @pytest.mark.usefixtures("ntpserver_install")
     def test_interactive_ntp_set_opt(self):
         """
         Test to verify that ipa installations with ntp options passed
@@ -254,7 +331,7 @@ class TestNTPoptions(IntegrationTest):
         """
         server_input = (
             # Do you want to configure integrated DNS (BIND)? [no]:
-            "No\n"
+            # "No\n"
             # Server host name [hostname]:
             "\n"
             # Do you want to configure chrony with NTP server
@@ -284,8 +361,10 @@ class TestNTPoptions(IntegrationTest):
             "Yes"
         )
 
+        tasks.install_packages(self.master, [self.time_server])
+
         server_install = tasks.install_master(self.master,
-                                              setup_dns=False,
+                                              setup_dns=True,
                                               unattended=False,
                                               stdin_text=server_input)
 
@@ -294,10 +373,12 @@ class TestNTPoptions(IntegrationTest):
         assert self.ntp_server1 in server_install.stdout_text
         assert self.ntp_server2 in server_install.stdout_text
 
-        cmd = self.master.run_command(self.print_chrony_conf)
+        cmd = self.master.run_command(['cat', self.ntp_config_file])
         assert self.ntp_pool in cmd.stdout_text
         assert self.ntp_server1 in cmd.stdout_text
         assert self.ntp_server2 in cmd.stdout_text
+
+        tasks.install_packages(self.client, [self.time_server])
 
         client_install = tasks.install_client(self.master,
                                               self.client,
@@ -306,11 +387,12 @@ class TestNTPoptions(IntegrationTest):
 
         assert client_install.returncode == 0
 
-        cmd = self.client.run_command(self.print_chrony_conf)
+        cmd = self.client.run_command(['cat', self.ntp_config_file])
         assert self.ntp_pool in cmd.stdout_text
         assert self.ntp_server1 in cmd.stdout_text
         assert self.ntp_server2 in cmd.stdout_text
 
+    @pytest.mark.usefixtures("ntpserver_install")
     def test_interactive_ntp_no_opt(self):
         """
         Test to verify that ipa installations without ntp options passed
@@ -321,7 +403,6 @@ class TestNTPoptions(IntegrationTest):
         """
 
         server_input = (
-            "No\n"
             "\n"
             "Yes\n"
             "\n"
@@ -337,14 +418,18 @@ class TestNTPoptions(IntegrationTest):
             "Yes"
         )
 
+        tasks.install_packages(self.master, [self.time_server])
+
         server_install = tasks.install_master(self.master,
-                                              setup_dns=False,
+                                              setup_dns=True,
                                               unattended=False,
                                               stdin_text=server_input)
 
         assert server_install.returncode == 0
-        assert self.exp_records_msg in server_install.stderr_text
-        assert self.exp_chrony_msg in server_install.stdout_text
+        assert self.exp_configure_msg_srv in server_install.stdout_text
+        assert self.exp_msg_srv_success in server_install.stdout_text
+
+        tasks.install_packages(self.client, [self.time_server])
 
         client_install = tasks.install_client(self.master,
                                               self.client,
@@ -352,9 +437,10 @@ class TestNTPoptions(IntegrationTest):
                                               stdin_text=client_input)
 
         assert client_install.returncode == 0
-        assert self.exp_records_msg in client_install.stderr_text
-        assert self.exp_chrony_msg in client_install.stdout_text
+        assert self.exp_records_msg not in client_install.stderr_text
+        assert self.exp_msg_cli_success in client_install.stdout_text
 
+    @pytest.mark.usefixtures("ntpserver_install")
     def test_interactive_ntp_no_conf(self):
         """
         Test to verify that ipa installations without selecting
@@ -367,7 +453,6 @@ class TestNTPoptions(IntegrationTest):
         server_input = (
             "\n" +
             "\n"
-            "No\n"
             "Yes"
         )
 
@@ -377,14 +462,18 @@ class TestNTPoptions(IntegrationTest):
             "Yes"
         )
 
+        tasks.install_packages(self.master, [self.time_server])
+
         server_install = tasks.install_master(self.master,
-                                              setup_dns=False,
+                                              setup_dns=True,
                                               unattended=False,
                                               stdin_text=server_input)
 
         assert server_install.returncode == 0
-        assert self.exp_records_msg in server_install.stderr_text
-        assert self.exp_chrony_msg in server_install.stdout_text
+        assert self.exp_configure_msg_srv in server_install.stdout_text
+        assert self.exp_msg_srv_success in server_install.stdout_text
+
+        tasks.install_packages(self.client, [self.time_server])
 
         client_install = tasks.install_client(self.master,
                                               self.client,
@@ -392,8 +481,8 @@ class TestNTPoptions(IntegrationTest):
                                               stdin_text=client_input)
 
         assert client_install.returncode == 0
-        assert self.exp_records_msg in client_install.stderr_text
-        assert self.exp_chrony_msg in client_install.stdout_text
+        assert self.exp_records_msg not in client_install.stderr_text
+        assert self.exp_msg_cli_success in client_install.stdout_text
 
     @classmethod
     def uninstall(cls, mh):
