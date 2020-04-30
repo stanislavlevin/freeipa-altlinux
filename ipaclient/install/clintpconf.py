@@ -49,7 +49,7 @@ class BaseNTPClient:
             return False
 
         ntp_servers = self.ntp_servers
-        if not ntp_servers:
+        if not ntp_servers and not self.ntp_pool:
             ntp_servers = ntpmethods.search_ntp_servers(self.cli_domain)
             if not ntp_servers:
                 logger.warning("No SRV records of NTP servers found and "
