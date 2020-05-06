@@ -3,6 +3,7 @@ ENV container=docker LANG=en_US.utf8 LANGUAGE=en_US.utf8 LC_ALL=en_US.utf8
 
 COPY dist /root
 RUN \
+    apt-repo add task 258915 && \
     apt-get update \
     && apt-get install -y /root/rpms/*.rpm openssh \
         gssproxy-nfs-server nfs-server \
