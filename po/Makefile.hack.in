@@ -10,7 +10,7 @@ PYTHON = @PYTHON@
 GIT_BRANCH = @GIT_BRANCH@
 
 .PHONY: strip-po
-strip-po:
+strip-po: stamp-po
 	grep -v '#: ipaclient/remote_plugins/' $(DOMAIN).pot > $(DOMAIN).pot.tmp || exit 1; \
 	mv $(DOMAIN).pot.tmp $(DOMAIN).pot || exit 1; \
 	for po_file in $(POFILES); do \
@@ -37,19 +37,19 @@ strip-po:
 		echo; echo Please remove the deleted files from LINGUAS!; echo; \
 	fi
 
-clean: strip-po mostlyclean
+clean: strip-po
 	rm -f *~
 
-all: $(DOMAIN).pot strip-po
+all: strip-po
 
 # linters
-test-gettext: $(DOMAIN).pot strip-po
+test-gettext: strip-po
 	$(PYTHON) $(IPA_TEST_I18N) --test-gettext
 
-validate-pot: $(DOMAIN).pot strip-po
+validate-pot: strip-po
 	$(PYTHON) $(IPA_TEST_I18N) --show-strings --validate-pot $(DOMAIN).pot
 
-validate-po: $(DOMAIN).pot strip-po
+validate-po: strip-po
 	$(PYTHON) $(IPA_TEST_I18N) --show-strings --validate-po $(POFILES)
 
 # forcefully re-generate .pot file and test it
