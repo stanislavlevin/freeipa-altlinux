@@ -153,7 +153,7 @@ jobs:
   condition: succeeded()
   strategy:
     matrix: $[ dependencies.Build.outputs['gating_matrix.matrix'] ]
-  timeoutInMinutes: 90
+  timeoutInMinutes: 0
   steps:
     - template: templates/generate-job-variables.yml
     - template: templates/test-jobs.yml
