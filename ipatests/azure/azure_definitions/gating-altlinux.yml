@@ -110,3 +110,38 @@ vms:
       clients: 3
     tests:
     - test_integration/test_nfs.py
+
+- vm_jobs:
+  - container_job: ntp_options_common
+    tests:
+    - test_integration/test_ntp_options.py::TestNTPoptionsCommon
+    containers:
+      replicas: 1
+      clients: 1
+
+- vm_jobs:
+  - container_job: ntp_options_chrony
+    tests:
+    - test_integration/test_ntp_options.py::TestNTPoptions
+    args: '-k chrony'
+    containers:
+      replicas: 1
+      clients: 1
+
+- vm_jobs:
+  - container_job: ntp_options_ntpd
+    tests:
+    - test_integration/test_ntp_options.py::TestNTPoptions
+    args: '-k "ntpd and not openntpd"'
+    containers:
+      replicas: 1
+      clients: 1
+
+- vm_jobs:
+  - container_job: ntp_options_openntpd
+    tests:
+    - test_integration/test_ntp_options.py::TestNTPoptions
+    args: '-k openntpd'
+    containers:
+      replicas: 1
+      clients: 1
