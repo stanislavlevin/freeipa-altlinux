@@ -1,4 +1,4 @@
-FROM stanislavlevin/freeipa-tests-altlinux:sisyphus
+FROM stanislavlevin/freeipa-tests-altlinux:p9
 ENV container=docker LANG=en_US.utf8 LANGUAGE=en_US.utf8 LC_ALL=en_US.utf8
 
 COPY dist /root

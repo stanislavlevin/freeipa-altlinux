@@ -1,7 +1,7 @@
 variables:
   IPA_PLATFORM: altlinux
   # the Docker public image to build IPA packages (rpms)
-  DOCKER_BUILD_IMAGE: 'stanislavlevin/freeipa-build-altlinux:sisyphus'
+  DOCKER_BUILD_IMAGE: 'stanislavlevin/freeipa-build-altlinux:p9'
 
   # the Dockerfile to build Docker image for running IPA tests
   DOCKER_DOCKERFILE: ${{ format('Dockerfile.build.{0}', variables.IPA_PLATFORM) }}
