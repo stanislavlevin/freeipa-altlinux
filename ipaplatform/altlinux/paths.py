@@ -10,7 +10,6 @@ import sys
 
 # Fallback to default path definitions
 from ipaplatform.base.paths import BasePathNamespace
-from ipaplatform.altlinux.constants import HAS_NFS_CONF
 
 
 class ALTLinuxPathNamespace(BasePathNamespace):
@@ -97,8 +96,7 @@ class ALTLinuxPathNamespace(BasePathNamespace):
         PAM_KRB5_SO = BasePathNamespace.PAM_KRB5_SO_64
         BIND_LDAP_SO = BasePathNamespace.BIND_LDAP_SO_64
 
-    if HAS_NFS_CONF:
-        SYSCONFIG_NFS = '/etc/nfs.conf'
+    SYSCONFIG_NFS = '/etc/nfs.conf'
 
 
 paths = ALTLinuxPathNamespace()
