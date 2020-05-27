@@ -77,20 +77,25 @@ def krb5_nfs_client(request, mh):
         ])
         client.run_command(["cat", paths.REQUEST_KEY_CONF])
 
-        # verbosity for rpc-gssd
+        # increase verbosity for rpc-gssd
+        # comment out existing options(if any) and add new ones
         client.run_command(
             ["sed", "-i.sav",
-             "-e", r"s/^\(# \)\?verbosity=0.*$/verbosity=4/g",
-             "-e", r"s/^\(# \)\?rpc-verbosity=0.*$/rpc-verbosity=4/g",
-             # we don't want gssproxy for NFS clients (default is '=0')
-             "-e", r"s/^use-gss-proxy=1.*$/# &/g",
+             "-e", r"s/#[[:space:]]*\(\[gssd\]\)$/\1/",
+             "-e", r"s/^\(#[[:space:]]*\)\?\(verbosity=.*\)$/# \2/g",
+             "-e", r"s/^\(#[[:space:]]*\)\?\(rpc-verbosity=.*\)$/# \2/g",
+             "-e", r"s/^\(#[[:space:]]*\)\?\(use-gss-proxy=.*\)$/# \2/g",
+             "-e", (r"/^\[gssd\]$/a verbosity=4\nrpc-verbosity=4\n"
+                    "use-gss-proxy=0"),
              paths.SYSCONFIG_NFS])
+        client.run_command(["cat", paths.SYSCONFIG_NFS])
 
         # verbosity for nfs-idmapd/nfsidmap
         client.run_command(
             ["sed", "-i.sav",
              "-e", r"s/^\(#\)\?Verbosity = 0.*$/Verbosity = 2/g",
              paths.IDMAPD_CONF])
+        client.run_command(["cat", paths.IDMAPD_CONF])
 
         client.run_command(["systemctl", "restart", rpcgssd_name])
         client.run_command(["systemctl", "restart", nfs_utils_name])
@@ -134,14 +139,18 @@ def krb5_nfs_server(request, mh):
     # disable NFSv3
     cls.nfs_server.run_command(
         ["sed", "-i.sav",
-         "-e", r"s/^\(# \)\?vers3=y.*$/vers3=n/g",
+         "-e", r"s/#[[:space:]]*\(\[nfsd\]\)$/\1/",
+         "-e", r"s/^\(#[[:space:]]*\)\?\(vers3=.*\)$/# \2/g",
+         "-e", r"/^\[nfsd\]$/a vers3=n",
          paths.SYSCONFIG_NFS])
+    cls.nfs_server.run_command(["cat", paths.SYSCONFIG_NFS])
 
     # verbosity for nfs-idmapd
     cls.nfs_server.run_command(
         ["sed", "-i.sav",
          "-e", r"s/^\(#\)\?Verbosity = 0.*$/Verbosity = 2/g",
          paths.IDMAPD_CONF])
+    cls.nfs_server.run_command(["cat", paths.IDMAPD_CONF])
 
     # gssproxy debugging
     cls.nfs_server.run_command([
@@ -154,6 +163,7 @@ def krb5_nfs_server(request, mh):
            "}}"
            ).format(paths.GSSPROXY_SYSTEM_CONF)
     cls.nfs_server.run_command(["/bin/sh", "-c", cmd])
+    cls.nfs_server.run_command(["cat", paths.GSSPROXY_SYSTEM_CONF])
 
     # manual restart is needed due to
     # nfsdopenone: Opening /proc/net/rpc/nfs4.nametoid/channel failed
