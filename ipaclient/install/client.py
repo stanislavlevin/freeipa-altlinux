@@ -51,7 +51,7 @@ from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
 from ipapython import certdb, kernel_keyring, ipaldap, ipautil, ntpmethods
-from ipapython.ntpmethods import TIME_SERVER
+from ipapython.ntpmethods import TIME_SERVER, SERVICE_API
 from ipapython.admintool import ScriptError
 from ipapython.dn import DN
 from ipapython.install import typing
@@ -3395,6 +3395,8 @@ def uninstall(options):
             )
 
     createntp.uninstall_client(fstore, statestore)
+    # restore ntp state
+    restore_state(SERVICE_API, statestore)
 
     if was_sshd_configured and services.knownservices.sshd.is_running():
         services.knownservices.sshd.restart()
