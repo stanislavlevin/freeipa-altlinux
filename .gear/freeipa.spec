@@ -228,6 +228,8 @@ Requires: python3-module-pki-base >= %pki_version
 Requires: python3-module-sssdconfig >= %sssd_version
 Requires: python3-module-samba
 Requires: librpm
+Obsoletes: python3-module-ipaserver-ntp < %EVR
+Provides: python3-module-ipaserver-ntp = %EVR
 
 %description -n python3-module-ipaserver
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -376,6 +378,8 @@ Group: System/Libraries
 Requires: %name-client-common = %EVR
 Requires: python3-module-freeipa = %EVR
 Requires: python3-module-dns
+Obsoletes: python3-module-ipaclient-ntp < %EVR
+Provides: python3-module-ipaclient-ntp = %EVR
 
 %description -n python3-module-ipaclient
 IPA is an integrated solution to provide centrally managed Identity (users,
