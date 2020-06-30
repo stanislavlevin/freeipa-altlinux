@@ -79,7 +79,8 @@ BuildRequires: libsystemd-devel
 
 BuildRequires: 389-ds-base-devel >= %ds_version
 BuildRequires: samba-devel >= %samba_version
-BuildRequires: node-uglify-js
+BuildRequires: nodejs
+BuildRequires: python3(rjsmin)
 %endif # only_client
 
 # python
