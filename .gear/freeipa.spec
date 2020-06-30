@@ -997,6 +997,8 @@ fi
 %_man5dir/epn.conf.5*
 %attr(644,root,root) %_unitdir/ipa-epn.service
 %attr(644,root,root) %_unitdir/ipa-epn.timer
+%dir %attr(0755,root,root) %_sysconfdir/ipa/epn
+%attr(644,root,root) %_sysconfdir/ipa/epn/expire_msg.template
 
 %files client-automount
 %_sbindir/ipa-client-automount
