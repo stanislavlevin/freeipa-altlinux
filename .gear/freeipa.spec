@@ -890,8 +890,6 @@ fi
 %_datadir/ipa/*.ldif
 %_datadir/ipa/*.uldif
 %_datadir/ipa/*.template
-%_datadir/ipa/bind.ipa-ext.conf
-%_datadir/ipa/bind.ipa-options-ext.conf.template
 %_datadir/ipa/advise/
 %_datadir/ipa/profiles/
 %dir %_datadir/ipa/html
