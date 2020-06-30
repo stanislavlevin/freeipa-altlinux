@@ -60,7 +60,6 @@ BuildRequires(pre): rpm-build-python3
 BuildRequires: libcmocka-devel
 BuildRequires: libini_config-devel
 BuildRequires: libkrb5-devel >= %krb5_version
-BuildRequires: libnss-devel
 BuildRequires: libpopt-devel
 BuildRequires: libsasl2-devel
 BuildRequires: libssl-devel
