@@ -352,6 +352,17 @@ on the machine enrolled into a FreeIPA environment
 
 ###############################################################################
 
+%package client-epn
+Summary: Tools to configure Expiring Password Notification in IPA
+Group: System/Base
+Requires: %name-client = %EVR
+
+%description client-epn
+This package provides a service to collect and send expiring password
+notifications via email (SMTP).
+
+###############################################################################
+
 %package client-automount
 Summary: IPA Automount for use on clients
 Group: System/Base
@@ -979,6 +990,13 @@ fi
 %files client-samba
 %_sbindir/ipa-client-samba
 %_man1dir/ipa-client-samba.1*
+
+%files client-epn
+%_sbindir/ipa-epn
+%_man1dir/ipa-epn.1*
+%_man5dir/epn.conf.5*
+%attr(644,root,root) %_unitdir/ipa-epn.service
+%attr(644,root,root) %_unitdir/ipa-epn.timer
 
 %files client-automount
 %_sbindir/ipa-client-automount
