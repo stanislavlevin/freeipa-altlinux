@@ -1015,7 +1015,6 @@ fi
 %python3_sitelibdir/ipapython-*.egg-info/
 %python3_sitelibdir/ipalib-*.egg-info/
 %python3_sitelibdir/ipaplatform-*.egg-info/
-%python3_sitelibdir/ipaplatform-*-nspkg.pth
 
 %changelog
 * Fri Jun 05 2020 Stanislav Levin <slev@altlinux.org> 4.8.6-alt2
