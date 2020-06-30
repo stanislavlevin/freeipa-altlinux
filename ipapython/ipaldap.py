@@ -752,6 +752,7 @@ class LDAPClient:
         'nsslapd-idlistscanlimit': True,
         'nsslapd-anonlimitsdn': True,
         'nsslapd-minssf-exclude-rootdse': True,
+        'nsslapd-enable-upgrade-hash': True,
     })
 
     time_limit = -1.0   # unlimited
@@ -1567,9 +1568,9 @@ class LDAPClient:
                                 str(base_dn), scope, filter, attrs_list,
                                 serverctrls=sctrls, timeout=time_limit,
                                 sizelimit=size_limit)
-                        except ldap.LDAPError as e:
+                        except ldap.LDAPError as e2:
                             logger.warning(
-                                "Error cancelling paged search: %s", e)
+                                "Error cancelling paged search: %s", e2)
                         cookie = ''
 
                     try:

@@ -19,6 +19,9 @@ try:
     import ipaplatform  # pylint: disable=unused-import
 except ImportError:
     ipaplatform = None
+    osinfo = None
+else:
+    from ipaplatform.osinfo import osinfo
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -42,6 +45,10 @@ MARKERS = [
     'ds_acceptance: Acceptance test suite for 389 Directory Server',
     'skip_ipaclient_unittest: Skip in ipaclient unittest mode',
     'needs_ipaapi: Test needs IPA API',
+    ('skip_if_platform(platform, reason): Skip test on platform '
+     '(ID and ID_LIKE)'),
+    ('skip_if_container(type, reason): Skip test on container '
+     '("any" or specific type)'),
 ]
 
 
@@ -111,8 +118,10 @@ def pytest_addoption(parser):
 
 def pytest_cmdline_main(config):
     kwargs = dict(
-        context=u'cli', in_server=False, in_tree=True, fallback=False
+        context=u'cli', in_server=False, fallback=False
     )
+    # FIXME: workaround for https://pagure.io/freeipa/issue/8317
+    kwargs.update(in_tree=True)
     if not os.path.isfile(os.path.expanduser('~/.ipa/default.conf')):
         # dummy domain/host for machines without ~/.ipa/default.conf
         kwargs.update(domain=u'ipa.test', server=u'master.ipa.test')
@@ -137,20 +146,31 @@ def pytest_cmdline_main(config):
 
 def pytest_runtest_setup(item):
     if isinstance(item, pytest.Function):
-        # pytest 3.6 has deprecated get_marker in 3.6. The method was
-        # removed in 4.x and replaced with get_closest_marker.
-        if hasattr(item, 'get_closest_marker'):
-            get_marker = item.get_closest_marker  # pylint: disable=no-member
-        else:
-            get_marker = item.get_marker  # pylint: disable=no-member
-        if get_marker('skip_ipaclient_unittest'):
+        if item.get_closest_marker('skip_ipaclient_unittest'):
             # pylint: disable=no-member
             if item.config.option.ipaclient_unittests:
                 pytest.skip("Skip in ipaclient unittest mode")
-        if get_marker('needs_ipaapi'):
+        if item.get_closest_marker('needs_ipaapi'):
             # pylint: disable=no-member
             if item.config.option.skip_ipaapi:
                 pytest.skip("Skip tests that needs an IPA API")
+    if osinfo is not None:
+        for mark in item.iter_markers(name="skip_if_platform"):
+            platform = mark.kwargs.get("platform")
+            if platform is None:
+                platform = mark.args[0]
+            reason = mark.kwargs["reason"]
+            if platform in osinfo.platform_ids:
+                pytest.skip(f"Skip test on platform {platform}: {reason}")
+        for mark in item.iter_markers(name="skip_if_container"):
+            container = mark.kwargs.get("container")
+            if container is None:
+                container = mark.args[0]
+            reason = mark.kwargs["reason"]
+            if osinfo.container is not None:
+                if container in ('any', osinfo.container):
+                    pytest.skip(
+                        f"Skip test on '{container}' container type: {reason}")
 
 
 @pytest.fixture

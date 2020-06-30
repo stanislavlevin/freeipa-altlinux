@@ -54,16 +54,17 @@ AM_CONDITIONAL([WITH_IPATESTS], [test x"$with_ipatests" = xyes])
 AM_CONDITIONAL([HAVE_GCC], [test "$ac_cv_prog_gcc" = yes])
 
 dnl ---------------------------------------------------------------------------
-dnl - Check for NSPR/NSS
+dnl - Check for POPT
 dnl ---------------------------------------------------------------------------
-PKG_CHECK_MODULES([NSPR], [nspr])
-PKG_CHECK_MODULES([NSS], [nss])
+
+PKG_CHECK_MODULES([POPT], [popt])
 
 dnl ---------------------------------------------------------------------------
 dnl - Check for KRB5
 dnl ---------------------------------------------------------------------------
 
 PKG_CHECK_MODULES([KRB5], [krb5])
+PKG_CHECK_MODULES([KRB5_GSSAPI], [krb5-gssapi])
 
 AC_CHECK_HEADER(kdb.h, [], [AC_MSG_ERROR([kdb.h not found])])
 AC_CHECK_MEMBER(
@@ -329,6 +330,7 @@ if test "x${IPAPLATFORM}" == "xdebian"; then
     KRB5KDC_SERVICE="krb5-kdc.service"
     NAMED_GROUP="bind"
     ODS_USER="opendnssec"
+    ODS_GROUP="opendnssec"
     # see https://www.debian.org/doc/packaging-manuals/python-policy/ap-packaging_tools.html
     PYTHON_INSTALL_EXTRA_OPTIONS="--install-layout=deb"
 elif test "x${IPAPLATFORM}" == "xaltlinux"; then
@@ -340,6 +342,7 @@ else
     KRB5KDC_SERVICE="krb5kdc.service"
     NAMED_GROUP="named"
     ODS_USER="ods"
+    ODS_GROUP="ods"
     PYTHON_INSTALL_EXTRA_OPTIONS=""
 fi
 
@@ -352,6 +355,10 @@ AC_MSG_RESULT([${NAMED_GROUP}])
 AC_MSG_CHECKING([ODS_USER])
 AC_SUBST([ODS_USER])
 AC_MSG_RESULT([${ODS_USER}])
+
+AC_MSG_CHECKING([ODS_GROUP])
+AC_SUBST([ODS_GROUP])
+AC_MSG_RESULT([${ODS_GROUP}])
 
 AC_MSG_CHECKING([python setup.py install extra options])
 AC_SUBST([PYTHON_INSTALL_EXTRA_OPTIONS])

@@ -21,7 +21,7 @@
 ########################################################
 define(IPA_VERSION_MAJOR, 4)
 define(IPA_VERSION_MINOR, 8)
-define(IPA_VERSION_RELEASE, 6)
+define(IPA_VERSION_RELEASE, 8)
 
 ########################################################
 # For 'pre' releases the version will be               #
@@ -86,8 +86,9 @@ define(IPA_DATA_VERSION, 20100614120000)
 #                                                      #
 ########################################################
 define(IPA_API_VERSION_MAJOR, 2)
-define(IPA_API_VERSION_MINOR, 236)
-# Last change: Add trust_enable_agent.
+define(IPA_API_VERSION_MINOR, 239)
+# Last change: allow ID overrides for users to be members of groups and roles
+
 
 ########################################################
 # Following values are auto-generated from values above

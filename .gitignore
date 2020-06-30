@@ -75,6 +75,7 @@ freeipa2-dev-doc
 /daemons/dnssec/ipa-ods-exporter.service
 /daemons/dnssec/ipa-ods-exporter.socket
 /daemons/ipa-kdb/ipa_kdb_tests
+/daemons/ipa-kdb/ipa-print-pac
 /daemons/ipa-kdb/tests/.dirstamp
 /daemons/ipa-otpd/ipa-otpd
 /daemons/ipa-otpd/ipa-otpd.socket
@@ -88,10 +89,13 @@ freeipa2-dev-doc
 /po/test.po
 /po/test_locale/xh_ZA/LC_MESSAGES/ipa.mo
 
+/util/t_pwd
+
 /init/ipa_memcached
 /init/systemd/ipa-custodia.service
 /init/systemd/ipa.service
-/init/systemd/ipa_memcached.service
+/init/systemd/ipa-epn.service
+/init/systemd/ipa-epn.timer
 /init/tmpfilesd/ipa.conf
 
 !/install/ui/doc/Makefile.in
@@ -127,6 +131,7 @@ client/ipa-certupdate
 client/ipa-client-automount
 client/ipa-client-install
 client/ipa-client-samba
+client/ipa-epn
 daemons/dnssec/ipa-dnskeysyncd
 daemons/dnssec/ipa-dnskeysync-replica
 daemons/dnssec/ipa-ods-exporter

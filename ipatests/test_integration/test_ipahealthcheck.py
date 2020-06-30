@@ -7,12 +7,16 @@ Tests to verify that the ipa-healthcheck scenarios
 
 from __future__ import absolute_import
 
-from ipatests.test_integration.base import IntegrationTest
-from ipatests.pytest_ipa.integration import tasks
+import json
+import re
+
+import pytest
+
 from ipalib import api
 from ipapython.ipaldap import realm_to_serverid
-
-import json
+from ipatests.pytest_ipa.integration import tasks
+from ipaplatform.paths import paths
+from ipatests.test_integration.base import IntegrationTest
 
 HEALTHCHECK_LOG = "/var/log/ipa/healthcheck/healthcheck.log"
 HEALTHCHECK_SYSTEMD_FILE = (
@@ -21,7 +25,7 @@ HEALTHCHECK_SYSTEMD_FILE = (
 HEALTHCHECK_LOG_ROTATE_CONF = "/etc/logrotate.d/ipahealthcheck"
 HEALTHCHECK_LOG_DIR = "/var/log/ipa/healthcheck"
 HEALTHCHECK_OUTPUT_FILE = "/tmp/output.json"
-HEALTHCHECK_PKG = ['freeipa-healthcheck']
+HEALTHCHECK_PKG = ["*ipa-healthcheck"]
 TOMCAT_CFG = "/var/lib/pki/pki-tomcat/conf/ca/CS.cfg"
 
 
@@ -108,8 +112,15 @@ DEFAULT_PKI_KRA_CERTS = [
     "auditSigningCert cert-pki-kra",
 ]
 
+TOMCAT_CONFIG_FILES = (
+    paths.PKI_TOMCAT_PASSWORD_CONF,
+    paths.PKI_TOMCAT_SERVER_XML,
+    paths.CA_CS_CFG_PATH,
+)
 
-def run_healthcheck(host, source=None, check=None, output_type="json"):
+
+def run_healthcheck(host, source=None, check=None, output_type="json",
+                    failures_only=False):
     """
     Run ipa-healthcheck on the remote host and return the result
 
@@ -131,6 +142,9 @@ def run_healthcheck(host, source=None, check=None, output_type="json"):
 
     cmd.append("--output-type")
     cmd.append(output_type)
+
+    if failures_only:
+        cmd.append("--failures-only")
 
     result = host.run_command(cmd, raiseonerr=False)
 
@@ -298,6 +312,36 @@ class TestIpaHealthCheck(IntegrationTest):
         self.master.run_command(["mv", TOMCAT_CFG + ".old", TOMCAT_CFG])
         self.master.run_command(["ipactl", "restart"])
 
+    @pytest.fixture
+    def restart_tomcat(self):
+        """Fixture to Stop and then start tomcat instance during test"""
+        self.master.run_command(
+            ["systemctl", "stop", "pki-tomcatd@pki-tomcat"]
+        )
+        yield
+        self.master.run_command(
+            ["systemctl", "start", "pki-tomcatd@pki-tomcat"]
+        )
+
+    def test_ipahealthcheck_dogtag_ca_connectivity_check(self, restart_tomcat):
+        """
+        This testcase checks that when the pki-tomcat service is stopped,
+        DogtagCertsConnectivityCheck displays the result as ERROR.
+        """
+        error_msg = (
+            "Request for certificate failed, "
+            "Certificate operation cannot be completed: "
+            "Unable to communicate with CMS (503)"
+        )
+        returncode, data = run_healthcheck(
+            self.master, "ipahealthcheck.dogtag.ca",
+            "DogtagCertsConnectivityCheck",
+        )
+        assert returncode == 1
+        for check in data:
+            assert check["result"] == "ERROR"
+            assert check["kw"]["msg"] == error_msg
+
     def test_source_ipahealthcheck_meta_core_metacheck(self):
         """
         Testcase checks behaviour of check MetaCheck in source
@@ -371,13 +415,19 @@ class TestIpaHealthCheck(IntegrationTest):
                 check["kw"]["suffix"] == "ca"
             )
 
-    def test_source_ipa_roles_check_crlmanager(self):
+    @pytest.fixture
+    def disable_crlgen(self):
+        """Fixture to disable crlgen then enable it once test is done"""
+        self.master.run_command(["ipa-crlgen-manage", "disable"])
+        yield
+        self.master.run_command(["ipa-crlgen-manage", "enable"])
+
+    def test_source_ipa_roles_check_crlmanager(self, disable_crlgen):
         """
         This testcase checks the status of healthcheck tool
         reflects correct information when crlgen is disabled
         using ipa-crl-manage disable
         """
-        self.master.run_command(["ipa-crlgen-manage", "disable"])
         returncode, data = run_healthcheck(
             self.master,
             "ipahealthcheck.ipa.roles",
@@ -388,6 +438,19 @@ class TestIpaHealthCheck(IntegrationTest):
             assert check["result"] == "SUCCESS"
             assert check["kw"]["key"] == "crl_manager"
             assert check["kw"]["crlgen_enabled"] is False
+
+    def test_ipa_healthcheck_no_errors(self):
+        """
+        Ensure that on a default installation with KRA and DNS
+        installed ipa-healthcheck runs with no errors.
+        """
+        cmd = tasks.install_kra(self.master)
+        assert cmd.returncode == 0
+        returncode, _unused = run_healthcheck(
+            self.master,
+            failures_only=True
+        )
+        assert returncode == 0
 
     def test_ipa_healthcheck_dna_plugin_returns_warning_pagure_issue_60(self):
         """
@@ -456,6 +519,209 @@ class TestIpaHealthCheck(IntegrationTest):
             ['logrotate', '--debug', HEALTHCHECK_LOG_ROTATE_CONF]
         )
         assert msg not in cmd.stdout_text
+
+    def test_ipa_dns_systemrecords_check(self):
+        """
+        This test ensures that the ipahealthcheck.ipa.idns check
+        displays the correct result when master and replica is setup
+        with integrated DNS.
+        """
+        SRV_RECORDS = [
+            "_ldap._tcp." + self.replicas[0].domain.name + ".:" +
+            self.replicas[0].hostname + ".",
+            "_ldap._tcp." + self.master.domain.name + ".:" +
+            self.master.hostname + ".",
+            "_kerberos._tcp." + self.replicas[0].domain.name + ".:" +
+            self.replicas[0].hostname + ".",
+            "_kerberos._tcp." + self.master.domain.name + ".:" +
+            self.master.hostname + ".",
+            "_kerberos._udp." + self.replicas[0].domain.name + ".:" +
+            self.replicas[0].hostname + ".",
+            "_kerberos._udp." + self.master.domain.name + ".:" +
+            self.master.hostname + ".",
+            "_kerberos-master._tcp." + self.replicas[0].domain.name +
+            ".:" + self.replicas[0].hostname + ".",
+            "_kerberos-master._tcp." + self.master.domain.name + ".:" +
+            self.master.hostname + ".",
+            "_kerberos-master._udp." + self.replicas[0].domain.name +
+            ".:" + self.replicas[0].hostname + ".",
+            "_kerberos-master._udp." + self.master.domain.name + ".:" +
+            self.master.hostname + ".",
+            "_kpasswd._tcp." + self.replicas[0].domain.name + ".:" +
+            self.replicas[0].hostname + ".",
+            "_kpasswd._tcp." + self.master.domain.name + ".:" +
+            self.master.hostname + ".",
+            "_kpasswd._udp." + self.replicas[0].domain.name + ".:" +
+            self.replicas[0].hostname + ".",
+            "_kpasswd._udp." + self.master.domain.name + ".:" +
+            self.master.hostname + ".",
+            "\"" + self.master.domain.realm.upper() + "\"",
+            self.master.ip,
+            self.replicas[0].ip
+        ]
+        returncode, data = run_healthcheck(
+            self.master,
+            "ipahealthcheck.ipa.idns",
+            "IPADNSSystemRecordsCheck"
+        )
+        assert returncode == 0
+        for check in data:
+            assert check["result"] == "SUCCESS"
+            assert check["kw"]["key"] in SRV_RECORDS
+
+    def test_ipa_healthcheck_ds_ruv_check(self):
+        """
+        This testcase checks that ipa-healthcheck tool with RUVCheck
+        discovers the same RUV entries as the ipa-replica-manage list-ruv
+        command
+        """
+        result = self.master.run_command(
+            [
+                "ipa-replica-manage",
+                "list-ruv",
+                "-p",
+                self.master.config.dirman_password,
+            ]
+        )
+        output = re.findall(
+            r"\w+.+.\w+.\w:\d+", result.stdout_text.replace("389: ", "")
+        )
+        ruvs = []
+        for r in output:
+            (host, r) = r.split(":")
+            if host == self.master.hostname:
+                ruvs.append(r)
+        returncode, data = run_healthcheck(
+            self.master, "ipahealthcheck.ds.ruv", "RUVCheck"
+        )
+        assert returncode == 0
+        for check in data:
+            assert check["result"] == "SUCCESS"
+            assert check["kw"]["key"] in (self.master.domain.basedn, "o=ipaca")
+            assert check["kw"]["ruv"] in ruvs
+            ruvs.remove(check["kw"]["ruv"])
+        assert not ruvs
+
+    @pytest.fixture
+    def change_tomcat_mode(self):
+        for files in TOMCAT_CONFIG_FILES:
+            self.master.run_command(["chmod", "600", files])
+        yield
+        for files in TOMCAT_CONFIG_FILES:
+            self.master.run_command(["chmod", "660", files])
+
+    def test_ipa_healthcheck_tomcatfilecheck(self, change_tomcat_mode):
+        """
+        This testcase changes the permissions of the tomcat configuration file
+        on an IPA Master and then checks if healthcheck tools reports the ERROR
+        """
+        returncode, data = run_healthcheck(
+            self.master, "ipahealthcheck.ipa.files", "TomcatFileCheck"
+        )
+        assert returncode == 1
+        for check in data:
+            if check["kw"]["type"] == "mode":
+                assert check["kw"]["expected"] == "0660"
+                assert check["kw"]["got"] == "0600"
+                assert check["result"] == "ERROR"
+                assert check["kw"]["path"] in TOMCAT_CONFIG_FILES
+                assert (
+                    check["kw"]["msg"]
+                    == "Permissions of %s are too restrictive: "
+                       "0600 and should be 0660"
+                    % check["kw"]["path"]
+                )
+
+    @pytest.fixture
+    def change_tomcat_owner(self):
+        """Fixture to change owner of tomcat config during test"""
+        for file in TOMCAT_CONFIG_FILES:
+            self.master.run_command(["chown", "root.root", file])
+        yield
+        for file in TOMCAT_CONFIG_FILES:
+            self.master.run_command(["chown", "pkiuser.pkiuser", file])
+
+    def test_ipa_healthcheck_tomcatfile_owner(self, change_tomcat_owner):
+        """
+        This testcase changes the ownership of the tomcat config files
+        on an IPA Master and then checks if healthcheck tools
+        reports the status as WARNING
+        """
+        returncode, data = run_healthcheck(
+            self.master, "ipahealthcheck.ipa.files", "TomcatFileCheck"
+        )
+        assert returncode == 1
+        for check in data:
+            if check["kw"]["type"] == "owner":
+                assert check["kw"]["expected"] == "pkiuser"
+                assert check["kw"]["got"] == "root"
+                assert check["result"] == "WARNING"
+                assert check["kw"]["path"] in TOMCAT_CONFIG_FILES
+                assert (
+                    check["kw"]["msg"]
+                    == "Ownership of %s is root and should be pkiuser"
+                    % check["kw"]["path"]
+                )
+            elif check["kw"]["type"] == "group":
+                assert check["kw"]["expected"] == "pkiuser"
+                assert check["kw"]["got"] == "root"
+                assert check["result"] == "WARNING"
+                assert check["kw"]["path"] in TOMCAT_CONFIG_FILES
+                assert (
+                    check["kw"]["msg"]
+                    == "Group of %s is root and should be pkiuser"
+                    % check["kw"]["path"]
+                )
+
+    def test_ipa_healthcheck_without_trust_setup(self):
+        """
+        This testcase checks that when trust isn't setup between IPA
+        server and Windows AD, IPADomainCheck displays key value as
+        domain-check and result is SUCCESS
+        """
+        returncode, data = run_healthcheck(
+            self.master,
+            "ipahealthcheck.ipa.trust",
+            "IPADomainCheck"
+        )
+        assert returncode == 0
+        for check in data:
+            assert check["result"] == "SUCCESS"
+            assert check["kw"]["key"] == "domain-check"
+
+    def test_ipa_healthcheck_output_indent(self):
+        """
+        This test case checks whether default (2) indentation is applied
+        to output without it being implicitly stated
+        """
+        cmd = self.master.run_command(["ipa-healthcheck",
+                                       "--source",
+                                       "ipahealthcheck.meta.services"],
+                                      raiseonerr=False)
+        output_str = cmd.stdout_text
+        output_json = json.loads(output_str)
+        assert output_str == "{}\n".format(json.dumps(output_json, indent=2))
+
+    @pytest.fixture
+    def ipactl(self):
+        """Stop and start IPA during test"""
+        self.master.run_command(["ipactl", "stop"])
+        yield
+        self.master.run_command(["ipactl", "start"])
+
+    def test_run_with_stopped_master(self, ipactl):
+        """
+        Test output of healthcheck where master IPA services are stopped
+        contains only errors regarding master being stopped and no other false
+        positives.
+        """
+        returncode, output = run_healthcheck(
+            self.master,
+            output_type="human",
+            failures_only=True)
+        assert returncode == 1
+        errors = re.findall("ERROR: .*: not running", output)
+        assert len(errors) == len(output.split('\n'))
 
     def test_ipa_healthcheck_remove(self):
         """

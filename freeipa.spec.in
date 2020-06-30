@@ -178,7 +178,6 @@ BuildRequires:  systemd
 # systemd-tmpfiles which is executed from make install requires apache user
 BuildRequires:  httpd
 BuildRequires:  nspr-devel
-BuildRequires:  nss-devel >= %{nss_version}
 BuildRequires:  openssl-devel
 BuildRequires:  libini_config-devel
 BuildRequires:  cyrus-sasl-devel
@@ -192,7 +191,7 @@ BuildRequires:  libsss_idmap-devel
 BuildRequires:  libsss_certmap-devel
 BuildRequires:  libsss_nss_idmap-devel >= %{sssd_version}
 BuildRequires:  nodejs(abi)
-BuildRequires:  uglify-js
+BuildRequires:  python3-rjsmin
 BuildRequires:  libverto-devel
 BuildRequires:  libunistring-devel
 # 0.13.0: https://bugzilla.redhat.com/show_bug.cgi?id=1584773
@@ -318,7 +317,6 @@ Requires: python3-ipaserver = %{version}-%{release}
 Requires: python3-ldap >= %{python_ldap_version}
 Requires: 389-ds-base >= %{ds_version}
 Requires: openldap-clients > 2.4.35-4
-Requires: nss >= %{nss_version}
 Requires: nss-tools >= %{nss_version}
 Requires(post): krb5-server >= %{krb5_version}
 Requires(post): krb5-server >= %{krb5_base_version}, krb5-server < %{krb5_base_version}.100
@@ -457,7 +455,12 @@ Requires: bind >= 9.11.0-6.P2
 Requires: bind-utils >= 9.11.0-6.P2
 Requires: bind-pkcs11 >= 9.11.0-6.P2
 Requires: bind-pkcs11-utils >= 9.11.0-6.P2
+%if 0%{?fedora} >= 32
+# See https://bugzilla.redhat.com/show_bug.cgi?id=1825812
+Requires: opendnssec >= 2.1.6-5
+%else
 Requires: opendnssec >= 1.4.6-4
+%endif
 %{?systemd_requires}
 
 Provides: %{alt_name}-server-dns = %{version}
@@ -579,6 +582,15 @@ Requires: cifs-utils
 %description client-samba
 This package provides command-line tools to deploy Samba domain member
 on the machine enrolled into a FreeIPA environment
+
+%package client-epn
+Summary: Tools to configure Expiring Password Notification in IPA
+Group: System Environment/Base
+Requires: %{name}-client = %{version}-%{release}
+
+%description client-epn
+This package provides a service to collect and send expiring password
+notifications via email (SMTP).
 
 %package -n python3-ipaclient
 Summary: Python libraries used by IPA client
@@ -739,7 +751,7 @@ Requires: ldns-utils
 Requires: python3-coverage
 Requires: python3-cryptography >= 1.6
 Requires: python3-polib
-Requires: python3-pytest >= 2.6
+Requires: python3-pytest >= 3.9.1
 Requires: python3-pytest-multihost >= 0.5
 Requires: python3-pytest-sourceorder
 Requires: python3-sssdconfig >= %{sssd_version}
@@ -1123,6 +1135,7 @@ fi
 %{_libexecdir}/ipa/ipa-pki-retrieve-key
 %{_libexecdir}/ipa/ipa-pki-wait-running
 %{_libexecdir}/ipa/ipa-otpd
+%{_libexecdir}/ipa/ipa-print-pac
 %dir %{_libexecdir}/ipa/custodia
 %attr(755,root,root) %{_libexecdir}/ipa/custodia/ipa-custodia-dmldap
 %attr(755,root,root) %{_libexecdir}/ipa/custodia/ipa-custodia-pki-tomcat
@@ -1206,7 +1219,6 @@ fi
 %{_usr}/share/ipa/*.ldif
 %{_usr}/share/ipa/*.uldif
 %{_usr}/share/ipa/*.template
-%{_usr}/share/ipa/bind.ipa-ext.conf
 %dir %{_usr}/share/ipa/advise
 %dir %{_usr}/share/ipa/advise/legacy
 %{_usr}/share/ipa/advise/legacy/*.template
@@ -1252,6 +1264,7 @@ fi
 %ghost %attr(0644,root,root) %config(noreplace) %{_sysconfdir}/ipa/kdcproxy/ipa-kdc-proxy.conf
 %ghost %attr(0644,root,root) %config(noreplace) %{_usr}/share/ipa/html/ca.crt
 %ghost %attr(0640,root,named) %config(noreplace) %{_sysconfdir}/named/ipa-ext.conf
+%ghost %attr(0640,root,named) %config(noreplace) %{_sysconfdir}/named/ipa-options-ext.conf
 %ghost %attr(0644,root,root) %{_usr}/share/ipa/html/krb.con
 %ghost %attr(0644,root,root) %{_usr}/share/ipa/html/krb5.ini
 %ghost %attr(0644,root,root) %{_usr}/share/ipa/html/krbrealm.con
@@ -1331,6 +1344,17 @@ fi
 %{_sbindir}/ipa-client-samba
 %{_mandir}/man1/ipa-client-samba.1*
 
+
+%files client-epn
+%doc README.md Contributors.txt
+%license COPYING
+%{_sbindir}/ipa-epn
+%{_mandir}/man1/ipa-epn.1*
+%{_mandir}/man5/epn.conf.5*
+%attr(644,root,root) %{_unitdir}/ipa-epn.service
+%attr(644,root,root) %{_unitdir}/ipa-epn.timer
+%attr(644,root,root) %{_sysconfdir}/ipa/epn/expire_msg.template
+
 %files -n python3-ipaclient
 %doc README.md Contributors.txt
 %license COPYING
@@ -1405,7 +1429,6 @@ fi
 %{python3_sitelib}/ipapython-*.egg-info
 %{python3_sitelib}/ipalib-*.egg-info
 %{python3_sitelib}/ipaplatform-*.egg-info
-%{python3_sitelib}/ipaplatform-*-nspkg.pth
 
 
 %if 0%{?with_ipatests}

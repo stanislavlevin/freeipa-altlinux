@@ -120,6 +120,10 @@ global_output_params = (
     Str('memberof_hbacrule?',
         label='Member of HBAC rule',
     ),
+    Str('member_idoverrideuser?',
+        label=_('Member ID user overrides'),),
+    Str('memberindirect_idoverrideuser?',
+        label=_('Indirect Member ID user overrides'),),
     Str('memberindirect_user?',
         label=_('Indirect Member users'),
     ),
@@ -858,7 +862,7 @@ def _check_limit_object_class(attributes, attrs, allow_only):
     # LDAP schema does not enforce any of LDAP attribute options
     # (e.g. attribute;option), thus we should avoid comparing
     # attribute names with options directly.
-    limitattrs = [x.split(';')[0] for x in attrs]
+    limitattrs = {x.split(';')[0].lower() for x in attrs}
     # Go through the MUST first
     for attr in attributes[0].values():
         if attr.names[0].lower() in limitattrs:
@@ -877,8 +881,8 @@ def _check_limit_object_class(attributes, attrs, allow_only):
             limitattrs.remove(attr.names[0].lower())
     if len(limitattrs) > 0 and allow_only:
         raise errors.ObjectclassViolation(
-            info=_('attribute "%(attribute)s" not allowed') % dict(
-                attribute=limitattrs[0]))
+            info=_('these attributes are not allowed: %(attrs)s') % dict(
+                attrs=", ".join(sorted(limitattrs))))
 
 
 class BaseLDAPCommand(Method):
@@ -2439,9 +2443,7 @@ class BaseLDAPAddAttribute(BaseLDAPModAttribute):
             value_to_add = set(value)
 
             if not old_value.isdisjoint(value_to_add):
-                raise errors.ExecutionError(
-                    message=_('\'%(attr)s\' already contains one or more '
-                              'values') % dict(attr=name))
+                raise errors.AlreadyContainsValueError(attr=name)
 
             update[name] = list(old_value | value_to_add)
 

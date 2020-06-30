@@ -17,7 +17,6 @@ AM_CPPFLAGS =						\
 	$(KRB5_CFLAGS)					\
 	$(WARN_CFLAGS)					\
 	$(NDRPAC_CFLAGS)				\
-	$(NSS_CFLAGS)					\
 	$(SSSCERTMAP_CFLAGS)				\
 	$(NULL)
 
@@ -60,7 +59,6 @@ ipadb_la_LIBADD = 		\
 	$(LDAP_LIBS)		\
 	$(NDRPAC_LIBS)		\
 	$(UNISTRING_LIBS)	\
-	$(NSS_LIBS)             \
 	$(SSSCERTMAP_LIBS)	\
 	$(top_builddir)/util/libutil.la	\
 	$(NULL)
@@ -100,12 +98,40 @@ ipa_kdb_tests_LDADD =          \
        $(LDAP_LIBS)            \
        $(NDRPAC_LIBS)          \
        $(UNISTRING_LIBS)       \
-       $(NSS_LIBS)             \
        $(SSSCERTMAP_LIBS)      \
        $(top_builddir)/util/libutil.la	\
        -lkdb5                  \
        -lsss_idmap             \
        $(NULL)
+
+appdir = $(libexecdir)/ipa
+app_PROGRAMS = ipa-print-pac
+ipa_print_pac_SOURCES = ipa-print-pac.c \
+			$(NULL)
+
+ipa_print_pac_CFLAGS = 			\
+	-I$(srcdir)			\
+	-I$(top_srcdir)/util		\
+	-DPREFIX=\""$(prefix)"\" 	\
+	-DBINDIR=\""$(bindir)"\"	\
+	-DLIBDIR=\""$(libdir)"\" 	\
+	-DLIBEXECDIR=\""$(libexecdir)"\"\
+	-DDATADIR=\""$(datadir)"\"	\
+	-DLDAPIDIR=\""$(runstatedir)"\"	\
+	$(AM_CFLAGS)			\
+	$(POPT_CFLAGS)			\
+	$(KRB5_CFLAGS)			\
+	$(KRB5_GSSAPI_CFLAGS)		\
+	$(WARN_CFLAGS)			\
+	$(NDRPAC_CFLAGS)		\
+	$(NULL)
+
+ipa_print_pac_LDADD =			\
+	$(KRB5_GSSAPI_LIBS)		\
+	$(KRB5_LIBS)			\
+	$(NDRPAC_LIBS)			\
+	$(POPT_LIBS)			\
+	$(NULL)
 
 clean-local:
 	rm -f tests/.dirstamp

@@ -1,30 +1,27 @@
-options {
-	// turns on IPv6 for port 53, IPv4 is on by default for all ifaces
-	listen-on-v6 {any;};
+/* WARNING: This config file is managed by IPA.
+ *
+ * DO NOT MODIFY! Any modification will be overwritten by upgrades.
+ *
+ *
+ * - $NAMED_CUSTOM_OPTIONS_CONF (for options)
+ * - $NAMED_CUSTOM_CONF (all other settings)
+ */
 
+options {
 	// Put files that named is allowed to write in the data/ directory:
 	directory "$NAMED_VAR_DIR"; // the default
 	dump-file		"${NAMED_DATA_DIR}cache_dump.db";
 	statistics-file		"${NAMED_DATA_DIR}named_stats.txt";
 	memstatistics-file	"${NAMED_DATA_DIR}named_mem_stats.txt";
 
-	// If not explicitly set, the ACLs for "allow-query-cache" and
-	// "allow-recursion" are set to "localnets; localhost;".
-	// If either "allow-query-cache" or "allow-recursion" is set,
-	// the other would be set the same value.
-	// Please refer to $CUSTOM_CONFIG
-	// for more informations
-
 	tkey-gssapi-keytab "$NAMED_KEYTAB";
+
 	pid-file "$NAMED_PID";
 
-	dnssec-enable yes;
-	dnssec-validation yes;
-
-	/* Path to ISC DLV key */
-	bindkeys-file "$BINDKEYS_FILE";
-
 	managed-keys-directory "$MANAGED_KEYS_DIR";
+
+	/* user customizations of options */
+	include "$NAMED_CUSTOM_OPTIONS_CONF";
 
 	/* crypto policy snippet on platforms with system-wide policy. */
 	$INCLUDE_CRYPTO_POLICY
@@ -50,18 +47,14 @@ ${NAMED_ZONE_COMMENT}};
 include "$RFC1912_ZONES";
 include "$ROOT_KEY";
 
-/* custom configuration snippet */
-include "$CUSTOM_CONFIG";
+/* user customization */
+include "$NAMED_CUSTOM_CONF";
 
-/* WARNING: This part of the config file is IPA-managed.
- * Modifications may break IPA setup or upgrades.
- */
 dyndb "ipa" "$BIND_LDAP_SO" {
 	uri "ldapi://%2fvar%2frun%2fslapd-$SERVER_ID.socket";
-	base "cn=dns, $SUFFIX";
+	base "cn=dns,$SUFFIX";
 	server_id "$FQDN";
 	auth_method "sasl";
 	sasl_mech "GSSAPI";
 	sasl_user "DNS/$FQDN";
 };
-/* End of IPA-managed part. */

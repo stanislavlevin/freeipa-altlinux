@@ -45,7 +45,7 @@ from ipapython.dn import DN
 import ipapython.errors
 from ipaserver.install import sysupgrade
 from ipalib import api, x509
-from ipalib.constants import IPAAPI_USER, MOD_SSL_VERIFY_DEPTH
+from ipalib.constants import IPAAPI_USER, MOD_SSL_VERIFY_DEPTH, IPA_CA_RECORD
 from ipaplatform.constants import constants
 from ipaplatform.tasks import tasks
 from ipaplatform.paths import paths
@@ -434,18 +434,29 @@ class HTTPInstance(service.Service):
             else:
                 prev_helper = None
             try:
-                certmonger.request_and_wait_for_cert(
+                # In migration case, if CA server is older version it may not
+                # have codepaths to support the ipa-ca.$DOMAIN dnsName in HTTP
+                # cert.  Therefore if request fails, try again without the
+                # ipa-ca.$DOMAIN dnsName.
+                args = dict(
                     certpath=(paths.HTTPD_CERT_FILE, paths.HTTPD_KEY_FILE),
                     principal=self.principal,
                     subject=str(DN(('CN', self.fqdn), self.subject_base)),
                     ca='IPA',
                     profile=dogtag.DEFAULT_PROFILE,
-                    dns=[self.fqdn],
+                    dns=[self.fqdn, f'{IPA_CA_RECORD}.{api.env.domain}'],
                     post_command='restart_httpd',
                     storage='FILE',
                     passwd_fname=key_passwd_file,
-                    resubmit_timeout=api.env.certmonger_wait_timeout
+                    resubmit_timeout=api.env.certmonger_wait_timeout,
+                    stop_tracking_on_error=True,
                 )
+                try:
+                    certmonger.request_and_wait_for_cert(**args)
+                except Exception as e:
+                    args['dns'] = [self.fqdn]  # remove ipa-ca.$DOMAIN
+                    args['stop_tracking_on_error'] = False
+                    certmonger.request_and_wait_for_cert(**args)
             finally:
                 if prev_helper is not None:
                     certmonger.modify_ca_helper('IPA', prev_helper)
@@ -659,6 +670,7 @@ class HTTPInstance(service.Service):
                 post_command='restart_httpd', storage='FILE',
                 profile=dogtag.DEFAULT_PROFILE,
                 pinfile=key_passwd_file,
+                dns=[self.fqdn, f'{IPA_CA_RECORD}.{api.env.domain}'],
             )
             subject = str(DN(cert.subject))
             certmonger.add_principal(request_id, self.principal)

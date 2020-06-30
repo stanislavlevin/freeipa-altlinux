@@ -69,8 +69,6 @@ if six.PY3:
     unicode = str
 
 
-PYTEST_VERSION = tuple(int(v) for v in pytest.__version__.split('.'))
-
 # settings are configured by conftest
 IPACLIENT_UNITTESTS = None
 SKIP_IPAAPI = None
@@ -81,25 +79,14 @@ def check_ipaclient_unittests(reason="Skip in ipaclient unittest mode"):
     """Call this in a package to skip the package in ipaclient-unittest mode
     """
     if IPACLIENT_UNITTESTS:
-        if PYTEST_VERSION[0] >= 3:
-            # pytest 3+ does no longer allow pytest.skip() on module level
-            # pylint: disable=unexpected-keyword-arg
-            raise pytest.skip.Exception(reason, allow_module_level=True)
-            # pylint: enable=unexpected-keyword-arg
-        else:
-            raise pytest.skip(reason)
+        pytest.skip(reason, allow_module_level=True)
 
 
 def check_no_ipaapi(reason="Skip tests that needs an IPA API"):
     """Call this in a package to skip the package in no-ipaapi mode
     """
     if SKIP_IPAAPI:
-        if PYTEST_VERSION[0] >= 3:
-            # pylint: disable=unexpected-keyword-arg
-            raise pytest.skip.Exception(reason, allow_module_level=True)
-            # pylint: enable=unexpected-keyword-arg
-        else:
-            raise pytest.skip(reason)
+        pytest.skip(reason, allow_module_level=True)
 
 
 class TempDir:
@@ -887,3 +874,28 @@ def get_group_dn(cn):
 
 def get_user_dn(uid):
     return DN(('uid', uid), api.env.container_user, api.env.basedn)
+
+
+@contextmanager
+def xfail_context(condition, reason):
+    """Expect a block of code to fail.
+
+    This function provides functionality similar to pytest.mark.xfail
+    but for a block of code instead of the whole test function. This has
+    two benefits:
+    1) you can mark single line as expectedly failing without suppressing
+       all other errors in the test function
+    2) you can use conditions which can not be evaluated before the test start.
+
+    The check is always done in "strict" mode, i.e. if test is expected to
+    fail but succeeds then it will be marked as failing.
+    """
+    try:
+        yield
+    except Exception:
+        if condition:
+            pytest.xfail(reason)
+        raise
+    else:
+        if condition:
+            pytest.fail('XPASS(strict) reason: {}'.format(reason), False)

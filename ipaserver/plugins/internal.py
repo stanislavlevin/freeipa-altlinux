@@ -251,6 +251,7 @@ class i18n_messages(Command):
             "expand_all": _("Expand All"),
             "general": _("General"),
             "identity": _("Identity Settings"),
+            "record": _("Record Settings"),
             "settings": _("${entity} ${primary_key} Settings"),
             "to_top": _("Back to Top"),
             "updated": _("${entity} ${primary_key} updated"),
@@ -522,6 +523,9 @@ class i18n_messages(Command):
                     "Add exclusive condition into '${primary_key}'"
                 ),
                 "attribute": _("Attribute"),
+                "default_group_confirm": _(
+                    "Are you sure you want to change default group?"
+                ),
                 "default_host_group": _("Default host group"),
                 "default_user_group": _("Default user group"),
                 "exclusive": _("Exclusive"),

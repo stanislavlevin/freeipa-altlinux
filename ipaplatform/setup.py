@@ -31,7 +31,6 @@ if __name__ == '__main__':
         name="ipaplatform",
         doc=__doc__,
         package_dir={'ipaplatform': ''},
-        namespace_packages=['ipaplatform'],
         packages=[
             "ipaplatform",
             "ipaplatform.altlinux",
@@ -39,7 +38,8 @@ if __name__ == '__main__':
             "ipaplatform.debian",
             "ipaplatform.fedora",
             "ipaplatform.redhat",
-            "ipaplatform.rhel"
+            "ipaplatform.rhel",
+            "ipaplatform.suse"
         ],
         install_requires=[
             "cffi",

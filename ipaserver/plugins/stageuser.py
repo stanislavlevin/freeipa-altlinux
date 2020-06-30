@@ -575,7 +575,7 @@ class stageuser_activate(LDAPQuery):
         preserved (defined in preserved_DN_syntax_attrs)
         see http://www.freeipa.org/page/V3/User_Life-Cycle_Management#Adjustment_of_DN_syntax_attributes
         '''
-        if not attr in entry_to:
+        if attr not in entry_to:
             if isinstance(entry_from[attr], (list, tuple)):
                 # attr is multi value attribute
                 entry_to[attr] = []
@@ -720,7 +720,7 @@ class stageuser_activate(LDAPQuery):
         # Now delete the Staging entry
         try:
             self._exc_wrapper(args, options, ldap.delete_entry)(staging_dn)
-        except:
+        except BaseException:
             try:
                 logger.error("Fail to delete the Staging user after "
                              "activating it %s ", staging_dn)

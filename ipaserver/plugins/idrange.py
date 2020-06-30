@@ -30,7 +30,7 @@ from ipapython.dn import DN
 if six.PY3:
     unicode = str
 
-if api.env.in_server and api.env.context in ['lite', 'server']:
+if api.env.in_server:
     try:
         import ipaserver.dcerpc
         _dcerpc_bindings_installed = True
@@ -709,7 +709,7 @@ class idrange_mod(LDAPUpdate):
                     entry_attrs['ipanttrusteddomainsid'])
 
             # Add trusted AD domain range object class, if it wasn't there
-            if not 'ipatrustedaddomainrange' in old_attrs['objectclass']:
+            if 'ipatrustedaddomainrange' not in old_attrs['objectclass']:
                 entry_attrs['objectclass'].append('ipatrustedaddomainrange')
 
         else:

@@ -538,7 +538,7 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
         logger.debug('Process interrupted')
         p.wait()
         raise
-    except:
+    except BaseException:
         logger.debug('Process execution failed')
         raise
     finally:
@@ -701,7 +701,7 @@ class CIDict(dict):
     if six.PY2:
         def has_key(self, key):
             # pylint: disable=no-member
-            return super(CIDict, self).has_key(key.lower())
+            return super(CIDict, self).has_key(key.lower())  # noqa
             # pylint: enable=no-member
 
     def get(self, key, failobj=None):
@@ -1580,7 +1580,7 @@ class APIVersion(tuple):
         return "<APIVersion('{}.{}')>".format(*self)
 
     def __getnewargs__(self):
-        return str(self)
+        return (str(self),)
 
     @property
     def major(self):

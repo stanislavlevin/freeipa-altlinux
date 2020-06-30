@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 
 import pytest
 from cryptography.hazmat.primitives import hashes
+from cryptography import x509 as crypto_x509
 
 from ipalib import x509
 from ipalib.constants import DOMAIN_LEVEL_0
@@ -606,24 +607,25 @@ class TestInstallMaster(IntegrationTest):
         other hand in case of restart it will change.
         """
         # listing all services
-        services = [
+        ipa_services_name = [
             "Directory", "krb5kdc", "kadmin", "named", "httpd", "ipa-custodia",
             "pki-tomcatd", "ipa-otpd", "ipa-dnskeysyncd"
         ]
 
         # checking the service status
         cmd = self.master.run_command(['ipactl', 'status'])
-        for service in services:
+        for service in ipa_services_name:
             assert f"{service} Service: RUNNING" in cmd.stdout_text
 
         # stopping few services
         service_stop = ["krb5kdc", "kadmin", "httpd"]
         for service in service_stop:
-            self.master.run_command(['systemctl', 'stop', service])
+            service_name = services.knownservices[service].systemd_name
+            self.master.run_command(['systemctl', 'stop', service_name])
 
         # checking service status
         service_start = [
-            svcs for svcs in services if svcs not in service_stop
+            svcs for svcs in ipa_services_name if svcs not in service_stop
         ]
         cmd = self.master.run_command(['ipactl', 'status'])
         for service in service_start:
@@ -636,7 +638,7 @@ class TestInstallMaster(IntegrationTest):
 
         # checking service status
         cmd = self.master.run_command(['ipactl', 'status'])
-        for service in services:
+        for service in ipa_services_name:
             assert f"{service} Service: RUNNING" in cmd.stdout_text
 
         # get process id of services
@@ -647,7 +649,7 @@ class TestInstallMaster(IntegrationTest):
 
         # checking service status
         cmd = self.master.run_command(['ipactl', 'status'])
-        for service in services:
+        for service in ipa_services_name:
             assert f"{service} Service: RUNNING" in cmd.stdout_text
 
         # check if pid for services are different
@@ -659,7 +661,7 @@ class TestInstallMaster(IntegrationTest):
 
         # checking service status
         cmd = self.master.run_command(['ipactl', 'status'])
-        for service in services:
+        for service in ipa_services_name:
             assert f"{service} Service: RUNNING" in cmd.stdout_text
 
         # check if pid for services are same
@@ -736,6 +738,17 @@ class TestInstallMaster(IntegrationTest):
                 assert key_size == 2048
             assert cert.signature_hash_algorithm.name == hashes.SHA256.name
 
+    def test_http_cert(self):
+        """
+        Test that HTTP certificate contains ipa-ca.$DOMAIN
+        DNS name.
+
+        """
+        data = self.master.get_file_contents(paths.HTTPD_CERT_FILE)
+        cert = x509.load_pem_x509_certificate(data)
+        name = f'ipa-ca.{self.master.domain.name}'
+        assert crypto_x509.DNSName(name) in cert.san_general_names
+
     def test_p11_kit_softhsm2(self):
         # check that p11-kit-proxy does not inject SoftHSM2
         result = self.master.run_command([
@@ -811,6 +824,31 @@ class TestInstallMaster(IntegrationTest):
             msg = "rpm -V found group issues for the following files: {}"
             assert group_warnings == [], msg.format(group_warnings)
 
+    def test_ds_disable_upgrade_hash(self):
+        # Test case for https://pagure.io/freeipa/issue/8315
+        # Disable password schema migration on LDAP bind
+        result = tasks.ldapsearch_dm(
+            self.master,
+            "cn=config",
+            ldap_args=["nsslapd-enable-upgrade-hash"],
+            scope="base"
+        )
+        assert "nsslapd-enable-upgrade-hash: off" in result.stdout_text
+
+    def test_admin_root_alias_CVE_2020_10747(self):
+        # Test for CVE-2020-10747 fix
+        # https://bugzilla.redhat.com/show_bug.cgi?id=1810160
+        rootprinc = "root@{}".format(self.master.domain.realm)
+        result = self.master.run_command(["ipa", "user-show", "admin"])
+        assert rootprinc in result.stdout_text
+
+        result = self.master.run_command(
+            ["ipa", "user-add", "root", "--first", "root", "--last", "root"],
+            raiseonerr=False
+        )
+        assert result.returncode != 0
+        assert 'user with name "root" already exists' in result.stderr_text
+
 
 class TestInstallMasterKRA(IntegrationTest):
 
@@ -854,7 +892,7 @@ class TestInstallMasterDNS(IntegrationTest):
         related : https://pagure.io/freeipa/issue/8079
         """
         # check of /etc/named/ipa-ext.conf exist
-        assert self.master.transport.file_exists(paths.NAMED_CUSTOM_CONFIG)
+        assert self.master.transport.file_exists(paths.NAMED_CUSTOM_CONF)
 
         # check if /etc/named.conf does not contain 'allow-recursion { any; };'
         string_to_check = 'allow-recursion { any; };'
@@ -864,7 +902,7 @@ class TestInstallMasterDNS(IntegrationTest):
 
         # check if ipa-backup command backups the /etc/named/ipa-ext.conf
         result = self.master.run_command(['ipa-backup', '-v'])
-        assert paths.NAMED_CUSTOM_CONFIG in result.stderr_text
+        assert paths.NAMED_CUSTOM_CONF in result.stderr_text
 
     def test_install_kra(self):
         tasks.install_kra(self.master, first_instance=True)

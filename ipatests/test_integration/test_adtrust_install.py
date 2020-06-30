@@ -5,6 +5,7 @@
 """This module provides tests for ipa-adtrust-install utility"""
 
 import re
+import os
 import textwrap
 
 from ipaplatform.paths import paths
@@ -57,10 +58,14 @@ class TestIpaAdTrustInstall(IntegrationTest):
         data_fmt = '{{"method":"trust_enable_agent","params":[["{}"],{{}}]}}'
 
         try:
-            # Create a nonadmin user that will be used by curl
-            tasks.create_active_user(self.master, user, passwd,
-                                     first=user, last=user)
-            tasks.kinit_as_user(self.master, user, passwd)
+            # Create a nonadmin user that will be used by curl.
+            # krb5_trace set to True: https://pagure.io/freeipa/issue/8353
+            tasks.create_active_user(
+                self.master, user, passwd, first=user, last=user,
+                krb5_trace=True
+            )
+            tasks.kinit_as_user(self.master, user, passwd, krb5_trace=True)
+
             # curl --negotiate -u : is using GSS-API i.e. nonadmin user
             cmd_args = [
                 paths.BIN_CURL,
@@ -214,3 +219,50 @@ class TestIpaAdTrustInstall(IntegrationTest):
         value = (r'ipaexternalmember=%deref_r('
                  '"member","ipaexternalmember")')
         assert value in entry_list
+
+    def test_ipa_user_pac(self):
+        """Test that a user can request a service ticket with PAC"""
+        user = 'testpacuser'
+        user_princ = '@'.join([user, self.master.domain.realm])
+        passwd = 'Secret123'
+        # Create a user with a password
+        tasks.create_active_user(self.master, user, passwd, extra_args=[
+            '--homedir', '/home/{}'.format(user)])
+        try:
+            # Defaults: host/... principal for service
+            # keytab in /etc/krb5.keytab
+            self.master.run_command(["kinit", '-k'])
+            # Don't use enterprise principal here because it doesn't work
+            # bug in krb5: src/lib/gssapi/krb5/acquire_cred.c:scan_cache()
+            # where enterprise principals aren't taken into account
+            result = self.master.run_command(
+                [os.path.join(paths.LIBEXEC_IPA_DIR, "ipa-print-pac"),
+                 "ticket", user_princ],
+                stdin_text=(passwd + '\n'), raiseonerr=False
+            )
+            assert "PAC_DATA" in result.stdout_text
+        finally:
+            tasks.kinit_admin(self.master)
+            self.master.run_command(['ipa', 'user-del', user])
+
+    def test_ipa_user_s4u2self_pac(self):
+        """Test that a service can request S4U2Self ticket with PAC"""
+        user = 'tests4u2selfuser'
+        user_princ = '@'.join([user, self.master.domain.realm])
+        passwd = 'Secret123'
+        # Create a user with a password
+        tasks.create_active_user(self.master, user, passwd, extra_args=[
+            '--homedir', '/home/{}'.format(user)])
+        try:
+            # Defaults: host/... principal for service
+            # keytab in /etc/krb5.keytab
+            self.master.run_command(["kinit", '-k'])
+            result = self.master.run_command(
+                [os.path.join(paths.LIBEXEC_IPA_DIR, "ipa-print-pac"),
+                 "-E", "impersonate", user_princ],
+                raiseonerr=False
+            )
+            assert "PAC_DATA" in result.stdout_text
+        finally:
+            tasks.kinit_admin(self.master)
+            self.master.run_command(['ipa', 'user-del', user])

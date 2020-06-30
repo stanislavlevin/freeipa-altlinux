@@ -46,6 +46,37 @@ DBUS_CM_REQUEST_IF = 'org.fedorahosted.certmonger.request'
 DBUS_CM_CA_IF = 'org.fedorahosted.certmonger.ca'
 DBUS_PROPERTY_IF = 'org.freedesktop.DBus.Properties'
 
+# These properties, if encountered in search criteria, result in a
+# subset test instead of equality test.
+ARRAY_PROPERTIES = ['template-hostname']
+
+
+"""
+Certmonger helper routines.
+
+Search criteria
+---------------
+
+Functions that look up requests take a ``dict`` of search criteria.
+In general, the key is a name of a property in the request property
+interface.  But there are some special cases with different
+behaviour:
+
+``nickname``
+  a.k.a. "request ID".  If given, only the specified request is
+  retrieved (if it exists), and it is still tested against other
+  criteria.
+
+``ca-name``
+  Test equality against the nickname of the CA (a.k.a. request
+  helper) object for the request.
+
+``template-hostname``
+  Must be an iterable of DNS names.  Tests that the given values
+  are a subset of the values defined on the Certmonger request.
+
+"""
+
 
 class _cm_dbus_object:
     """
@@ -156,9 +187,12 @@ class _certmonger(_cm_dbus_object):
                                           DBUS_CM_IF)
 
 
-def _get_requests(criteria=dict()):
+def _get_requests(criteria):
     """
     Get all requests that matches the provided criteria.
+
+    :param criteria: dict of criteria; see module doc for details
+
     """
     if not isinstance(criteria, dict):
         raise TypeError('"criteria" must be dict.')
@@ -184,11 +218,18 @@ def _get_requests(criteria=dict()):
                                        criteria.get('ca-name'))
                 ca = _cm_dbus_object(cm.bus, cm, ca_path, DBUS_CM_CA_IF,
                                      DBUS_CM_IF)
-                value = ca.obj_if.get_nickname()
+                if criteria[criterion] != ca.obj_if.get_nickname():
+                    break
+            elif criterion in ARRAY_PROPERTIES:
+                # perform subset test
+                expect = set(criteria[criterion])
+                got = request.prop_if.Get(DBUS_CM_REQUEST_IF, criterion)
+                if not expect.issubset(got):
+                    break
             else:
                 value = request.prop_if.Get(DBUS_CM_REQUEST_IF, criterion)
-            if value != criteria[criterion]:
-                break
+                if criteria[criterion] != value:
+                    break
         else:
             requests.append(request)
 
@@ -197,11 +238,11 @@ def _get_requests(criteria=dict()):
 
 def _get_request(criteria):
     """
-    Find request that matches criteria.
-    If 'nickname' is specified other criteria are ignored because 'nickname'
-    uniquely identify single request.
-    When multiple or none request matches specified criteria RuntimeError is
-    raised.
+    Find request that matches criteria.  Return ``None`` if no match.
+    Raise ``RuntimeError`` if there is more than one matching request.
+
+    :param criteria: dict of criteria; see module doc for details
+
     """
     requests = _get_requests(criteria)
     if len(requests) == 0:
@@ -239,11 +280,11 @@ def get_request_id(criteria):
     If you don't know the certmonger request_id then try to find it by looking
     through all the requests.
 
-    criteria is a tuple of key/value to search for. The more specific
-    the better. An error is raised if multiple request_ids are returned for
-    the same criteria.
+    Return ``None`` if no match.  Raise ``RuntimeError`` if there is
+    more than one matching request.
 
-    None is returned if none of the criteria match.
+    :param criteria: dict of criteria; see module doc for details
+
     """
     try:
         request = _get_request(criteria)
@@ -309,7 +350,7 @@ def request_and_wait_for_cert(
         certpath, subject, principal, nickname=None, passwd_fname=None,
         dns=None, ca='IPA', profile=None,
         pre_command=None, post_command=None, storage='NSSDB', perms=None,
-        resubmit_timeout=0):
+        resubmit_timeout=0, stop_tracking_on_error=False):
     """Request certificate, wait and possibly resubmit failing requests
 
     Submit a cert request to certmonger and wait until the request has
@@ -361,6 +402,9 @@ def request_and_wait_for_cert(
             logger.debug("Sleep and resubmit cert request %s", req_id)
             time.sleep(10)
             resubmit_request(req_id)
+
+    if stop_tracking_on_error:
+        stop_tracking(request_id=req_id)
 
     raise RuntimeError(
         "Certificate issuance failed ({}: {})".format(state, ca_error)
@@ -438,7 +482,7 @@ def request_cert(
 def start_tracking(
         certpath, ca='IPA', nickname=None, pin=None, pinfile=None,
         pre_command=None, post_command=None, profile=None, storage="NSSDB",
-        token_name=None):
+        token_name=None, dns=None):
     """
     Tell certmonger to track the given certificate in either a file or an NSS
     database. The certificate access can be protected by a password_file.
@@ -473,6 +517,8 @@ def start_tracking(
         Which certificate profile should be used.
     :param token_name:
         Hardware token name for HSM support
+    :param dns:
+        List of DNS names
     :returns: certificate tracking nickname.
     """
     if storage == 'FILE':
@@ -517,6 +563,8 @@ def start_tracking(
         # only pass token names for external tokens (e.g. HSM)
         params['key-token'] = token_name
         params['cert-token'] = token_name
+    if dns is not None and len(dns) > 0:
+        params['DNS'] = dns
 
     result = cm.obj_if.add_request(params)
     try:

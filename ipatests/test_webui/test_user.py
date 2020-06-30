@@ -58,6 +58,7 @@ LONG_LOGIN = "invalid 'login': can be at most 32 characters"
 INV_PASSWD = ("invalid 'password': Leading and trailing spaces are "
               "not allowed")
 
+
 @pytest.mark.tier1
 class user_tasks(UI_driver):
     def load_file(self, path):
@@ -123,11 +124,16 @@ class test_user(user_tasks):
         self.navigate_to_entity(user.ENTITY)
         self.navigate_to_record(user.PKEY)
 
-        self.add_associations([group.PKEY, 'editors'], facet='memberof_group', delete=True)
-        self.add_associations([netgroup.PKEY], facet='memberof_netgroup', delete=True)
-        self.add_associations([rbac.ROLE_PKEY], facet='memberof_role', delete=True)
-        self.add_associations([hbac.RULE_PKEY], facet='memberof_hbacrule', delete=True)
-        self.add_associations([sudo.RULE_PKEY], facet='memberof_sudorule', delete=True)
+        self.add_associations([group.PKEY, 'editors'],
+                              facet='memberof_group', delete=True)
+        self.add_associations([netgroup.PKEY],
+                              facet='memberof_netgroup', delete=True)
+        self.add_associations([rbac.ROLE_PKEY],
+                              facet='memberof_role', delete=True)
+        self.add_associations([hbac.RULE_PKEY],
+                              facet='memberof_hbacrule', delete=True)
+        self.add_associations([sudo.RULE_PKEY],
+                              facet='memberof_sudorule', delete=True)
 
         # cleanup
         # -------
@@ -179,13 +185,17 @@ class test_user(user_tasks):
         self.navigate_to_record(user.PKEY)
 
         self.assert_indirect_record(group.PKEY2, user.ENTITY, 'memberof_group')
-        self.assert_indirect_record(netgroup.PKEY, user.ENTITY, 'memberof_netgroup')
-        self.assert_indirect_record(rbac.ROLE_PKEY, user.ENTITY, 'memberof_role')
-        self.assert_indirect_record(hbac.RULE_PKEY, user.ENTITY, 'memberof_hbacrule')
-        self.assert_indirect_record(sudo.RULE_PKEY, user.ENTITY, 'memberof_sudorule')
+        self.assert_indirect_record(netgroup.PKEY,
+                                    user.ENTITY, 'memberof_netgroup')
+        self.assert_indirect_record(rbac.ROLE_PKEY,
+                                    user.ENTITY, 'memberof_role')
+        self.assert_indirect_record(hbac.RULE_PKEY,
+                                    user.ENTITY, 'memberof_hbacrule')
+        self.assert_indirect_record(sudo.RULE_PKEY,
+                                    user.ENTITY, 'memberof_sudorule')
 
-        ## cleanup
-        ## -------
+        # cleanup
+        # -------
         self.delete(user.ENTITY, [user.DATA])
         self.delete(group.ENTITY, [group.DATA, group.DATA2])
         self.delete(netgroup.ENTITY, [netgroup.DATA])
@@ -353,7 +363,7 @@ class test_user(user_tasks):
         self.navigate_to_record(user.PKEY, entity=user.ENTITY)
         self.reset_password_action(pwd)
 
-        #re-login as new user
+        # re-login as new user
         self.logout()
         self.init_app(user.PKEY, pwd)
 
@@ -650,6 +660,29 @@ class test_user(user_tasks):
         # cleanup
         self.delete_record([user.PKEY, user.PKEY2, user.PKEY_NO_LOGIN,
                             'nsurname10'])
+
+    @screenshot
+    def test_menu_click_minimized_window(self):
+        """
+        Test if menu is clickable when there is notification
+        in minimized browser window.
+
+        related: https://pagure.io/freeipa/issue/8120
+        """
+        self.init_app()
+
+        self.driver.set_window_size(570, 600)
+        self.add_record(user.ENTITY, user.DATA2, negative=True)
+        self.assert_notification(assert_text=USR_ADDED)
+        menu_button = self.find('.navbar-toggle', By.CSS_SELECTOR)
+        menu_button.click()
+        self.assert_record(user.PKEY2)
+        self.close_notifications()
+        self.driver.maximize_window()
+
+        # cleanup
+        self.delete(user.ENTITY, [user.DATA2])
+
 
 @pytest.mark.tier1
 class test_user_no_private_group(UI_driver):

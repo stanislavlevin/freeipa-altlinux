@@ -29,11 +29,13 @@ import re
 import collections
 import itertools
 import shutil
+import copy
 import tempfile
 import time
 from pipes import quote
 import configparser
 from contextlib import contextmanager
+from pkg_resources import parse_version
 
 import dns
 from ldif import LDIFWriter
@@ -61,67 +63,6 @@ from .host import Host
 from .firewall import Firewall
 
 logger = logging.getLogger(__name__)
-
-
-def setup_server_logs_collecting(host):
-    """
-    This function setup logs to be collected on host. We should collect all
-    possible logs that may be helpful to debug IPA server
-    """
-    # dirsrv logs
-    inst = host.domain.realm.replace('.', '-')
-    host.collect_log(paths.SLAPD_INSTANCE_ERROR_LOG_TEMPLATE % inst)
-    host.collect_log(paths.SLAPD_INSTANCE_ACCESS_LOG_TEMPLATE % inst)
-
-    # IPA install logs
-    host.collect_log(paths.IPASERVER_INSTALL_LOG)
-    host.collect_log(paths.IPASERVER_UNINSTALL_LOG)
-    host.collect_log(paths.IPACLIENT_INSTALL_LOG)
-    host.collect_log(paths.IPACLIENT_UNINSTALL_LOG)
-    host.collect_log(paths.IPAREPLICA_INSTALL_LOG)
-    host.collect_log(paths.IPAREPLICA_CONNCHECK_LOG)
-    host.collect_log(paths.IPAREPLICA_CA_INSTALL_LOG)
-    host.collect_log(paths.IPASERVER_KRA_INSTALL_LOG)
-    host.collect_log(paths.IPA_CUSTODIA_AUDIT_LOG)
-
-    # IPA uninstall logs
-    host.collect_log(paths.IPACLIENT_UNINSTALL_LOG)
-
-    # IPA backup and restore logs
-    host.collect_log(paths.IPARESTORE_LOG)
-    host.collect_log(paths.IPABACKUP_LOG)
-
-    # kerberos related logs
-    host.collect_log(paths.KADMIND_LOG)
-    host.collect_log(paths.KRB5KDC_LOG)
-
-    # httpd logs
-    host.collect_log(paths.VAR_LOG_HTTPD_ERROR)
-
-    # dogtag logs
-    host.collect_log(os.path.join(paths.VAR_LOG_PKI_DIR))
-
-    # selinux logs
-    host.collect_log(paths.VAR_LOG_AUDIT)
-
-    # SSSD debugging must be set after client is installed (function
-    # setup_sssd_debugging)
-
-
-def collect_logs(func):
-    def wrapper(*args):
-        try:
-            func(*args)
-        finally:
-            if hasattr(args[0], 'master'):
-                setup_server_logs_collecting(args[0].master)
-            if hasattr(args[0], 'replicas') and args[0].replicas:
-                for replica in args[0].replicas:
-                    setup_server_logs_collecting(replica)
-            if hasattr(args[0], 'clients') and args[0].clients:
-                for client in args[0].clients:
-                    setup_server_logs_collecting(client)
-    return wrapper
 
 
 def check_arguments_are(slice, instanceof):
@@ -158,8 +99,6 @@ def prepare_host(host):
 
         # First we try to run simple echo command to test the connection
         host.run_command(['true'], set_env=False)
-
-        host.collect_log(env_filename)
         try:
             host.transport.mkdir_recursive(host.config.test_dir)
         except IOError:
@@ -314,6 +253,25 @@ def enable_replication_debugging(host, log_level=0):
     ldapmodify_dm(host, logging_ldif)
 
 
+def enable_ds_audit_log(host, enabled='on'):
+    """Enable 389-ds audit log and auditfail log
+
+    :param host: the host on which audit log is configured
+    :param enabled: a string (either 'on' or 'off')
+    """
+    logger.info('Set LDAP audit log')
+    logging_ldif = textwrap.dedent("""
+        dn: cn=config
+        changetype: modify
+        replace: nsslapd-auditlog-logging-enabled
+        nsslapd-auditlog-logging-enabled: {enabled}
+        -
+        replace: nsslapd-auditfaillog-logging-enabled
+        nsslapd-auditfaillog-logging-enabled: {enabled}
+        """.format(enabled=enabled))
+    ldapmodify_dm(host, logging_ldif)
+
+
 def set_default_ttl_for_ipa_dns_zone(host, raiseonerr=True):
     args = [
         'ipa', 'dnszone-mod', host.domain.name,
@@ -332,7 +290,6 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
     if domain_level is None:
         domain_level = host.config.domain_level
     check_domain_level(domain_level)
-    setup_server_logs_collecting(host)
     apply_common_fixes(host)
     fix_apache_semaphores(host)
     fw = Firewall(host)
@@ -372,6 +329,7 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
     if result.returncode == 0 and not external_ca:
         # external CA step 1 doesn't have DS and KDC fully configured, yet
         enable_replication_debugging(host)
+        enable_ds_audit_log(host, 'on')
         setup_sssd_debugging(host)
         kinit_admin(host)
         if setup_dns:
@@ -443,7 +401,6 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
         domain_level = domainlevel(master)
     check_domain_level(domain_level)
     apply_common_fixes(replica)
-    setup_server_logs_collecting(replica)
     allow_sync_ptr(master)
     fw = Firewall(replica)
     fw_services = ["freeipa-ldap", "freeipa-ldaps"]
@@ -499,6 +456,7 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
                                  stdin_text=stdin_text)
     if result.returncode == 0:
         enable_replication_debugging(replica)
+        enable_ds_audit_log(replica, 'on')
         setup_sssd_debugging(replica)
         kinit_admin(replica)
     else:
@@ -508,8 +466,6 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
 
 def install_client(master, client, extra_args=[], user=None,
                    password=None, unattended=True, stdin_text=None):
-    client.collect_log(paths.IPACLIENT_INSTALL_LOG)
-
     apply_common_fixes(client)
     allow_sync_ptr(master)
     # Now, for the situations where a client resides in a different subnet from
@@ -551,9 +507,6 @@ def install_adtrust(host):
     Runs ipa-adtrust-install on the client and generates SIDs for the entries.
     Configures the compat tree for the legacy clients.
     """
-
-    setup_server_logs_collecting(host)
-
     kinit_admin(host)
     host.run_command(['ipa-adtrust-install', '-U',
                       '--enable-compat',
@@ -775,8 +728,6 @@ def setup_sssd_debugging(host):
                       paths.SSSD_CONF],
                      raiseonerr=False)
 
-    host.collect_log(os.path.join(paths.VAR_LOG_SSSD_DIR))
-
     # Clear the cache and restart SSSD
     clear_sssd_cache(host)
 
@@ -981,7 +932,6 @@ def kinit_admin(host, raiseonerr=True):
 
 def uninstall_master(host, ignore_topology_disconnect=True,
                      ignore_last_of_role=True, clean=True, verbose=False):
-    host.collect_log(paths.IPASERVER_UNINSTALL_LOG)
     uninstall_cmd = ['ipa-server-install', '--uninstall', '-U']
 
     host_domain_level = domainlevel(host)
@@ -1021,8 +971,6 @@ def uninstall_master(host, ignore_topology_disconnect=True,
 
 
 def uninstall_client(host):
-    host.collect_log(paths.IPACLIENT_UNINSTALL_LOG)
-
     host.run_command(['ipa-client-install', '--uninstall', '-U'],
                      raiseonerr=False)
     unapply_fixes(host)
@@ -1490,11 +1438,58 @@ def resolve_record(nameserver, query, rtype="SOA", retry=True, timeout=100):
         time.sleep(1)
 
 
-def ipa_backup(master):
-    result = master.run_command(["ipa-backup"])
-    path_re = re.compile("^Backed up to (?P<backup>.*)$", re.MULTILINE)
-    matched = path_re.search(result.stdout_text + result.stderr_text)
-    return matched.group("backup")
+def ipa_backup(host, disable_role_check=False, raiseonerr=True):
+    """Run backup on host and return the run_command result.
+    """
+    cmd = ['ipa-backup', '-v']
+    if disable_role_check:
+        cmd.append('--disable-role-check')
+    result = host.run_command(cmd, raiseonerr=raiseonerr)
+
+    # Test for ticket 7632: check that services are restarted
+    # before the backup is compressed
+    pattern = r'.*{}.*Starting IPA service.*'.format(paths.GZIP)
+    if (re.match(pattern, result.stderr_text, re.DOTALL)):
+        raise AssertionError('IPA Services are started after compression')
+
+    return result
+
+
+def ipa_epn(
+    host, dry_run=False, from_nbdays=None, to_nbdays=None, raiseonerr=True,
+    mailtest=False,
+):
+    """Run EPN on host and return the run_command result.
+    """
+    cmd = ["ipa-epn"]
+    if dry_run:
+        cmd.append("--dry-run")
+    if mailtest:
+        cmd.append("--mail-test")
+    if from_nbdays:
+        cmd.extend(("--from-nbdays", str(from_nbdays)))
+    if to_nbdays:
+        cmd.extend(("--to-nbdays", str(to_nbdays)))
+    return host.run_command(cmd, raiseonerr=raiseonerr)
+
+
+def get_backup_dir(host, raiseonerr=True):
+    """Wrapper around ipa_backup: returns the backup directory.
+    """
+    result = ipa_backup(host, raiseonerr)
+
+    # Get the backup location from the command's output
+    for line in result.stderr_text.splitlines():
+        prefix = 'ipaserver.install.ipa_backup: INFO: Backed up to '
+        if line.startswith(prefix):
+            backup_path = line[len(prefix):].strip()
+            logger.info('Backup path for %s is %s', host.hostname, backup_path)
+            return backup_path
+    else:
+        if raiseonerr:
+            raise AssertionError('Backup directory not found in output')
+        else:
+            return None
 
 
 def ipa_restore(master, backup_path):
@@ -1508,10 +1503,7 @@ def install_kra(host, domain_level=None, first_instance=False, raiseonerr=True):
         domain_level = domainlevel(host)
     check_domain_level(domain_level)
     command = ["ipa-kra-install", "-U", "-p", host.config.dirman_password]
-    try:
-        result = host.run_command(command, raiseonerr=raiseonerr)
-    finally:
-        setup_server_logs_collecting(host)
+    result = host.run_command(command, raiseonerr=raiseonerr)
     return result
 
 
@@ -1534,10 +1526,7 @@ def install_ca(
     if cert_files:
         for fname in cert_files:
             command.extend(['--external-cert-file', fname])
-    try:
-        result = host.run_command(command, raiseonerr=raiseonerr)
-    finally:
-        setup_server_logs_collecting(host)
+    result = host.run_command(command, raiseonerr=raiseonerr)
     return result
 
 
@@ -1949,7 +1938,7 @@ def ldapsearch_dm(host, base, ldap_args, scope='sub', **kwargs):
 
 
 def create_temp_file(host, directory=None, create_file=True):
-    """Creates temproray file using mktemp."""
+    """Creates temporary file using mktemp."""
     cmd = ['mktemp']
     if create_file is False:
         cmd += ['--dry-run']
@@ -1959,15 +1948,22 @@ def create_temp_file(host, directory=None, create_file=True):
 
 
 def create_active_user(host, login, password, first='test', last='user',
-                       extra_args=()):
+                       extra_args=(), krb5_trace=False):
     """Create user and do login to set password"""
     temp_password = 'Secret456789'
     kinit_admin(host)
     user_add(host, login, first=first, last=last, extra_args=extra_args,
              password=temp_password)
-    host.run_command(
-        ['kinit', login],
-        stdin_text='{0}\n{1}\n{1}\n'.format(temp_password, password))
+    if krb5_trace:
+        host.run_command(
+            "KRB5_TRACE=/dev/stdout kinit %s" % login,
+            stdin_text='{0}\n{1}\n{1}\n'.format(temp_password, password)
+        )
+    else:
+        host.run_command(
+            ['kinit', login],
+            stdin_text='{0}\n{1}\n{1}\n'.format(temp_password, password)
+        )
     kdestroy_all(host)
 
 
@@ -1989,8 +1985,126 @@ def run_command_as_user(host, user, command, *args, **kwargs):
     return host.run_command(command, *args, **kwargs)
 
 
-def kinit_as_user(host, user, password):
-    host.run_command(['kinit', user], stdin_text=password + '\n')
+def kinit_as_user(host, user, password, krb5_trace=False):
+    if krb5_trace:
+        host.run_command(
+            "KRB5_TRACE=/dev/stdout kinit %s" % user,
+            stdin_text='{0}\n'.format(password)
+        )
+    else:
+        host.run_command(['kinit', user], stdin_text='{0}\n'.format(password))
+
+
+KeyEntry = collections.namedtuple('KeyEntry',
+                                  ['kvno', 'principal', 'etype', 'key'])
+
+
+class KerberosKeyCopier:
+    """Copy Kerberos keys from a keytab to a keytab on a target host
+
+    Example:
+       Copy host/master1.ipa.test principal as MASTER$ in a temporary keytab
+
+       # host - master1.ipa.test
+       copier = KerberosKeyCopier(host)
+       realm = host.domain.realm
+       principal = copier.host_princ_template.format(
+           master=host.hostname, realm=realm)
+       replacement = {principal: f'MASTER$@{realm}'}
+
+       result = host.run_command(['mktemp'])
+       tmpname = result.stdout_text.strip()
+
+       copier.copy_keys('/etc/krb5.keytab', tmpname, replacement=replacement)
+    """
+    host_princ_template = "host/{master}@{realm}"
+    valid_etypes = ['aes256-cts-hmac-sha1-96', 'aes128-cts-hmac-sha1-96']
+
+    def __init__(self, host):
+        self.host = host
+        self.realm = host.domain.realm
+
+    def extract_key_refs(self, keytab, princ=None):
+        if princ is None:
+            princ = self.host_princ_template.format(master=self.host.hostname,
+                                                    realm=self.realm)
+        result = self.host.run_command(
+            [paths.KLIST, "-eK", "-k", keytab],
+            log_stdout=False, raiseonerr=False)
+        if result.returncode != 0:
+            return None
+
+        keys_to_sync = []
+        for l in result.stdout_text.splitlines():
+            if (princ in l and any(e in l for e in self.valid_etypes)):
+
+                els = l.split()
+                els[-2] = els[-2].strip('()')
+                els[-1] = els[-1].strip('()')
+                keys_to_sync.append(KeyEntry._make(els))
+
+        return keys_to_sync
+
+    def copy_key(self, keytab, keyentry):
+        # keyentry.key is a hex value of the actual key
+        # prefixed with 0x, as produced by klist -K -k.
+        # However, ktutil accepts hex value without 0x, so
+        # we should strip first two characters.
+        stdin = textwrap.dedent("""\
+        rkt {keytab}
+        addent -key -p {principal} -k {kvno} -e {etype}
+        {key}
+        wkt {keytab}
+        """).format(keytab=keytab, principal=keyentry.principal,
+                    kvno=keyentry.kvno, etype=keyentry.etype,
+                    key=keyentry.key[2:])
+
+        result = self.host.run_command(
+            [paths.KTUTIL], stdin_text=stdin,
+            raiseonerr=False, log_stdout=False)
+
+        return result.returncode == 0
+
+    def copy_keys(self, origin, destination, principal=None, replacement=None):
+        def sync_keys(origkeys, destkeys):
+            for origkey in origkeys:
+                copied = False
+                uptodate = False
+                if origkey.principal in replacement:
+                    origkey = copy.deepcopy(origkey)
+                    origkey.principal = replacement.get(origkey.principal)
+                for destkey in destkeys:
+                    if all([destkey.principal == origkey.principal,
+                            destkey.etype == origkey.etype]):
+                        if any([destkey.key != origkey.key,
+                                destkey.kvno != origkey.kvno]):
+                            copied = self.copy_key(destination, origkey)
+                            break
+                        uptodate = True
+                if not (copied or uptodate):
+                    copied = self.copy_key(destination, origkey)
+            return copied or uptodate
+
+        if not self.host.transport.file_exists(origin):
+            return False
+        origkeys = self.extract_key_refs(origin, princ=principal)
+        if self.host.transport.file_exists(destination):
+            destkeys = self.extract_key_refs(destination)
+            if any([origkeys is None, destkeys is None]):
+                logger.warning('Either %s or %s are missing or unreadable',
+                               origin, destination)
+                return False
+            return sync_keys(origkeys, destkeys)
+        else:
+            for origkey in origkeys:
+                if origkey.principal in replacement:
+                    newkey = KeyEntry._make(
+                        [origkey.kvno, replacement.get(origkey.principal),
+                         origkey.etype, origkey.key])
+                    origkey = newkey
+                if not self.copy_key(destination, origkey):
+                    return False
+            return True
 
 
 class FileBackup:
@@ -2113,11 +2227,39 @@ def wait_for_request(host, request_id, timeout=120):
         )
 
         state = result.stdout_text.strip()
-        print("certmonger request is in state %r", state)
+        logger.info("certmonger request is in state %s", state)
         if state in ('CA_REJECTED', 'CA_UNREACHABLE', 'CA_UNCONFIGURED',
                      'NEED_GUIDANCE', 'NEED_CA', 'MONITORING'):
             break
         time.sleep(5)
+    else:
+        raise RuntimeError("request timed out")
+
+    return state
+
+
+def wait_for_certmonger_status(host, status, request_id, timeout=120):
+    """Aggressively wait for a specific certmonger status.
+
+       This checks the status every second in order to attempt to
+       catch transient states like SUBMITTED. There are no guarantees.
+
+       :param host: the host where the uninstallation takes place
+       :param status: tuple of statuses to look for
+       :param request_id: request_id of request to check status on
+       :param timeout: max time in seconds to wait for the status
+    """
+    for _i in range(0, timeout, 1):
+        result = host.run_command(
+            "getcert list -i %s | grep status: | awk '{ print $2 }'" %
+            request_id
+        )
+
+        state = result.stdout_text.strip()
+        logger.info("certmonger request is in state %s", state)
+        if state in status:
+            break
+        time.sleep(1)
     else:
         raise RuntimeError("request timed out")
 
@@ -2146,3 +2288,9 @@ def wait_for_sssd_domain_status_online(host, timeout=120):
         time.sleep(5)
     else:
         raise RuntimeError("SSSD still offline")
+
+
+def get_sssd_version(host):
+    """Get sssd version on remote host."""
+    version = host.run_command('sssd --version').stdout_text.strip()
+    return parse_version(version)

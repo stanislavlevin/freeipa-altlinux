@@ -207,8 +207,8 @@ if ! WITH_JSLINT
 	@echo "ERROR: jslint not available"; exit 1
 endif
 	@ # just tests, aci, api and pylint on Python 3
-	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON) ipatests/ipa-run-tests \
-	    --ipaclient-unittests
+	PATH=$(abspath ipatests):$$PATH PYTHONPATH=$(abspath $(top_srcdir)) \
+	    $(PYTHON) ipatests/ipa-run-tests --ipaclient-unittests
 	$(MAKE) $(AM_MAKEFLAGS) acilint apilint polint pylint jslint yamllint check
 	@echo "All tests passed."
 
@@ -272,11 +272,23 @@ $(top_builddir)/ipapython/version.py:
 
 .PHONY: acilint
 acilint: $(GENERATED_PYTHON_FILES)
-	cd $(srcdir); $(PYTHON) ./makeaci --validate
+	cd $(srcdir); \
+	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON) ./makeaci --validate
+
+.PHONY: aci
+aci: $(GENERATED_PYTHON_FILES)
+	cd $(srcdir); \
+	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON) ./makeaci
 
 .PHONY: apilint
 apilint: $(GENERATED_PYTHON_FILES)
-	cd $(srcdir); $(PYTHON) ./makeapi --validate
+	cd $(srcdir); \
+	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON) ./makeapi --validate
+
+.PHONY: api
+api: $(GENERATED_PYTHON_FILES)
+	cd $(srcdir); \
+	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON) ./makeapi
 
 .PHONY: polint
 polint:

@@ -27,7 +27,7 @@ if [ "$install_result" -eq 0 ] ; then
     echo "Installation complete. Performance of individual steps:"
     grep 'service duration:' /var/log/ipaserver-install.log | sed -e 's/DEBUG //g'
 
-    sed -ri "s/mode = production/mode = development/" /etc/ipa/default.conf
+    sed -ri "s/mode = production/mode = developer/" /etc/ipa/default.conf
     systemctl restart "$HTTPD_SYSTEMD_NAME"
     firewalld_cmd --add-service={freeipa-ldap,freeipa-ldaps,dns}
 
@@ -91,6 +91,15 @@ tar --ignore-failed-read --remove-files -czf var_log.tar.gz \
     /var/log/samba \
     "$BIND_DATADIR" \
     systemd_journal.log
+
+echo "Report memory statistics"
+cat /sys/fs/cgroup/memory/memory.memsw.failcnt
+cat /sys/fs/cgroup/memory/memory.memsw.limit_in_bytes
+cat /sys/fs/cgroup/memory/memory.memsw.max_usage_in_bytes
+cat /sys/fs/cgroup/memory/memory.failcnt
+cat /sys/fs/cgroup/memory/memory.max_usage_in_bytes
+cat /sys/fs/cgroup/memory/memory.limit_in_bytes
+cat /proc/sys/vm/swappiness
 
 # Final result depends on the exit code of the ipa-run-tests
 test "$tests_result" -eq 0 -a "$install_result" -eq 0

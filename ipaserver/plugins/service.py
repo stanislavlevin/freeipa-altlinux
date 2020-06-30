@@ -257,7 +257,7 @@ def set_certificate_attrs(entry_attrs):
 
     returns nothing
     """
-    if not 'usercertificate' in entry_attrs:
+    if 'usercertificate' not in entry_attrs:
         return
     if type(entry_attrs['usercertificate']) in (list, tuple):
         cert = entry_attrs['usercertificate'][0]
@@ -287,9 +287,12 @@ def check_required_principal(ldap, principal):
     try:
         host_is_master(ldap, principal.hostname)
     except errors.ValidationError:
-        service_types = ['HTTP', 'ldap', 'DNS', 'dogtagldap']
-        if principal.service_name in service_types:
-            raise errors.ValidationError(name='principal', error=_('This principal is required by the IPA master'))
+        service_types = {'http', 'ldap', 'dns', 'dogtagldap'}
+        if principal.service_name.lower() in service_types:
+            raise errors.ValidationError(
+                name='principal',
+                error=_('{} is required by the IPA master').format(principal)
+            )
 
 def update_krbticketflags(ldap, entry_attrs, attrs_list, options, existing):
     add = remove = 0

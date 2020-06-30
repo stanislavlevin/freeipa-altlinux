@@ -33,17 +33,24 @@ class DebianPathNamespace(BasePathNamespace):
     OLD_IPA_KEYTAB = "/etc/apache2/ipa.keytab"
     HTTPD_PASSWORD_CONF = "/etc/apache2/password.conf"
     NAMED_CONF = "/etc/bind/named.conf"
-    NAMED_CUSTOM_CONFIG = "/etc/bind/ipa-ext.conf"
+    NAMED_CONF_BAK = "/etc/bind/named.conf.ipa-backup"
+    NAMED_CUSTOM_CONF = "/etc/bind/ipa-ext.conf"
+    NAMED_CUSTOM_OPTIONS_CONF = "/etc/bind/ipa-options-ext.conf"
     NAMED_VAR_DIR = "/var/cache/bind"
     NAMED_KEYTAB = "/etc/bind/named.keytab"
     NAMED_RFC1912_ZONES = "/etc/bind/named.conf.default-zones"
     NAMED_ROOT_KEY = "/etc/bind/bind.keys"
-    NAMED_BINDKEYS_FILE = "/etc/bind/bind.keys"
     NAMED_MANAGED_KEYS_DIR = "/var/cache/bind/dynamic"
     CHRONY_CONF = "/etc/chrony/chrony.conf"
     OPENLDAP_LDAP_CONF = "/etc/ldap/ldap.conf"
     ETC_DEBIAN_VERSION = "/etc/debian_version"
-    IPA_P11_KIT = "/usr/local/share/ca-certificates/ipa-ca.crt"
+    # Old versions of freeipa wrote all trusted certificates to a single
+    # file, which is not supported by ca-certificates.
+    CA_CERTIFICATES_BUNDLE_PEM = "/usr/local/share/ca-certificates/ipa-ca.crt"
+    CA_CERTIFICATES_DIR = "/usr/local/share/ca-certificates/ipa-ca"
+    # Debian's p11-kit does not use ipa.p11-kit, so the file is provided
+    # for information only.
+    IPA_P11_KIT = "/usr/local/share/ca-certificates/ipa.p11-kit"
     ETC_SYSCONFIG_DIR = "/etc/default"
     SYSCONFIG_AUTOFS = "/etc/default/autofs"
     SYSCONFIG_DIRSRV = "/etc/default/dirsrv"

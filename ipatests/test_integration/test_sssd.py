@@ -9,6 +9,7 @@ from __future__ import absolute_import
 import time
 from contextlib import contextmanager
 import re
+import os
 
 import pytest
 import subprocess
@@ -16,6 +17,8 @@ import textwrap
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.tasks import clear_sssd_cache
+from ipatests.util import xfail_context
 from ipaplatform.tasks import tasks as platform_tasks
 from ipaplatform.osinfo import osinfo
 from ipaplatform.paths import paths
@@ -26,6 +29,7 @@ class TestSSSDWithAdTrust(IntegrationTest):
 
     topology = 'star'
     num_ad_domains = 1
+    num_ad_subdomains = 1
     num_clients = 1
 
     users = {
@@ -38,6 +42,10 @@ class TestSSSDWithAdTrust(IntegrationTest):
             'name_tmpl': 'testuser@{domain}',
             'password': 'Secret123',
             'group_tmpl': 'testgroup@{domain}',
+        },
+        'child_ad': {
+            'name_tmpl': 'subdomaintestuser@{domain}',
+            'password': 'Secret123',
         },
         'fakeuser': {
             'name': 'some_user@some.domain'
@@ -54,6 +62,7 @@ class TestSSSDWithAdTrust(IntegrationTest):
         super(TestSSSDWithAdTrust, cls).install(mh)
 
         cls.ad = cls.ads[0]
+        cls.child_ad = cls.ad_subdomains[0]
 
         tasks.install_adtrust(cls.master)
         tasks.configure_dns_for_trust(cls.master, cls.ad)
@@ -63,6 +72,9 @@ class TestSSSDWithAdTrust(IntegrationTest):
             domain=cls.ad.domain.name)
         cls.users['ad']['group'] = cls.users['ad']['group_tmpl'].format(
             domain=cls.ad.domain.name)
+        cls.users['child_ad']['name'] = (
+            cls.users['child_ad']['name_tmpl'].format(
+                domain=cls.child_ad.domain.name))
         tasks.user_add(cls.master, cls.intermed_user)
         tasks.create_active_user(cls.master, cls.ipa_user,
                                  cls.ipa_user_password)
@@ -352,3 +364,255 @@ class TestSSSDWithAdTrust(IntegrationTest):
             assert user_origin == 'ipa'
         finally:
             master.run_command(['ipa', 'group-del', 'ext-ipatest'])
+
+    @contextmanager
+    def disabled_trustdomain(self):
+        ad_domain_name = self.ad.domain.name
+        ad_subdomain_name = self.child_ad.domain.name
+        self.master.run_command(['ipa', 'trustdomain-disable',
+                                 ad_domain_name, ad_subdomain_name])
+        tasks.clear_sssd_cache(self.master)
+        try:
+            yield
+        finally:
+            self.master.run_command(['ipa', 'trustdomain-enable',
+                                     ad_domain_name, ad_subdomain_name])
+            tasks.clear_sssd_cache(self.master)
+
+    @pytest.mark.parametrize('user_origin', ['ipa', 'ad'])
+    def test_trustdomain_disable_does_not_disable_root_domain(self,
+                                                              user_origin):
+        """Test that disabling trustdomain does not affect other domains."""
+        user = self.users[user_origin]['name']
+        with self.disabled_trustdomain():
+            self.master.run_command(['id', user])
+
+    def test_trustdomain_disable_disables_subdomain(self):
+        """Test that users from disabled trustdomains can not use ipa resources
+
+        This is a regression test for sssd bug:
+        https://pagure.io/SSSD/sssd/issue/4078
+        """
+        user = self.users['child_ad']['name']
+        # verify the user can be retrieved initially
+        self.master.run_command(['id', user])
+        with self.disabled_trustdomain():
+            res = self.master.run_command(['id', user], raiseonerr=False)
+            sssd_version = tasks.get_sssd_version(self.master)
+            with xfail_context(sssd_version < tasks.parse_version('2.2.3'),
+                               'https://pagure.io/SSSD/sssd/issue/4078'):
+                assert res.returncode == 1
+                assert 'no such user' in res.stderr_text
+        # verify the user can be retrieved after re-enabling trustdomain
+        self.master.run_command(['id', user])
+
+    @pytest.mark.xfail(
+        osinfo.id == 'fedora' and osinfo.version_number <= (31,),
+        reason='https://pagure.io/SSSD/sssd/issue/3721',
+    )
+    def test_subdomain_lookup_with_certmaprule_containing_dn(self):
+        """DN names on certmaprules should not break AD Trust lookups.
+
+        Regression test for https://pagure.io/SSSD/sssd/issue/3721
+        """
+        tasks.kinit_admin(self.master)
+
+        # verify the user can be retrieved initially
+        first_res = self.master.run_command(['id', self.users['ad']['name']])
+
+        cert_cn = 'CN=adca'
+        cert_dcs = 'DC=' + ',DC='.join(self.ad.domain.name.split('.'))
+        cert_subject = cert_cn + ',' + cert_dcs
+
+        self.master.run_command([
+            'ipa',
+            'certmaprule-add',
+            "'{}'".format(cert_subject),
+            "--maprule='(userCertificate;binary={cert!bin})'",
+            "--matchrule='<ISSUER>{}'".format(cert_subject),
+            "--domain={}".format(self.master.domain.name)
+        ])
+        tasks.clear_sssd_cache(self.master)
+
+        # verify the user can be retrieved after the certmaprule is added
+        second_res = self.master.run_command(['id', self.users['ad']['name']])
+
+        assert first_res.stdout_text == second_res.stdout_text
+        verify_in_stdout = ['gid', 'uid', 'groups', self.users['ad']['name']]
+        for text in verify_in_stdout:
+            assert text in second_res.stdout_text
+
+
+class TestNestedMembers(IntegrationTest):
+    num_clients = 1
+    username = "testuser001"
+    userpasswd = 'Secret123'
+
+    @classmethod
+    def install(cls, mh):
+        tasks.install_master(cls.master)
+        tasks.install_client(cls.master, cls.clients[0])
+
+    @pytest.fixture
+    def nested_group_setup(self, tmpdir):
+        """Setup and Clean up groups and user created"""
+        master = self.master
+        client = self.clients[0]
+
+        # add a user and set password
+        tasks.create_active_user(master, self.username, self.userpasswd)
+        tasks.kinit_admin(master)
+
+        privkey, pubkey = tasks.generate_ssh_keypair()
+        with open(os.path.join(
+                tmpdir, 'ssh_priv_key'), 'w') as fp:
+            fp.write(privkey)
+
+        master.run_command([
+            'ipa', 'user-mod', self.username, '--ssh', "{}".format(pubkey)
+        ])
+
+        master.put_file_contents('/tmp/user_ssh_priv_key', privkey)
+        master.run_command(['chmod', '600', '/tmp/user_ssh_priv_key'])
+
+        # add group groupa
+        cmd_output = master.run_command(['ipa', 'group-add', 'groupa'])
+        assert 'Added group "groupa"' in cmd_output.stdout_text
+
+        # add group groupb
+        cmd_output = master.run_command(['ipa', 'group-add', 'groupb'])
+        assert 'Added group "groupb"' in cmd_output.stdout_text
+
+        # add group groupc
+        cmd_output = master.run_command(['ipa', 'group-add', 'groupc'])
+        assert 'Added group "groupc"' in cmd_output.stdout_text
+
+        client.put_file_contents('/tmp/user_ssh_priv_key',
+                                 privkey)
+        client.run_command(['chmod', '600', '/tmp/user_ssh_priv_key'])
+        yield
+        # test cleanup
+        for group in ['groupa', 'groupb', 'groupc']:
+            self.master.run_command(['ipa', 'group-del', group, '--continue'])
+        self.master.run_command(['ipa', 'user-del', self.username,
+                                 '--no-preserve', '--continue'])
+        tasks.kdestroy_all(self.master)
+        tasks.kdestroy_all(self.clients[0])
+
+    def test_nested_group_members(self, tmpdir, nested_group_setup):
+        """Nested group memberships should be honoured
+
+        "groupc" should be a child of "groupb"
+        so that parent child relationship is as follows:
+        "groupa"->"groupb"->"groupc"
+
+        testuser001 is direct member of "groupa" and as a result
+        member of "groupb" and "groupc"".
+        Now if one adds a direct membership to "groupb"
+        nothing will change.
+
+        Now if one removes the direct membership to "groupb"
+        nothing should change, the memberships should be honored
+        Linked Issue: https://pagure.io/SSSD/sssd/issue/3636
+        """
+        master = self.master
+        client = self.clients[0]
+
+        # add group members
+        cmd_output = master.run_command(['ipa', 'group-add-member',
+                                         'groupb', '--groups', 'groupa'])
+        assert 'Group name: groupb' in cmd_output.stdout_text
+        assert 'Member groups: groupa' in cmd_output.stdout_text
+        assert 'Number of members added 1' in cmd_output.stdout_text
+
+        cmd_output = master.run_command(['ipa', 'group-add-member',
+                                         'groupc', '--groups', 'groupb'])
+        assert 'Group name: groupc' in cmd_output.stdout_text
+        assert 'Member groups: groupb' in cmd_output.stdout_text
+        assert 'Indirect Member groups: groupa' in cmd_output.stdout_text
+
+        # add user to group 'groupa'
+        cmd_output = master.run_command(['ipa', 'group-add-member',
+                                         'groupa', '--users', self.username])
+        assert 'Group name: groupa' in cmd_output.stdout_text
+        assert_str = 'Member users: {}'.format(self.username)
+        assert assert_str in cmd_output.stdout_text
+        assert 'Member of groups: groupb' in cmd_output.stdout_text
+        assert 'Indirect Member of group: groupc' in cmd_output.stdout_text
+
+        # clear sssd_cache
+        clear_sssd_cache(master)
+
+        # user lookup
+        # at this point, testuser001 has the following group memberships
+        # Member of groups: groupa, ipausers
+        # Indirect Member of group: groupb, groupc
+        cmd_output = master.run_command(['ipa', 'user-show', self.username])
+        assert 'groupa' in cmd_output.stdout_text
+        assert 'ipausers' in cmd_output.stdout_text
+        assert 'groupb' in cmd_output.stdout_text
+        assert 'groupc' in cmd_output.stdout_text
+
+        clear_sssd_cache(client)
+
+        cmd = ['ssh', '-i', '/tmp/user_ssh_priv_key',
+               '-q', '{}@{}'.format(self.username, client.hostname),
+               'groups']
+        cmd_output = master.run_command(cmd)
+        assert self.username in cmd_output.stdout_text
+        assert 'groupa' in cmd_output.stdout_text
+        assert 'groupb' in cmd_output.stdout_text
+        assert 'groupc' in cmd_output.stdout_text
+
+        # add member
+        cmd_output = master.run_command(['ipa', 'group-add-member',
+                                         'groupb', '--users', self.username])
+        assert 'Group name: groupb' in cmd_output.stdout_text
+        assert_str = 'Member users: {}'.format(self.username)
+        assert assert_str in cmd_output.stdout_text
+        assert 'Member groups: groupa' in cmd_output.stdout_text
+        assert 'Member of groups: groupc' in cmd_output.stdout_text
+        assert 'Number of members added 1' in cmd_output.stdout_text
+
+        # now check ssh on the client
+        clear_sssd_cache(client)
+
+        # after adding testuser001 to b group
+        # testuser001 will have the following memberships
+        # Member of groups: groupa, ipausers, groupb
+        # Indirect Member of group: groupc
+        cmd = ['ssh', '-i', '/tmp/user_ssh_priv_key',
+               '-q', '{}@{}'.format(self.username, client.hostname),
+               'groups']
+        cmd_output = client.run_command(cmd)
+        assert self.username in cmd_output.stdout_text
+        assert 'groupa' in cmd_output.stdout_text
+        assert 'groupb' in cmd_output.stdout_text
+        assert 'groupc' in cmd_output.stdout_text
+
+        # now back to server to remove member
+        cmd_output = master.run_command(['ipa', 'group-remove-member',
+                                         'groupb', '--users', self.username])
+        assert_str = 'Indirect Member users: {}'.format(self.username)
+        assert 'Group name: groupb' in cmd_output.stdout_text
+        assert 'Member groups: groupa' in cmd_output.stdout_text
+        assert 'Member of groups: groupc' in cmd_output.stdout_text
+        assert assert_str in cmd_output.stdout_text
+        assert 'Number of members removed 1' in cmd_output.stdout_text
+
+        clear_sssd_cache(master)
+
+        # now check ssh on the client again
+        # after removing testuser001 from b group
+        # testuser001 will have the following memberships
+        # Member of groups: groupa, ipausers
+        # Indirect Member of group: groupb, groupc
+        clear_sssd_cache(client)
+        cmd = ['ssh', '-i', '/tmp/user_ssh_priv_key',
+               '-q', '{}@{}'.format(self.username, client.hostname),
+               'groups']
+        cmd_output = client.run_command(cmd)
+        assert self.username in cmd_output.stdout_text
+        assert 'groupa' in cmd_output.stdout_text
+        assert 'groupb' in cmd_output.stdout_text
+        assert 'groupc' in cmd_output.stdout_text

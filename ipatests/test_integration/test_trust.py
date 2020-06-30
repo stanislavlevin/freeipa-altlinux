@@ -127,6 +127,54 @@ class TestTrust(BaseTestTrust):
         assert re.search(
             testuser_regex, result.stdout_text), result.stdout_text
 
+    def test_ipa_commands_run_as_aduser(self):
+        """Test if proper error thrown when AD user tries to run IPA commands
+
+        Before fix the error used to implies that the ipa setup is broken.
+        Fix is to throw the proper error. This test is to check that the
+        error with 'Invalid credentials' thrown when AD user tries to run
+        IPA commands.
+
+        related: https://pagure.io/freeipa/issue/8163
+        """
+        tasks.kdestroy_all(self.master)
+        ad_admin = 'Administrator@%s' % self.ad_domain
+        tasks.kinit_as_user(self.master, ad_admin,
+                            self.master.config.ad_admin_password)
+        err_string = ('ipa: ERROR: Insufficient access: SASL(-14):'
+                      ' authorization failure: Invalid credentials')
+        result = self.master.run_command(['ipa', 'ping'], raiseonerr=False)
+        assert err_string in result.stderr_text
+
+        tasks.kdestroy_all(self.master)
+        tasks.kinit_admin(self.master)
+
+    def test_ipa_management_run_as_aduser(self):
+        """Test if adding AD user to a role makes it an administrator"""
+        ipauser = u'tuser'
+        ad_admin = 'Administrator@%s' % self.ad_domain
+
+        tasks.kdestroy_all(self.master)
+        tasks.kinit_admin(self.master)
+        self.master.run_command(['ipa', 'idoverrideuser-add',
+                                 'Default Trust View', ad_admin])
+
+        self.master.run_command(['ipa', 'role-add-member',
+                                 'User Administrator',
+                                 '--idoverrideusers', ad_admin])
+        tasks.kdestroy_all(self.master)
+        tasks.kinit_as_user(self.master, ad_admin,
+                            self.master.config.ad_admin_password)
+        # Create a user in IPA as Active Directory administrator
+        self.test_ipauser_authentication_with_nonposix_trust()
+
+        tasks.kdestroy_all(self.master)
+        tasks.kinit_as_user(self.master, ad_admin,
+                            self.master.config.ad_admin_password)
+        self.master.run_command(['ipa', 'user-del', ipauser], raiseonerr=False)
+        tasks.kdestroy_all(self.master)
+        tasks.kinit_admin(self.master)
+
     def test_ipauser_authentication_with_nonposix_trust(self):
         ipauser = u'tuser'
         original_passwd = 'Secret123'

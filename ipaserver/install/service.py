@@ -159,7 +159,7 @@ def set_service_entry_config(name, fqdn, config_values,
                 "service %s has already enabled config values %s", name,
                 config_values)
             return
-        except:
+        except BaseException:
             logger.debug("failed to set service %s config values", name)
             raise
 
@@ -699,7 +699,7 @@ class Service:
             api.Backend.ldap2.update_entry(entry)
         except errors.EmptyModlist:
             pass
-        except:
+        except BaseException:
             logger.debug("failed to disable service %s startup entry", name)
             raise
 
@@ -801,7 +801,7 @@ class SimpleServiceInstance(Service):
 
     def __enable(self):
         self.backup_state("enabled", self.is_enabled())
-        if self.gensvc_name == None:
+        if self.gensvc_name is None:
             self.enable()
         else:
             self.ldap_configure(self.gensvc_name, self.fqdn, None, self.suffix)

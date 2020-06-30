@@ -33,19 +33,6 @@ if six.PY3:
     unicode = str
 
 pytestmark = pytest.mark.tier0
-
-
-# pytest >= 2.10 supports yield based fixtures with pytest.fixture. In
-# pytest < 2.10 pytest.yield_fixture is required. But that function
-# also raises a deprecation warning in pytest >= 3.0.
-PYTEST_VERSION = tuple(int(p) for p in pytest.__version__.split('.'))
-
-if PYTEST_VERSION < (2, 10):
-    yield_fixture = pytest.yield_fixture
-else:
-    yield_fixture = pytest.fixture
-
-
 pattern_type = type(re.compile(""))
 
 
@@ -147,9 +134,9 @@ class test_Fuzzy:
         assert (self.klass(test=t, type=unicode) == b'foobar') is False
         assert (self.klass(test=t) == 'barfoo') is False
 
-        assert (False == self.klass()) is True
-        assert (True == self.klass()) is True
-        assert (None == self.klass()) is True
+        assert (False == self.klass()) is True  # noqa
+        assert (True == self.klass()) is True  # noqa
+        assert (None == self.klass()) is True  # noqa
 
 
 def test_assert_deepequal(pytestconfig):

@@ -4,6 +4,9 @@ dnl ---------------------------------------------------------------------------
 dnl - Check for DS slapi plugin
 dnl ---------------------------------------------------------------------------
 
+# 389-ds headers depend on NSPR
+PKG_CHECK_MODULES([NSPR], [nspr])
+
 # Need to hack CPPFLAGS to be able to correctly detect slapi-plugin.h
 SAVE_CPPFLAGS=$CPPFLAGS
 CPPFLAGS=$NSPR_CFLAGS
@@ -20,6 +23,8 @@ CPPFLAGS=$SAVE_CPPFLAGS
 if test "x$ac_cv_header_dirsrv_slapi_plugin_h" = "xno" ; then
     AC_MSG_ERROR([Required DS slapi plugin header not available (fedora-ds-base-devel)])
 fi
+
+AC_CHECK_FUNC(timegm, [], [AC_MSG_ERROR([timegm not found])])
 
 dnl -- dirsrv is needed for the extdom unit tests --
 PKG_CHECK_MODULES([DIRSRV], [dirsrv  >= 1.3.0])
