@@ -37,7 +37,7 @@ HEALTHCHECK_SYSTEMD_FILE = (
 HEALTHCHECK_LOG_ROTATE_CONF = "/etc/logrotate.d/ipahealthcheck"
 HEALTHCHECK_LOG_DIR = "/var/log/ipa/healthcheck"
 HEALTHCHECK_OUTPUT_FILE = "/tmp/output.json"
-HEALTHCHECK_PKG = ["*ipa-healthcheck"]
+HEALTHCHECK_PKG = ["freeipa-healthcheck"]
 
 IPA_CA = "ipa_ca.crt"
 ROOT_CA = "root_ca.crt"
