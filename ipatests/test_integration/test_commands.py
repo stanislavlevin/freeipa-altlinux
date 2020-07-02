@@ -1151,7 +1151,7 @@ class TestIPACommand(IntegrationTest):
                 "for details"
             )
             msg2 = "IndexError: list index out of range"
-            tasks.install_packages(self.master, ["*ipa-server-trust-ad"])
+            tasks.install_packages(self.master, ["freeipa-server-trust-ad"])
             result = self.master.run_command(
                 ["ipa-adtrust-install", "-U"], raiseonerr=False
             )
