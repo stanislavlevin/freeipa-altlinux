@@ -63,6 +63,7 @@ BuildRequires: libkrb5-devel >= %krb5_version
 BuildRequires: libpopt-devel
 BuildRequires: libsasl2-devel
 BuildRequires: libssl-devel
+BuildRequires: libsystemd-devel
 BuildRequires: libxmlrpc-devel
 BuildRequires: openldap-devel >= %openldap_version
 
@@ -74,7 +75,6 @@ BuildRequires: libsss_idmap-devel
 BuildRequires: libsss_certmap-devel
 BuildRequires: libsss_nss_idmap-devel >= %sssd_version
 BuildRequires: libunistring-devel
-BuildRequires: libsystemd-devel
 
 BuildRequires: 389-ds-base-devel >= %ds_version
 BuildRequires: samba-devel >= %samba_version
