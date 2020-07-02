@@ -776,6 +776,18 @@ if [ -f '/etc/openssh/sshd_config' -a $restore -ge 2 ]; then
     fi
 fi
 
+%post client-epn
+# first installation
+if [ $1 -eq 1 ]; then
+    systemctl -q preset ipa-epn.{service,timer} ||:
+fi
+
+%preun client-epn
+# removal (not upgrade)
+if [ $1 -eq 0 ]; then
+    systemctl --no-reload -q disable --now ipa-epn.{service,timer} ||:
+fi
+
 %if_without only_client
 %files server
 %_sbindir/ipa-backup
