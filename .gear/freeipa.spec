@@ -98,6 +98,7 @@ BuildRequires: python3-module-six
 BuildRequires: python3-module-sss_nss_idmap
 
 %if_with fasttest
+BuildRequires: chrony
 BuildRequires: keyutils
 BuildRequires: systemd
 %endif
