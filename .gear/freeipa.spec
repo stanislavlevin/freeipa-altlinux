@@ -44,7 +44,7 @@
 
 Name: freeipa
 Version: 4.8.8
-Release: alt1
+Release: alt2
 
 Summary: The Identity, Policy and Audit system
 License: GPLv3+
@@ -1053,6 +1053,10 @@ fi
 %python3_sitelibdir/ipaplatform-*.egg-info/
 
 %changelog
+* Tue Aug 04 2020 Stanislav Levin <slev@altlinux.org> 4.8.8-alt2
+- Fixed FTBFS(new pylint 2.5.3).
+- Fixed group ownership of pki instance nssdb.
+
 * Tue Jun 30 2020 Stanislav Levin <slev@altlinux.org> 4.8.8-alt1
 - 4.8.6 -> 4.8.8.
 
