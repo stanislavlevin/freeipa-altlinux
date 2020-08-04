@@ -152,6 +152,7 @@ BuildRequires: python3-module-sss_nss_idmap
 BuildRequires: python3-module-sss-murmur
 BuildRequires: python3-module-sssdconfig >= %sssd_version
 BuildRequires: python3-module-systemd
+BuildRequires: python3-module-yaml
 BuildRequires: python3-module-yubico
 
 %endif
