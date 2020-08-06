@@ -29,6 +29,7 @@ import ipalib.errors
 from ipaclient.install.client import sssd_enable_ifp
 from ipaplatform import services
 from ipaplatform.tasks import tasks
+from ipapython import certdb
 from ipapython import ipautil, version
 from ipapython import ipaldap
 from ipapython import directivesetter
@@ -1392,6 +1393,20 @@ def fix_permissions():
             os.chmod(filename, mode)
 
 
+def fix_pki_nssdb_permissions():
+    """Fix permission of pki instance's nssdb directory and files.
+    Remove this when it will be fixed in dogtag pki upstream.
+    """
+    shutil.chown(paths.PKI_TOMCAT_ALIAS_DIR, group=constants.PKI_GROUP)
+
+    for basename in certdb.NSS_FILES:
+        filename = os.path.join(paths.PKI_TOMCAT_ALIAS_DIR, basename)
+        try:
+            shutil.chown(filename, group=constants.PKI_GROUP)
+        except FileNotFoundError:
+            pass
+
+
 def upgrade_bind(fstore):
     """Update BIND named DNS server instance
     """
@@ -1475,6 +1490,7 @@ def upgrade_configuration():
 
     check_certs()
     fix_permissions()
+    fix_pki_nssdb_permissions()
 
     auto_redirect = find_autoredirect(fqdn)
     sub_dict = dict(
