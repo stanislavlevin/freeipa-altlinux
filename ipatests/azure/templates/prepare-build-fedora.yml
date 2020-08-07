@@ -16,6 +16,7 @@ steps:
         docker \
         python3-paramiko \
         python3-pyyaml \
+        strace \
 
     echo "Installing FreeIPA development dependencies"
     sudo dnf builddep -y freeipa
