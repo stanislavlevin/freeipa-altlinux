@@ -1,0 +1,36 @@
+jobs:
+- job: WebUI_Unit_Tests
+  variables:
+  - template: ../variables/variables-common.yml
+  # platform specific variables, links to
+  - template: ../variables/variables.yml
+
+  pool:
+    vmImage: $(VM_IMAGE)
+  container:
+    image: $(DOCKER_BUILD_IMAGE)
+    options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged --env container=docker
+  steps:
+    - template: ../templates/${{ variables.PREPARE_BUILD_TEMPLATE }}
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: ${{ variables.AZURE_PYTHON_VERSION }}
+        architecture: x64
+    - template: ../templates/${{ variables.PREPARE_WEBUI_TEMPLATE }}
+    - script: |
+        set -e
+        echo "Running autoconf generator"
+        ./autogen.sh
+      displayName: Configure the project
+    - script: |
+        set -e
+        echo "Running WebUI unit tests"
+        cd $(builddir)/install/ui/js/libs && make
+        cd $(builddir)/install/ui && npm install
+        cd $(builddir)/install/ui && node_modules/grunt/bin/grunt --verbose test
+      displayName: WebUI Unit Tests
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFiles: 'install/ui/_build/test-reports/TEST-*.xml'
+        testRunTitle: 'Web UI unit test results'
+      condition: succeededOrFailed()

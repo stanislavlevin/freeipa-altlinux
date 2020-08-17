@@ -1,0 +1,17 @@
+jobs:
+- job: GATING
+  variables:
+  - template: ../variables/variables-common.yml
+  # platform specific variables, links to
+  - template: ../variables/variables.yml
+
+  pool:
+    vmImage: $(VM_IMAGE)
+  dependsOn: Build
+  condition: succeeded()
+  strategy:
+    matrix: $[ dependencies.Build.outputs['gating_matrix.matrix'] ]
+  timeoutInMinutes: 90
+  steps:
+    - template: ../templates/generate-job-variables.yml
+    - template: ../templates/test-jobs.yml

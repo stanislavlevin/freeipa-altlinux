@@ -1,0 +1,16 @@
+jobs:
+- job: BASE_XMLRPC
+  variables:
+  - template: ../variables/variables-common.yml
+  # platform specific variables, links to
+  - template: ../variables/variables.yml
+
+  pool:
+    vmImage: $(VM_IMAGE)
+  dependsOn: Build
+  condition: succeeded()
+  strategy:
+    matrix: $[ dependencies.Build.outputs['base_matrix.matrix'] ]
+  steps:
+    - template: ../templates/generate-job-variables.yml
+    - template: ../templates/test-jobs.yml

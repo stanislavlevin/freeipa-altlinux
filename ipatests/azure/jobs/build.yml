@@ -1,0 +1,56 @@
+jobs:
+- job: Build
+  variables:
+  - template: ../variables/variables-common.yml
+  # platform specific variables, links to
+  - template: ../variables/variables.yml
+
+  pool:
+    vmImage: $(VM_IMAGE)
+  container:
+    image: $(DOCKER_BUILD_IMAGE)
+    options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged --env container=docker
+  steps:
+    - template: ../templates/${{ variables.PREPARE_BUILD_TEMPLATE }}
+    - script: |
+        set -e
+        echo "Running autoconf generator"
+        ./autogen.sh
+      displayName: Configure the project
+    - script: |
+        set -e
+        git update-ref refs/heads/$(System.PullRequest.TargetBranch) origin/$(System.PullRequest.TargetBranch)
+        make V=0 "GIT_BRANCH=$(System.PullRequest.TargetBranch)" fastlint
+      displayName: Quick code style check
+      condition: eq(variables['Build.Reason'], 'PullRequest')
+    - template: ../templates/${{ variables.BUILD_TEMPLATE }}
+    - template: ../templates/publish-build.yml
+      parameters:
+        artifactName: 'packages-$(Build.BuildId)-$(Agent.OS)-$(Agent.OSArchitecture)'
+        targetPath: $(Build.Repository.LocalPath)/dist
+        displayName: Publish packages
+
+    - script: |
+        set -e
+        mkdir container
+        cp -pr dist container/
+        cp $(IPA_TESTS_DOCKERFILES)/$(DOCKER_DOCKERFILE) container/Dockerfile
+        cd container
+        docker build -t freeipa-azure-builder .
+        docker save freeipa-azure-builder | gzip > '$(builddir)/freeipa-azure-builder-container.tar.gz'
+      displayName: Create container image for test
+    - template: ../templates/publish-build.yml
+      parameters:
+        artifactName: 'image-$(Build.BuildId)-$(Agent.OS)-$(Agent.OSArchitecture)'
+        targetPath: $(Build.Repository.LocalPath)/freeipa-azure-builder-container.tar.gz
+        displayName: Publish container image
+    - template: ../templates/generate-matrix.yml
+      parameters:
+        definition: 'ipatests/azure/azure_definitions/gating.yml'
+        displayName: Generate Matrix for Gating tests
+        name: gating_matrix
+    - template: ../templates/generate-matrix.yml
+      parameters:
+        definition: 'ipatests/azure/azure_definitions/base.yml'
+        displayName: Generate Matrix for Base tests
+        name: base_matrix
