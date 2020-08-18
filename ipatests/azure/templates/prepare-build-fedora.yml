@@ -15,9 +15,11 @@ steps:
         libtool \
         docker \
         python3-paramiko \
+        python3-pip \
         python3-pyyaml \
 
     echo "Installing FreeIPA development dependencies"
     sudo dnf builddep -y freeipa
     sudo dnf builddep -y --skip-broken -D "with_wheels 1" -D "with_lint 1" -D "with_doc 1" --spec freeipa.spec.in --best --allowerasing --setopt=install_weak_deps=False
+    pip install --force --user pylint
   displayName: Prepare build environment

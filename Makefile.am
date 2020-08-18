@@ -360,6 +360,7 @@ pylint: $(GENERATED_PYTHON_FILES) ipasetup.py python_scripts
 		-type f -exec grep -qsm1 '^#!.*\bpython' '{}' \; -print`; \
 	FILES=`echo -e "$${FILES}\n$(AZURE_PYTHON_SCRIPT_SUBDIR)"`; \
 	echo -e "Pylint on $(PYTHON) is running over files:\n$${FILES}\nPlease wait ...\n"; \
+	PYTHONPATH=$(top_srcdir) $(PYTHON) -m pylint --version; \
 	PYTHONPATH=$(top_srcdir) $(PYTHON) -m pylint \
 		--rcfile=$(top_srcdir)/pylintrc \
 		--load-plugins pylint_plugins \
