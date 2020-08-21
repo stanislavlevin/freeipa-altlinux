@@ -850,7 +850,6 @@ fi
 %attr(755,root,root) %plugin_dir/libipa_uuid.so
 %attr(755,root,root) %plugin_dir/libipa_modrdn.so
 %attr(755,root,root) %plugin_dir/libipa_lockout.so
-%attr(755,root,root) %plugin_dir/libipa_cldap.so
 %attr(755,root,root) %plugin_dir/libipa_dns.so
 %attr(755,root,root) %plugin_dir/libipa_range_check.so
 %attr(755,root,root) %plugin_dir/libipa_otp_counter.so
@@ -902,6 +901,7 @@ fi
 %_datadir/ipa/kdcproxy.wsgi
 %_datadir/ipa/ipaca*.ini
 %_datadir/ipa/*.ldif
+%exclude %_datadir/ipa/ipa-cldap-conf.ldif
 %_datadir/ipa/*.uldif
 %_datadir/ipa/*.template
 %_datadir/ipa/advise/
@@ -965,6 +965,8 @@ fi
 %_sbindir/ipa-adtrust-install
 %_datadir/ipa/smb.conf.empty
 %attr(755,root,root) %_libdir/samba/pdb/ipasam.so
+%attr(755,root,root) %plugin_dir/libipa_cldap.so
+%_datadir/ipa/ipa-cldap-conf.ldif
 %_man1dir/ipa-adtrust-install.1*
 %_sysconfdir/dbus-1/system.d/oddjob-ipa-trust.conf
 %_sysconfdir/oddjobd.conf.d/oddjobd-ipa-trust.conf
