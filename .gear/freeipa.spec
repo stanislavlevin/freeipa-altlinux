@@ -43,8 +43,8 @@
 %define openldap_version 2.4.47-alt2
 
 Name: freeipa
-Version: 4.8.8
-Release: alt2
+Version: 4.8.9
+Release: alt1
 
 Summary: The Identity, Policy and Audit system
 License: GPLv3+
@@ -1049,6 +1049,10 @@ fi
 %python3_sitelibdir/ipaplatform-*.egg-info/
 
 %changelog
+* Fri Aug 21 2020 Stanislav Levin <slev@altlinux.org> 4.8.9-alt1
+- 4.8.8 -> 4.8.9.
+- Made SELinux optional (closes: #38788).
+
 * Tue Aug 04 2020 Stanislav Levin <slev@altlinux.org> 4.8.8-alt2
 - Fixed FTBFS(new pylint 2.5.3).
 - Fixed group ownership of pki instance nssdb.
