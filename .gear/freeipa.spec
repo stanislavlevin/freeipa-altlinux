@@ -35,7 +35,7 @@
 %define ds_version 1.4.1.6
 %define gssproxy_version 0.8.0-alt2
 %define krb5_version 1.16.3
-%define pki_version 10.7.3
+%define pki_version 10.9.2
 %define python_ldap_version 3.2.0
 %define samba_version 4.7.6
 %define slapi_nis_version 0.56.3
