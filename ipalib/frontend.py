@@ -795,10 +795,10 @@ class Command(HasParam):
         server_apiver = APIVersion(self.api_version)
         try:
             client_apiver = APIVersion(client_version)
-        except ValueError:
+        except ValueError as e:
             raise VersionError(cver=client_version,
                                sver=self.api_version,
-                               server=self.env.xmlrpc_uri)
+                               server=self.env.xmlrpc_uri) from e
 
         if client_apiver.major != server_apiver.major:
             raise VersionError(cver=client_version,

@@ -187,31 +187,30 @@ class automountlocation_import(Command):
                             automountkey=unicode(am[0]),
                             automountinformation=unicode(' '.join(am[1:])))
                 result['keys'].append([am[0], u'auto.master'])
-            except errors.DuplicateEntry:
+            except errors.DuplicateEntry as e:
                 if unicode(am[0]) in DEFAULT_KEYS:
                     # ignore conflict when the key was pre-created by the framework
                     pass
                 elif options.get('continue', False):
                     result['duplicatekeys'].append(am[0])
-                else:
-                    raise errors.DuplicateEntry(
-                        message=_('key %(key)s already exists') % dict(
-                            key=am[0]))
+                raise errors.DuplicateEntry(
+                    message=_('key %(key)s already exists') % dict(key=am[0])
+                ) from e
             # Add the new map
             if not am[1].startswith('-'):
                 try:
                     api.Command['automountmap_add'](args[0], unicode(am[1]))
                     result['maps'].append(am[1])
-                except errors.DuplicateEntry:
+                except errors.DuplicateEntry as e:
                     if unicode(am[1]) in DEFAULT_MAPS:
                         # ignore conflict when the map was pre-created by the framework
                         pass
                     elif options.get('continue', False):
                         result['duplicatemaps'].append(am[0])
-                    else:
-                        raise errors.DuplicateEntry(
-                            message=_('map %(map)s already exists') % dict(
-                                map=am[1]))
+                    raise errors.DuplicateEntry(
+                        message=_('map %(map)s already exists') % dict(
+                            map=am[1])
+                    ) from e
 
         # Now iterate over the map files and add the keys. To handle
         # continuation lines I'll make a pass through it to skip comments

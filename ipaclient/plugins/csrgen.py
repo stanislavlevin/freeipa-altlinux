@@ -104,9 +104,10 @@ class cert_get_requestdata(Local):
             elif principal.is_user:
                 principal_obj = api.Command.user_show(
                     principal.username, all=True)
-        except errors.NotFound:
+        except errors.NotFound as e:
             raise errors.NotFound(
-                reason=_("The principal for this request doesn't exist."))
+                reason=_("The principal for this request doesn't exist.")
+            ) from e
         principal_obj = principal_obj['result']
         config = api.Command.config_show()['result']
 

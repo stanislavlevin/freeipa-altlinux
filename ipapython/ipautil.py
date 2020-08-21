@@ -146,7 +146,7 @@ class CheckedIPAddress(UnsafeIPAddress):
         try:
             super(CheckedIPAddress, self).__init__(addr)
         except netaddr.core.AddrFormatError as e:
-            raise ValueError(e)
+            raise ValueError(e) from e
 
         if isinstance(addr, CheckedIPAddress):
             self.prefixlen = addr.prefixlen
@@ -973,10 +973,10 @@ def user_input(prompt, default = None, allow_empty = True):
                 ret = input("%s: " % prompt)
                 if allow_empty or ret.strip():
                     return ret.strip()
-            except EOFError:
+            except EOFError as e:
                 if allow_empty:
                     return ''
-                raise RuntimeError("Failed to get user input")
+                raise RuntimeError("Failed to get user input") from e
 
     if isinstance(default, str):
         while True:

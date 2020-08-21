@@ -187,7 +187,9 @@ class Cookie:
         try:
             dt = email.utils.parsedate_to_datetime(s)
         except Exception as e:
-            raise ValueError("unable to parse expires datetime '%s': %s" % (s, e))
+            raise ValueError(
+                "unable to parse expires datetime '%s': %s" % (s, e)
+            ) from e
 
         return dt
 
@@ -441,8 +443,10 @@ class Cookie:
         else:
             try:
                 self._max_age = int(value)
-            except Exception:
-                raise ValueError("Max-Age value '%s' not convertable to integer" % value)
+            except Exception as e:
+                raise ValueError(
+                    "Max-Age value '%s' not convertable to integer" % value
+                ) from e
 
     def __set_attr(self, name, value):
         '''

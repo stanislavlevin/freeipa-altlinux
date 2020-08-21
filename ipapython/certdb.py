@@ -191,7 +191,7 @@ def verify_kdc_cert_validity(kdc_cert, ca_certs, realm):
                  kdc_file.name],
                 capture_output=True)
         except ipautil.CalledProcessError as e:
-            raise ValueError(e.output)
+            raise ValueError(e.output) from e
 
         try:
             eku = kdc_cert.extensions.get_extension_for_class(
@@ -199,8 +199,8 @@ def verify_kdc_cert_validity(kdc_cert, ca_certs, realm):
             list(eku.value).index(
                 cryptography.x509.ObjectIdentifier(x509.EKU_PKINIT_KDC))
         except (cryptography.x509.ExtensionNotFound,
-                ValueError):
-            raise ValueError("invalid for a KDC")
+                ValueError) as e:
+            raise ValueError("invalid for a KDC") from e
 
         principal = str(Principal(['krbtgt', realm], realm))
         gns = x509.process_othernames(kdc_cert.san_general_names)
@@ -575,13 +575,16 @@ class NSSDatabase:
             self.run_pk12util(args)
         except ipautil.CalledProcessError as e:
             if e.returncode == 17:
-                raise RuntimeError("incorrect password for pkcs#12 file %s" %
-                                   pkcs12_filename)
+                raise RuntimeError(
+                    "incorrect password for pkcs#12 file %s" % pkcs12_filename
+                ) from e
             elif e.returncode == 10:
-                raise RuntimeError("Failed to open %s" % pkcs12_filename)
-            else:
-                raise RuntimeError("unknown error exporting pkcs#12 file %s" %
-                                   pkcs12_filename)
+                raise RuntimeError(
+                    "Failed to open %s" % pkcs12_filename
+                ) from e
+            raise RuntimeError(
+                "unknown error exporting pkcs#12 file %s" % pkcs12_filename
+            ) from e
         finally:
             if pkcs12_password_file is not None:
                 pkcs12_password_file.close()
@@ -601,14 +604,15 @@ class NSSDatabase:
         except ipautil.CalledProcessError as e:
             if e.returncode == 17 or e.returncode == 18:
                 raise Pkcs12ImportIncorrectPasswordError(
-                    "incorrect password for pkcs#12 file %s" % pkcs12_filename)
+                    "incorrect password for pkcs#12 file %s" % pkcs12_filename
+                ) from e
             elif e.returncode == 10:
                 raise Pkcs12ImportOpenError(
-                    "Failed to open %s" % pkcs12_filename)
-            else:
-                raise Pkcs12ImportUnknownError(
-                    "unknown error import pkcs#12 file %s" %
-                    pkcs12_filename)
+                    "Failed to open %s" % pkcs12_filename
+                ) from e
+            raise Pkcs12ImportUnknownError(
+                "unknown error import pkcs#12 file %s" % pkcs12_filename
+            ) from e
         finally:
             if pkcs12_password_file is not None:
                 pkcs12_password_file.close()
@@ -637,7 +641,8 @@ class NSSDatabase:
                     data = f.read()
             except IOError as e:
                 raise RuntimeError(
-                    "Failed to open %s: %s" % (filename, e.strerror))
+                    "Failed to open %s: %s" % (filename, e.strerror)
+                ) from e
 
             # Try to parse the file as PEM file
             matches = list(
@@ -750,8 +755,9 @@ class NSSDatabase:
                     # go to the generic error about unrecognized format
                     pass
                 except RuntimeError as e:
-                    raise RuntimeError("Failed to load %s: %s" %
-                                       (filename, str(e)))
+                    raise RuntimeError(
+                        "Failed to load %s: %s" % (filename, str(e))
+                    ) from e
                 else:
                     if key_file:
                         raise RuntimeError(
@@ -813,7 +819,8 @@ class NSSDatabase:
                 except ipautil.CalledProcessError as e:
                     raise RuntimeError(
                         "No matching certificate found for private key from "
-                        "%s" % key_file)
+                        "%s" % key_file
+                    ) from e
 
                 self.import_pkcs12(out_file.name, out_password)
 
@@ -827,9 +834,10 @@ class NSSDatabase:
             try:
                 self.run_certutil(["-M", "-n", root_nickname,
                                    "-t", trust_flags])
-            except ipautil.CalledProcessError:
+            except ipautil.CalledProcessError as e:
                 raise RuntimeError(
-                    "Setting trust on %s failed" % root_nickname)
+                    "Setting trust on %s failed" % root_nickname
+                ) from e
 
     def get_cert(self, nickname):
         """
@@ -840,8 +848,8 @@ class NSSDatabase:
         args = ['-L', '-n', nickname, '-a']
         try:
             result = self.run_certutil(args, capture_output=True)
-        except ipautil.CalledProcessError:
-            raise RuntimeError("Failed to get %s" % nickname)
+        except ipautil.CalledProcessError as e:
+            raise RuntimeError("Failed to get %s" % nickname) from e
         cert, _start = find_cert_from_txt(result.output, start=0)
         return cert
 
@@ -872,7 +880,7 @@ class NSSDatabase:
         except IOError as e:
             raise RuntimeError(
                 "Failed to open %s: %s" % (location, e.strerror)
-            )
+            ) from e
 
         cert, st = find_cert_from_txt(certs)
         self.add_cert(cert, nickname, flags)
@@ -959,12 +967,12 @@ class NSSDatabase:
         except ipautil.CalledProcessError as e:
             # certutil output in case of error is
             # 'certutil: certificate is invalid: <ERROR_STRING>\n'
-            raise ValueError(e.output)
+            raise ValueError(e.output) from e
 
         try:
             cert.match_hostname(hostname)
-        except ValueError:
-            raise ValueError('invalid for server %s' % hostname)
+        except ValueError as e:
+            raise ValueError('invalid for server %s' % hostname) from e
 
     def verify_ca_cert_validity(self, nickname, minpathlen=None):
         cert = self.get_cert(nickname)
@@ -976,8 +984,8 @@ class NSSDatabase:
         try:
             bc = cert.extensions.get_extension_for_class(
                     cryptography.x509.BasicConstraints)
-        except cryptography.x509.ExtensionNotFound:
-            raise ValueError("missing basic constraints")
+        except cryptography.x509.ExtensionNotFound as e:
+            raise ValueError("missing basic constraints") from e
 
         if not bc.value.ca:
             raise ValueError("not a CA certificate")
@@ -994,8 +1002,10 @@ class NSSDatabase:
         try:
             ski = cert.extensions.get_extension_for_class(
                     cryptography.x509.SubjectKeyIdentifier)
-        except cryptography.x509.ExtensionNotFound:
-            raise ValueError("missing subject key identifier extension")
+        except cryptography.x509.ExtensionNotFound as e:
+            raise ValueError(
+                "missing subject key identifier extension"
+            ) from e
         else:
             if len(ski.value.digest) == 0:
                 raise ValueError("subject key identifier must not be empty")
@@ -1013,7 +1023,7 @@ class NSSDatabase:
         except ipautil.CalledProcessError as e:
             # certutil output in case of error is
             # 'certutil: certificate is invalid: <ERROR_STRING>\n'
-            raise ValueError(e.output)
+            raise ValueError(e.output) from e
 
     def verify_kdc_cert_validity(self, nickname, realm):
         nicknames = self.get_trust_chain(nickname)

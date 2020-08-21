@@ -331,8 +331,8 @@ class _SchemaNameSpace(Mapping):
     def __getitem__(self, key):
         try:
             return self._schema.read_namespace_member(self.name, key)
-        except KeyError:
-            raise KeyError(key)
+        except KeyError as e:
+            raise KeyError(key) from e
 
     def __iter__(self):
         for key in self._schema.iter_namespace(self.name):
@@ -344,8 +344,8 @@ class _SchemaNameSpace(Mapping):
     def get_help(self, key):
         try:
             return self._schema.get_help(self.name, key)
-        except KeyError:
-            raise KeyError(key)
+        except KeyError as e:
+            raise KeyError(key) from e
 
 
 class NotAvailable(Exception):
@@ -425,8 +425,8 @@ class Schema:
             kwargs[u'known_fingerprints'] = fps
         try:
             schema = client.forward(u'schema', **kwargs)['result']
-        except errors.CommandError:
-            raise NotAvailable()
+        except errors.CommandError as e:
+            raise NotAvailable() from e
 
         try:
             fp = schema['fingerprint']
@@ -439,7 +439,7 @@ class Schema:
                 self._dict[key] = value
         except KeyError as e:
             logger.warning("Failed to fetch schema: %s", e)
-            raise NotAvailable()
+            raise NotAvailable() from e
 
         return (fp, ttl,)
 

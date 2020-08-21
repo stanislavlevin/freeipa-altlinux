@@ -217,14 +217,18 @@ class SchemaCache:
                 logger.debug('cn=schema not found, fallback to cn=subschema')
                 schema_entry = conn.search_s('cn=subschema', ldap.SCOPE_BASE,
                     attrlist=['attributetypes', 'objectclasses'])[0]
-        except ldap.SERVER_DOWN:
-            raise errors.NetworkError(uri=url,
-                               error=u'LDAP Server Down, unable to retrieve LDAP schema')
+        except ldap.SERVER_DOWN as e:
+            raise errors.NetworkError(
+                uri=url,
+                error=u'LDAP Server Down, unable to retrieve LDAP schema'
+            ) from e
         except ldap.LDAPError as e:
             desc = e.args[0]['desc'].strip()
             info = e.args[0].get('info', '').strip()
-            raise errors.DatabaseError(desc = u'uri=%s' % url,
-                                info = u'Unable to retrieve LDAP schema: %s: %s' % (desc, info))
+            raise errors.DatabaseError(
+                desc = u'uri=%s' % url,
+                info = u'Unable to retrieve LDAP schema: %s: %s' % (desc, info)
+            ) from e
 
         # no 'cn=schema' entry in LDAP? some servers use 'cn=subschema'
         # TODO: DS uses 'cn=schema', support for other server?
@@ -361,8 +365,9 @@ class LDAPEntry(MutableMapping):
             try:
                 value = self._conn.decode(value, name)
             except ValueError as e:
-                raise ValueError("{error} in LDAP entry '{dn}'".format(
-                    error=e, dn=self._dn))
+                raise ValueError(
+                    "{error} in LDAP entry '{dn}'".format(error=e, dn=self._dn)
+                ) from e
             if value in nice_adds:
                 continue
             nice.remove(value)
@@ -377,8 +382,9 @@ class LDAPEntry(MutableMapping):
             try:
                 value = self._conn.decode(value, name)
             except ValueError as e:
-                raise ValueError("{error} in LDAP entry '{dn}'".format(
-                    error=e, dn=self._dn))
+                raise ValueError(
+                    "{error} in LDAP entry '{dn}'".format(error=e, dn=self._dn)
+                ) from e
             if value in nice_dels:
                 continue
             nice.append(value)
@@ -1019,10 +1025,10 @@ class LDAPClient:
                     return x509.load_der_x509_certificate(val)
                 else:
                     return target_type(val)
-            except Exception:
+            except Exception as e:
                 msg = 'unable to convert the attribute %r value %r to type %s' % (attr, val, target_type)
                 logger.error('%s', msg)
-                raise ValueError(msg)
+                raise ValueError(msg) from e
         elif isinstance(val, list):
             return [self.decode(m, attr) for m in val]
         elif isinstance(val, tuple):
@@ -1081,77 +1087,76 @@ class LDAPClient:
         try:
             try:
                 yield
-            except ldap.TIMEOUT:
-                raise errors.DatabaseTimeout()
+            except ldap.TIMEOUT as e:
+                raise errors.DatabaseTimeout() from e
             except ldap.LDAPError as e:
                 desc = e.args[0]['desc'].strip()
                 info = e.args[0].get('info', '').strip()
                 if arg_desc is not None:
                     info = "%s arguments: %s" % (info, arg_desc)
                 raise
-        except ldap.NO_SUCH_OBJECT:
-            raise errors.NotFound(reason=arg_desc or 'no such entry')
-        except ldap.ALREADY_EXISTS:
+        except ldap.NO_SUCH_OBJECT as e:
+            raise errors.NotFound(reason=arg_desc or 'no such entry') from e
+        except ldap.ALREADY_EXISTS as e:
             # entry already exists
-            raise errors.DuplicateEntry()
-        except ldap.TYPE_OR_VALUE_EXISTS:
+            raise errors.DuplicateEntry() from e
+        except ldap.TYPE_OR_VALUE_EXISTS as e:
             # attribute type or attribute value already exists, usually only
             # occurs, when two machines try to write at the same time.
-            raise errors.DuplicateEntry(message=desc)
-        except ldap.CONSTRAINT_VIOLATION:
+            raise errors.DuplicateEntry(message=desc) from e
+        except ldap.CONSTRAINT_VIOLATION as e:
             # This error gets thrown by the uniqueness plugin
             _msg = 'Another entry with the same attribute value already exists'
             if info.startswith(_msg):
-                raise errors.DuplicateEntry()
-            else:
-                raise errors.DatabaseError(desc=desc, info=info)
-        except ldap.INSUFFICIENT_ACCESS:
-            raise errors.ACIError(info=info)
-        except ldap.INVALID_CREDENTIALS:
-            raise errors.ACIError(info="%s %s" % (info, desc))
-        except ldap.INAPPROPRIATE_AUTH:
-            raise errors.ACIError(info="%s: %s" % (desc, info))
-        except ldap.NO_SUCH_ATTRIBUTE:
+                raise errors.DuplicateEntry() from e
+            raise errors.DatabaseError(desc=desc, info=info) from e
+        except ldap.INSUFFICIENT_ACCESS as e:
+            raise errors.ACIError(info=info) from e
+        except ldap.INVALID_CREDENTIALS as e:
+            raise errors.ACIError(info="%s %s" % (info, desc)) from e
+        except ldap.INAPPROPRIATE_AUTH as e:
+            raise errors.ACIError(info="%s: %s" % (desc, info)) from e
+        except ldap.NO_SUCH_ATTRIBUTE as e:
             # this is raised when a 'delete' attribute isn't found.
             # it indicates the previous attribute was removed by another
             # update, making the oldentry stale.
-            raise errors.MidairCollision()
-        except ldap.INVALID_SYNTAX:
-            raise errors.InvalidSyntax(attr=info)
-        except ldap.OBJECT_CLASS_VIOLATION:
-            raise errors.ObjectclassViolation(info=info)
-        except ldap.ADMINLIMIT_EXCEEDED:
-            raise errors.AdminLimitExceeded()
-        except ldap.SIZELIMIT_EXCEEDED:
-            raise errors.SizeLimitExceeded()
-        except ldap.TIMELIMIT_EXCEEDED:
-            raise errors.TimeLimitExceeded()
-        except ldap.NOT_ALLOWED_ON_RDN:
-            raise errors.NotAllowedOnRDN(attr=info)
-        except ldap.FILTER_ERROR:
-            raise errors.BadSearchFilter(info=info)
-        except ldap.NOT_ALLOWED_ON_NONLEAF:
-            raise errors.NotAllowedOnNonLeaf()
-        except ldap.SERVER_DOWN:
+            raise errors.MidairCollision() from e
+        except ldap.INVALID_SYNTAX as e:
+            raise errors.InvalidSyntax(attr=info) from e
+        except ldap.OBJECT_CLASS_VIOLATION as e:
+            raise errors.ObjectclassViolation(info=info) from e
+        except ldap.ADMINLIMIT_EXCEEDED as e:
+            raise errors.AdminLimitExceeded() from e
+        except ldap.SIZELIMIT_EXCEEDED as e:
+            raise errors.SizeLimitExceeded() from e
+        except ldap.TIMELIMIT_EXCEEDED as e:
+            raise errors.TimeLimitExceeded() from e
+        except ldap.NOT_ALLOWED_ON_RDN as e:
+            raise errors.NotAllowedOnRDN(attr=info) from e
+        except ldap.FILTER_ERROR as e:
+            raise errors.BadSearchFilter(info=info) from e
+        except ldap.NOT_ALLOWED_ON_NONLEAF as e:
+            raise errors.NotAllowedOnNonLeaf() from e
+        except ldap.SERVER_DOWN as e:
             raise errors.NetworkError(uri=self.ldap_uri,
-                                      error=info)
-        except ldap.LOCAL_ERROR:
-            raise errors.ACIError(info=info)
+                                      error=info) from e
+        except ldap.LOCAL_ERROR as e:
+            raise errors.ACIError(info=info) from e
         except ldap.SUCCESS:
             pass
-        except ldap.CONNECT_ERROR:
-            raise errors.DatabaseError(desc=desc, info=info)
-        except ldap.UNWILLING_TO_PERFORM:
-            raise errors.DatabaseError(desc=desc, info=info)
-        except ldap.AUTH_UNKNOWN:
-            raise errors.ACIError(info='%s (%s)' % (info,desc))
+        except ldap.CONNECT_ERROR as e:
+            raise errors.DatabaseError(desc=desc, info=info) from e
+        except ldap.UNWILLING_TO_PERFORM as e:
+            raise errors.DatabaseError(desc=desc, info=info) from e
+        except ldap.AUTH_UNKNOWN as e:
+            raise errors.ACIError(info='%s (%s)' % (info,desc)) from e
         except ldap.LDAPError as e:
             if 'NOT_ALLOWED_TO_DELEGATE' in info:
                 raise errors.ACIError(
-                    info="KDC returned NOT_ALLOWED_TO_DELEGATE")
+                    info="KDC returned NOT_ALLOWED_TO_DELEGATE") from e
             logger.debug(
                 'Unhandled LDAPError: %s: %s', type(e).__name__, str(e))
-            raise errors.DatabaseError(desc=desc, info=info)
+            raise errors.DatabaseError(desc=desc, info=info) from e
 
     @staticmethod
     def handle_truncated_result(truncated):

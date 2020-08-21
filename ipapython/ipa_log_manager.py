@@ -114,6 +114,6 @@ def convert_log_level(value):
                 'error': logging.ERROR,
                 'critical': logging.CRITICAL
             }[value.lower()]
-        except KeyError:
-            raise ValueError('unknown log level (%s)' % value)
+        except KeyError as e:
+            raise ValueError('unknown log level (%s)' % value) from e
     return level

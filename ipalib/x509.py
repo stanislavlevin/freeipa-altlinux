@@ -909,8 +909,10 @@ class MSCSTemplateV2(MSCSTemplate):
                 self.check_version_in_range("minor", minor)
                 obj['templateMinorVersion'] = int(parts[2])
 
-        except pyasn1.error.PyAsn1Error:
-            raise ValueError("Could not parse certificate template specifier.")
+        except pyasn1.error.PyAsn1Error as e:
+            raise ValueError(
+                "Could not parse certificate template specifier."
+            ) from e
         self.asn1obj = obj
 
 

@@ -66,14 +66,17 @@ def check_ip_option(option, opt, value, allow_loopback=False):
         else:
             return CheckedIPAddress(value)
     except Exception as e:
-        raise OptionValueError("option {}: invalid IP address {}: {}"
-                               .format(opt, value, e))
+        raise OptionValueError(
+            "option {}: invalid IP address {}: {}".format(opt, value, e)
+        ) from e
 
 def check_dn_option(option, opt, value):
     try:
         return DN(value)
     except Exception as e:
-        raise OptionValueError("option %s: invalid DN: %s" % (opt, e))
+        raise OptionValueError(
+            "option %s: invalid DN: %s" % (opt, e)
+        ) from e
 
 
 def check_constructor(option, opt, value):
@@ -82,7 +85,9 @@ def check_constructor(option, opt, value):
     try:
         return con(value)
     except Exception as e:
-        raise OptionValueError("option {} invalid: {}".format(opt, e))
+        raise OptionValueError(
+            "option {} invalid: {}".format(opt, e)
+        ) from e
 
 
 class IPAOption(Option):

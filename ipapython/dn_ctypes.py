@@ -19,7 +19,7 @@ if ldap_r_lib is None:
 try:
     lib = ctypes.CDLL(ldap_r_lib)
 except OSError as e:
-    raise ImportError(str(e))
+    raise ImportError(str(e)) from e
 
 # constants
 LDAP_AVA_FREE_ATTR = 0x0010

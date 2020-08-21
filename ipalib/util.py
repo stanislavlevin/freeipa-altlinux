@@ -261,15 +261,15 @@ def get_proper_tls_version_span(tls_version_min, tls_version_max):
 
     try:
         min_version_idx = TLS_VERSIONS.index(tls_version_min)
-    except ValueError:
+    except ValueError as e:
         raise ValueError("tls_version_min ('{val}') is not a known "
-                         "TLS version.".format(val=tls_version_min))
+                         "TLS version.".format(val=tls_version_min)) from e
 
     try:
         max_version_idx = TLS_VERSIONS.index(tls_version_max)
-    except ValueError:
+    except ValueError as e:
         raise ValueError("tls_version_max ('{val}') is not a known "
-                         "TLS version.".format(val=tls_version_max))
+                         "TLS version.".format(val=tls_version_max)) from e
 
     if min_version_idx > max_version_idx:
         raise ValueError("tls_version_min is higher than "
@@ -831,7 +831,7 @@ def _validate_edns0_forwarder(owner, rtype, ip_addr, timeout=10):
     except DNSException as e:
         _log_response(e)
         raise UnresolvableRecordError(owner=owner, rtype=rtype, ip=ip_addr,
-                                      error=e)
+                                      error=e) from e
 
     try:
         _resolve_record(owner, rtype, nameserver_ip=ip_addr, edns0=True,
@@ -839,7 +839,7 @@ def _validate_edns0_forwarder(owner, rtype, ip_addr, timeout=10):
     except DNSException as e:
         _log_response(e)
         raise EDNS0UnsupportedError(owner=owner, rtype=rtype, ip=ip_addr,
-                                    error=e)
+                                    error=e) from e
 
 
 def validate_dnssec_global_forwarder(ip_addr, timeout=10):
@@ -864,15 +864,19 @@ def validate_dnssec_global_forwarder(ip_addr, timeout=10):
                               timeout=timeout)
     except DNSException as e:
         _log_response(e)
-        raise DNSSECSignatureMissingError(owner=owner, rtype=rtype, ip=ip_addr)
+        raise DNSSECSignatureMissingError(
+            owner=owner, rtype=rtype, ip=ip_addr
+        ) from e
 
     try:
         ans.response.find_rrset(
             ans.response.answer, dns.name.root, dns.rdataclass.IN,
             dns.rdatatype.RRSIG, dns.rdatatype.SOA
         )
-    except KeyError:
-        raise DNSSECSignatureMissingError(owner=owner, rtype=rtype, ip=ip_addr)
+    except KeyError as e:
+        raise DNSSECSignatureMissingError(
+            owner=owner, rtype=rtype, ip=ip_addr
+        ) from e
 
 
 def validate_dnssec_zone_forwarder_step1(ip_addr, fwzone, timeout=10):
@@ -902,18 +906,22 @@ def validate_dnssec_zone_forwarder_step2(ipa_ip_addr, fwzone, timeout=10):
     except NXDOMAIN as e:
         # sometimes CD flag is ignored and NXDomain is returned
         _log_response(e)
-        raise DNSSECValidationError(owner=fwzone, rtype=rtype, ip=ipa_ip_addr)
+        raise DNSSECValidationError(
+            owner=fwzone, rtype=rtype, ip=ipa_ip_addr
+        ) from e
     except DNSException as e:
         _log_response(e)
         raise UnresolvableRecordError(owner=fwzone, rtype=rtype,
-                                      ip=ipa_ip_addr, error=e)
+                                      ip=ipa_ip_addr, error=e) from e
 
     try:
         ans_do = _resolve_record(fwzone, rtype, nameserver_ip=ipa_ip_addr,
                                  edns0=True, dnssec=True, timeout=timeout)
     except DNSException as e:
         _log_response(e)
-        raise DNSSECValidationError(owner=fwzone, rtype=rtype, ip=ipa_ip_addr)
+        raise DNSSECValidationError(
+            owner=fwzone, rtype=rtype, ip=ipa_ip_addr
+        ) from e
     else:
         if (ans_do.canonical_name == ans_cd.canonical_name
             and ans_do.rrset == ans_cd.rrset):

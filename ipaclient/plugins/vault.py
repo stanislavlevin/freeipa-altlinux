@@ -139,9 +139,9 @@ def decrypt(data, symmetric_key=None, private_key=None):
         try:
             fernet = Fernet(symmetric_key)
             return fernet.decrypt(data)
-        except InvalidToken:
+        except InvalidToken as e:
             raise errors.AuthenticationError(
-                message=_('Invalid credentials'))
+                message=_('Invalid credentials')) from e
 
     elif private_key is not None:
         try:
@@ -158,9 +158,9 @@ def decrypt(data, symmetric_key=None, private_key=None):
                     label=None
                 )
             )
-        except ValueError:
+        except ValueError as e:
             raise errors.AuthenticationError(
-                message=_('Invalid credentials'))
+                message=_('Invalid credentials')) from e
     else:
         raise ValueError("Either a symmetric or a private key is required.")
 

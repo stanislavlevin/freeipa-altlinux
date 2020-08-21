@@ -43,7 +43,7 @@ def openLocked(filename, perms):
                 os.close(fd)
             except OSError:
                 pass
-        raise IOError(e.errno, e.strerror)
+        raise IOError(e.errno, e.strerror) from e
     return os.fdopen(fd, "r+")
 
     # TODO: add subsection as a concept
@@ -478,8 +478,10 @@ class IPAChangeConf:
             try:
                 curopts.append(self.parseLine(line))
             except SyntaxError as e:
-                raise SyntaxError('{error} in file {fname}: [{line}]'.format(
-                    error=e, fname=f.name, line=line.rstrip()))
+                raise SyntaxError(
+                    '{error} in file {fname}: [{line}]'.format(
+                        error=e, fname=f.name, line=line.rstrip())
+                ) from e
 
         # Add last section if any
         if len(sectopts) != 0:

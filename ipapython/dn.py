@@ -469,8 +469,8 @@ def _normalize_ava_input(val):
 def str2rdn(value):
     try:
         rdns = str2dn(value.encode('utf-8'))
-    except DECODING_ERROR:
-        raise ValueError("malformed AVA string = \"%s\"" % value)
+    except DECODING_ERROR as e:
+        raise ValueError("malformed AVA string = \"%s\"" % value) from e
     if len(rdns) != 1:
         raise ValueError("multiple RDN's specified by \"%s\"" % (value))
     return rdns[0]
@@ -627,7 +627,9 @@ class AVA:
         try:
             self._ava[0] = _normalize_ava_input(new_attr)
         except Exception as e:
-            raise ValueError('unable to convert attr "%s": %s' % (new_attr, e))
+            raise ValueError(
+                'unable to convert attr "%s": %s' % (new_attr, e)
+            ) from e
 
     attr = property(_get_attr)
 
@@ -638,7 +640,9 @@ class AVA:
         try:
             self._ava[1] = _normalize_ava_input(new_value)
         except Exception as e:
-            raise ValueError('unable to convert value "%s": %s' % (new_value, e))
+            raise ValueError(
+                'unable to convert value "%s": %s' % (new_value, e)
+            ) from e
 
     value = property(_get_value)
 
@@ -1123,8 +1127,10 @@ class DN:
                 if isinstance(value, str):
                     value = val_encode(value)
                 rdns = str2dn(value)
-            except DECODING_ERROR:
-                raise ValueError("malformed RDN string = \"%s\"" % value)
+            except DECODING_ERROR as e:
+                raise ValueError(
+                    "malformed RDN string = \"%s\"" % value
+                ) from e
             for rdn in rdns:
                 sort_avas(rdn)
         elif isinstance(value, DN):

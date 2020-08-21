@@ -159,10 +159,10 @@ class Formatter:
 
         try:
             combined_template_source = base_template.render(**template_params)
-        except jinja2.UndefinedError:
+        except jinja2.UndefinedError as e:
             logger.debug(traceback.format_exc())
             raise errors.CSRTemplateError(reason=_(
-                'Template error when formatting certificate data'))
+                'Template error when formatting certificate data')) from e
 
         logger.debug(
             'Formatting with template: %s', combined_template_source)
@@ -197,10 +197,10 @@ class Formatter:
         is_required = syntax_rule.options.get('required', False)
         try:
             prepared_template = template.render(datarules=data_rules)
-        except jinja2.UndefinedError:
+        except jinja2.UndefinedError as e:
             logger.debug(traceback.format_exc())
             raise errors.CSRTemplateError(reason=_(
-                'Template error when formatting certificate data'))
+                'Template error when formatting certificate data')) from e
 
         if data_sources:
             combinator = ' %s ' % syntax_rule.options.get(
@@ -331,17 +331,17 @@ class FileRuleProvider(RuleProvider):
             try:
                 with self._open('rules', '%s.json' % rule_name) as f:
                     ruleconf = json.load(f)
-            except IOError:
+            except IOError as e:
                 raise errors.NotFound(
                     reason=_('No generation rule %(rulename)s found.') %
-                    {'rulename': rule_name})
+                    {'rulename': rule_name}) from e
 
             try:
                 rule = ruleconf['rule']
-            except KeyError:
+            except KeyError as e:
                 raise errors.EmptyResult(
                     reason=_('Generation rule "%(rulename)s" is missing the'
-                             ' "rule" key') % {'rulename': rule_name})
+                             ' "rule" key') % {'rulename': rule_name}) from e
 
             options = ruleconf.get('options', {})
 
@@ -354,10 +354,12 @@ class FileRuleProvider(RuleProvider):
         try:
             with self._open('profiles', '%s.json' % profile_id) as f:
                 profile = json.load(f)
-        except IOError:
+        except IOError as e:
             raise errors.NotFound(
-                reason=_('No CSR generation rules are defined for profile'
-                         ' %(profile_id)s') % {'profile_id': profile_id})
+                reason=_(
+                    'No CSR generation rules are defined for profile'
+                    ' %(profile_id)s'
+                ) % {'profile_id': profile_id}) from e
 
         field_mappings = []
         for field in profile:
@@ -381,10 +383,10 @@ class CSRGenerator:
 
         try:
             config = template.render(render_data)
-        except jinja2.UndefinedError:
+        except jinja2.UndefinedError as e:
             logger.debug(traceback.format_exc())
             raise errors.CSRTemplateError(reason=_(
-                'Template error when formatting certificate data'))
+                'Template error when formatting certificate data')) from e
 
         return config
 

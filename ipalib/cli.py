@@ -560,9 +560,9 @@ class textui(backend.Backend):
         """
         try:
             return self.decode(prompt_func(self.encode(prompt)))
-        except (KeyboardInterrupt, EOFError):
+        except (KeyboardInterrupt, EOFError) as e:
             print()
-            raise PromptFailed(name=label)
+            raise PromptFailed(name=label) from e
 
     def print_prompt_attribute_error(self, attribute, error):
         self.print_plain('>>> %s: %s' % (attribute, error))
@@ -1407,7 +1407,7 @@ class cli(backend.Executioner):
                         raise ValidationError(
                             name=to_cli(p.cli_name),
                             error='%s: %s:' % (fname, e.args[1])
-                        )
+                        ) from e
                 elif p.stdin_if_missing:
                     try:
                         if six.PY3 and p.type is bytes:
@@ -1419,7 +1419,7 @@ class cli(backend.Executioner):
                     except IOError as e:
                         raise ValidationError(
                             name=to_cli(p.cli_name), error=e.args[1]
-                        )
+                        ) from e
 
                 if raw:
                     if p.type is bytes:

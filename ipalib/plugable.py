@@ -264,7 +264,7 @@ class Plugin(ReadOnly):
             obj.ensure_finalized()
             try:
                 return getattr(obj, self.name)
-            except RuntimeError:
+            except RuntimeError as e:
                 # If the actual attribute value is not set in _on_finalize(),
                 # getattr() calls __get__() again, which leads to infinite
                 # recursion. This can happen only if the plugin is written
@@ -272,7 +272,7 @@ class Plugin(ReadOnly):
                 # them a generic "maximum recursion depth exceeded" error.
                 raise AttributeError(
                     "attribute '%s' of plugin '%s' was not set in finalize()" % (self.name, obj.name)
-                )
+                ) from e
 
     def __repr__(self):
         """
@@ -348,8 +348,8 @@ class APINameSpace(Mapping):
     def __getattr__(self, key):
         try:
             return self[key]
-        except KeyError:
-            raise AttributeError(key)
+        except KeyError as e:
+            raise AttributeError(key) from e
 
 
 class API(ReadOnly):
@@ -416,8 +416,8 @@ class API(ReadOnly):
         for name in self:
             try:
                 yield getattr(self, name)
-            except AttributeError:
-                raise KeyError(name)
+            except AttributeError as e:
+                raise KeyError(name) from e
 
     def is_production_mode(self):
         """

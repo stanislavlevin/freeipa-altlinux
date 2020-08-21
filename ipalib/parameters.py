@@ -1131,9 +1131,10 @@ class Int(Number):
         """
         try:
             return Int.convert_int(value)
-        except ValueError:
-            raise ConversionError(name=self.get_param_name(),
-                                  error=ugettext(self.type_error))
+        except ValueError as e:
+            raise ConversionError(
+                name=self.get_param_name(), error=ugettext(self.type_error)
+            ) from e
 
     def _rule_minvalue(self, _, value):
         """
@@ -1195,7 +1196,8 @@ class Decimal(Number):
                 except Exception as e:
                     raise ValueError(
                        '%s: cannot parse kwarg %s: %s' % (
-                        name, kwparam, str(e)))
+                        name, kwparam, str(e))
+                    ) from e
                 kw[kwparam] = value
 
         super(Decimal, self).__init__(name, *rules, **kw)
@@ -1252,8 +1254,10 @@ class Decimal(Number):
             try:
                 value = value.quantize(quantize_exp)
             except decimal.DecimalException as e:
-                raise ConversionError(name=self.get_param_name(),
-                                      error=unicode(e))
+                raise ConversionError(
+                    name=self.get_param_name(),
+                    error=unicode(e)
+                ) from e
         return value
 
     def _remove_exponent(self, value):
@@ -1266,8 +1270,10 @@ class Decimal(Number):
                         if value == value.to_integral() \
                         else value.normalize()
             except decimal.DecimalException as e:
-                raise ConversionError(name=self.get_param_name(),
-                                      error=unicode(e))
+                raise ConversionError(
+                    name=self.get_param_name(),
+                    error=unicode(e)
+                ) from e
 
         return value
 
@@ -1287,8 +1293,10 @@ class Decimal(Number):
             try:
                 value = decimal.Decimal(value)
             except decimal.DecimalException as e:
-                raise ConversionError(name=self.get_param_name(),
-                                      error=unicode(e))
+                raise ConversionError(
+                    name=self.get_param_name(),
+                    error=unicode(e)
+                ) from e
 
         if isinstance(value, decimal.Decimal):
             return self._test_and_normalize(value)
@@ -1436,7 +1444,7 @@ class Bytes(Data):
             try:
                 value = base64.b64decode(value)
             except (TypeError, ValueError) as e:
-                raise Base64DecodeError(reason=str(e))
+                raise Base64DecodeError(reason=str(e)) from e
         return super(Bytes, self)._convert_scalar(value)
 
 
@@ -1463,7 +1471,7 @@ class Certificate(Param):
             try:
                 value = base64.b64decode(value)
             except (TypeError, ValueError) as e:
-                raise Base64DecodeError(reason=str(e))
+                raise Base64DecodeError(reason=str(e)) from e
 
         if isinstance(value, bytes):
             # we now only have either bytes or an IPACertificate object
@@ -1471,7 +1479,7 @@ class Certificate(Param):
             try:
                 value = load_der_x509_certificate(value)
             except ValueError as e:
-                raise CertificateFormatError(error=str(e))
+                raise CertificateFormatError(error=str(e)) from e
 
         return super(Certificate, self)._convert_scalar(value)
 
@@ -1513,8 +1521,8 @@ class CertificateSigningRequest(Param):
         if isinstance(value, unicode):
             try:
                 value = value.encode('ascii')
-            except UnicodeDecodeError:
-                raise CertificateOperationError('not a valid CSR')
+            except UnicodeDecodeError as e:
+                raise CertificateOperationError('not a valid CSR') from e
 
         if isinstance(value, bytes):
             # try to extract DER from whatever we got
@@ -1525,7 +1533,8 @@ class CertificateSigningRequest(Param):
             except ValueError as e:
                 raise CertificateOperationError(
                     error=_("Failure decoding Certificate Signing Request:"
-                            " %s") % e)
+                            " %s") % e
+                ) from e
 
         return super(CertificateSigningRequest, self)._convert_scalar(value)
 
@@ -1731,9 +1740,11 @@ class IntEnum(Enum):
         """
         try:
             return Int.convert_int(value)
-        except ValueError:
-            raise ConversionError(name=self.get_param_name(),
-                                  error=ugettext(self.type_error))
+        except ValueError as e:
+            raise ConversionError(
+                name=self.get_param_name(),
+                error=ugettext(self.type_error)
+            ) from e
 
 
 class Any(Param):
@@ -2001,11 +2012,15 @@ class AccessTime(Str):
         try:
             self._check(value)
         except ValueError as e:
-            raise ValidationError(name=self.get_param_name(), error=e.args[0])
-        except IndexError:
             raise ValidationError(
-                name=self.get_param_name(), error=ugettext('incomplete time value')
-            )
+                name=self.get_param_name(),
+                error=e.args[0]
+            ) from e
+        except IndexError as e:
+            raise ValidationError(
+                name=self.get_param_name(),
+                error=ugettext('incomplete time value')
+            ) from e
 
 
 class DNParam(Param):
@@ -2025,8 +2040,10 @@ class DNParam(Param):
         try:
             dn = DN(value)
         except Exception as e:
-            raise ConversionError(name=self.get_param_name(),
-                                  error=ugettext(e))
+            raise ConversionError(
+                name=self.get_param_name(),
+                error=ugettext(e)
+            ) from e
         return dn
 
 
@@ -2098,8 +2115,10 @@ class DNSNameParam(Param):
             try:
                 validate_idna_domain(value)
             except ValueError as e:
-                raise ConversionError(name=self.get_param_name(),
-                                      error=unicode(e))
+                raise ConversionError(
+                    name=self.get_param_name(),
+                    error=unicode(e)
+                ) from e
             value = DNSName(value)
 
             if self.only_absolute and not value.is_absolute():
@@ -2148,11 +2167,12 @@ class Principal(Param):
         if isinstance(value, unicode):
             try:
                 value = kerberos.Principal(value)
-            except ValueError:
+            except ValueError as e:
                 raise ConversionError(
                     name=self.get_param_name(),
                     error=_("Malformed principal: '%(value)s'") % dict(
-                        value=value))
+                        value=value)
+                ) from e
 
         return super(Principal, self)._convert_scalar(value)
 

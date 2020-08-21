@@ -109,7 +109,7 @@ def update_persistent_client_session_data(principal, data):
     try:
         session_storage.store_data(principal, CCACHE_COOKIE_KEY, data)
     except Exception as e:
-        raise ValueError(str(e))
+        raise ValueError(str(e)) from e
 
 def read_persistent_client_session_data(principal):
     '''
@@ -122,7 +122,7 @@ def read_persistent_client_session_data(principal):
     try:
         return session_storage.get_data(principal, CCACHE_COOKIE_KEY)
     except Exception as e:
-        raise ValueError(str(e))
+        raise ValueError(str(e)) from e
 
 def delete_persistent_client_session_data(principal):
     '''
@@ -135,7 +135,7 @@ def delete_persistent_client_session_data(principal):
     try:
         session_storage.remove_data(principal, CCACHE_COOKIE_KEY)
     except Exception as e:
-        raise ValueError(str(e))
+        raise ValueError(str(e)) from e
 
 def xml_wrap(value, version):
     """
@@ -484,7 +484,7 @@ def xml_loads(data, encoding='UTF-8'):
         (params, method) = loads(data)
         return (xml_unwrap(params), method)
     except Fault as e:
-        raise decode_fault(e)
+        raise decode_fault(e) from e
 
 
 class DummyParser:
@@ -1065,13 +1065,13 @@ class RPCClient(Connectible):
                         e = decode_fault(e)
                         if e.faultCode in errors_by_code:
                             error = errors_by_code[e.faultCode]
-                            raise error(message=e.faultString)
+                            raise error(message=e.faultString) from e
                         else:
                             raise UnknownError(
                                 code=e.faultCode,
                                 error=e.faultString,
                                 server=url,
-                            )
+                            ) from e
                     # We don't care about the response, just that we got one
                     return serverproxy
                 # pylint: disable=try-except-raise
@@ -1151,12 +1151,12 @@ class RPCClient(Connectible):
                              server, e.faultString)
                 if e.faultCode in errors_by_code:
                     error = errors_by_code[e.faultCode]
-                    raise error(message=e.faultString)
+                    raise error(message=e.faultString) from e
                 raise UnknownError(
                     code=e.faultCode,
                     error=e.faultString,
                     server=server,
-                )
+                ) from e
             except ProtocolError as e:
                 # By catching a 401 here we can detect the case where we have
                 # a single IPA server and the session is invalid. Otherwise
@@ -1183,11 +1183,11 @@ class RPCClient(Connectible):
                             Connection(serverproxy, self.disconnect))
                     # try to connect again with the new session cookie
                     continue
-                raise NetworkError(uri=server, error=e.errmsg)
+                raise NetworkError(uri=server, error=e.errmsg) from e
             except (SSLError, socket.error) as e:
-                raise NetworkError(uri=server, error=str(e))
+                raise NetworkError(uri=server, error=str(e)) from e
             except (OverflowError, TypeError) as e:
-                raise XMLRPCMarshallError(error=str(e))
+                raise XMLRPCMarshallError(error=str(e)) from e
         raise NetworkError(
             uri=server,
             error=_("Exceeded number of tries to forward a request."))
@@ -1253,18 +1253,18 @@ class JSONServerProxy:
         try:
             response = json_decode_binary(response)
         except ValueError as e:
-            raise JSONError(error=str(e))
+            raise JSONError(error=str(e)) from e
 
         error = response.get('error')
         if error:
             try:
                 error_class = errors_by_code[error['code']]
-            except KeyError:
+            except KeyError as e:
                 raise UnknownError(
                     code=error.get('code'),
                     error=error.get('message'),
                     server=self.__host,
-                )
+                ) from e
             else:
                 kw = error.get('data', {})
                 kw['message'] = error['message']

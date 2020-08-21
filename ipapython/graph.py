@@ -34,19 +34,19 @@ class Graph:
     def remove_edge(self, tail, head):
         try:
             self.edges.remove((tail, head))
-        except KeyError:
+        except KeyError as e:
             raise ValueError(
                 "graph does not contain edge: ({0}, {1})".format(tail, head)
-            )
+            ) from e
         self._adj[tail].remove(head)
 
     def remove_vertex(self, vertex):
         try:
             self.vertices.remove(vertex)
-        except KeyError:
+        except KeyError as exc:
             raise ValueError(
                 "graph does not contain vertex: {0}".format(vertex)
-            )
+            ) from exc
 
         # delete _adjacencies
         del self._adj[vertex]

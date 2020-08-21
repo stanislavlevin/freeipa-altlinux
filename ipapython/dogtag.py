@@ -104,9 +104,10 @@ def get_ca_certchain(ca_host=None):
             try:
                 item_node = doc.getElementsByTagName("ChainBase64")
                 chain = item_node[0].childNodes[0].data
-            except IndexError:
+            except IndexError as e:
                 raise error_from_xml(
-                    doc, _("Retrieving CA cert chain failed: %s"))
+                    doc, _("Retrieving CA cert chain failed: %s")
+                ) from e
         finally:
             if doc:
                 doc.unlink()
@@ -123,8 +124,10 @@ def _parse_ca_status(body):
         item_node = doc.getElementsByTagName("XMLResponse")[0]
         item_node = item_node.getElementsByTagName("Status")[0]
         return item_node.childNodes[0].data
-    except IndexError:
-        raise error_from_xml(doc, _("Retrieving CA status failed: %s"))
+    except IndexError as e:
+        raise error_from_xml(
+            doc, _("Retrieving CA status failed: %s")
+        ) from e
 
 
 def ca_status(ca_host=None):
@@ -239,7 +242,7 @@ def _httplib_request(
         conn.close()
     except Exception as e:
         logger.debug("httplib request failed:", exc_info=True)
-        raise NetworkError(uri=uri, error=str(e))
+        raise NetworkError(uri=uri, error=str(e)) from e
 
     encoding = res.getheader('Content-Encoding')
     if encoding == 'gzip':

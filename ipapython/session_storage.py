@@ -16,7 +16,7 @@ else:
 try:
     LIBKRB5 = ctypes.CDLL(LIBKRB5_FILENAME)
 except OSError as e:  # pragma: no cover
-    raise ImportError(str(e))
+    raise ImportError(str(e)) from e
 
 krb5_int32 = ctypes.c_int32
 krb5_error_code = krb5_int32

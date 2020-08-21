@@ -30,9 +30,9 @@ from ipalib.util import classproperty
 try:
     import usb.core
     import yubico
-except ImportError:
+except ImportError as e:
     # python-yubico depends on pyusb
-    raise SkipPluginModule(reason=_("python-yubico is not installed."))
+    raise SkipPluginModule(reason=_("python-yubico is not installed.")) from e
 
 if six.PY3:
     unicode = str
@@ -128,12 +128,12 @@ class otptoken_add_yubikey(Command):
         try:
             yk = yubico.find_yubikey()
         except usb.core.USBError as e:
-            raise NotFound(reason="No YubiKey found: %s" % e.strerror)
+            raise NotFound(reason="No YubiKey found: %s" % e.strerror) from e
         except yubico.yubikey.YubiKeyError as e:
-            raise NotFound(reason=e.reason)
+            raise NotFound(reason=e.reason) from e
         except ValueError as e:
             raise NotFound(reason=str(e) + ". Please install 'libyubikey' "
-                           "and 'libusb' packages first.")
+                           "and 'libusb' packages first.") from e
 
         assert yk.version_num() >= (2, 1)
 
@@ -142,8 +142,8 @@ class otptoken_add_yubikey(Command):
             try:
                 used = yk.status().valid_configs()
                 kwargs['slot'] = sorted({1, 2}.difference(used))[0]
-            except IndexError:
-                raise NotFound(reason=_('No free YubiKey slot!'))
+            except IndexError as e:
+                raise NotFound(reason=_('No free YubiKey slot!')) from e
 
         # Create the key (NOTE: the length is fixed).
         key = os.urandom(20)

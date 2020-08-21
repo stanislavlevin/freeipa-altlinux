@@ -367,7 +367,7 @@ def check_zone_overlap(zone, raise_on_error=True):
     except dns.exception.DNSException as e:
         msg = ("DNS check for domain %s failed: %s." % (zone, e))
         if raise_on_error:
-            raise ValueError(msg)
+            raise ValueError(msg) from e
         else:
             logger.warning('%s', msg)
             return

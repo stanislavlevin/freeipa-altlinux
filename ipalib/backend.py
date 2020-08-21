@@ -145,6 +145,6 @@ class Executioner(Backend):
             logger.exception(
                 'non-public: %s: %s', e.__class__.__name__, str(e)
             )
-            raise InternalError()
+            raise InternalError() from e
         finally:
             destroy_context()
