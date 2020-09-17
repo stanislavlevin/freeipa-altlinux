@@ -1012,7 +1012,8 @@ fi
 %attr(644,root,root) %_unitdir/ipa-epn.service
 %attr(644,root,root) %_unitdir/ipa-epn.timer
 %dir %attr(0755,root,root) %_sysconfdir/ipa/epn
-%attr(644,root,root) %_sysconfdir/ipa/epn/expire_msg.template
+%attr(600,root,root) %config(noreplace) %_sysconfdir/ipa/epn.conf
+%attr(644,root,root) %config(noreplace) %_sysconfdir/ipa/epn/expire_msg.template
 
 %files client-automount
 %_sbindir/ipa-client-automount

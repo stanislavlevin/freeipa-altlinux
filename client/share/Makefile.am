@@ -15,8 +15,3 @@ epntemplatedir = $(IPA_SYSCONF_DIR)/epn
 dist_epntemplate_DATA =			\
 	expire_msg.template	\
 	$(NULL)
-
-epnconfdir = $(IPA_SYSCONF_DIR)/epn
-dist_epnconf_DATA =			\
-	expire_msg.template	\
-	$(NULL)
