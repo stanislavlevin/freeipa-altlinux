@@ -201,8 +201,6 @@ Requires: python3-module-gssapi
 Requires: python3-module-systemd
 Requires: slapi-nis >= %slapi_nis_version
 
-# upgrade path from monolithic -server to -server + -server-dns
-Obsoletes: %name-server <= 4.2.0
 # Versions of nss-pam-ldapd < 0.8.4 require a mapping from uniqueMember to
 # member.
 Conflicts: nss-ldapd < 0.8.4
@@ -269,9 +267,6 @@ Requires: bind-dyndb-ldap >= %bind_dyndb_ldap_version
 Requires: bind >= %bind_version
 Requires: bind-utils >= %bind_version
 Requires: opendnssec
-
-# upgrade path from monolithic -server to -server + -server-dns
-Obsoletes: %name-server <= 4.2.0
 
 %description server-dns
 IPA integrated DNS server with support for automatic DNSSEC signing.
