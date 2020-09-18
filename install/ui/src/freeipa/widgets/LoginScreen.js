@@ -546,7 +546,7 @@ define(['dojo/_base/declare',
         },
 
         set_reset_aside_text: function() {
-            this.set('aside', "<p>"+this.otp_info_msg+"<p/>");
+            this.set('aside', "<p>"+this.otp_reset_info_msg+"<p/>");
         },
 
         constructor: function(spec) {
@@ -647,7 +647,7 @@ define(['dojo/_base/declare',
             label: text.get('@i18n:login.password', "Password"),
             placeholder: text.get(
                 '@i18n:login.password_and_otp',
-                'Password or Password+One-Time-Password'
+                'Password or Password+One-Time Password'
             ),
             show_errors: false,
             undo: false
@@ -669,17 +669,6 @@ define(['dojo/_base/declare',
             placeholder: text.get(
                 '@i18n:password.current_password',
                 "Current Password"
-            ),
-            show_errors: false,
-            undo: false
-        },
-        {
-            name: 'otp',
-            $type: 'password',
-            label: text.get('@i18n:password.otp', "OTP"),
-            placeholder: text.get(
-                '@i18n:password.otp_long',
-                'One-Time-Password'
             ),
             show_errors: false,
             undo: false
@@ -715,6 +704,17 @@ define(['dojo/_base/declare',
                 $type: 'same_password',
                 other_field: 'new_password'
             }],
+            show_errors: false,
+            undo: false
+        },
+        {
+            name: 'otp',
+            $type: 'password',
+            label: text.get('@i18n:password.otp', "OTP"),
+            placeholder: text.get(
+                '@i18n:password.otp_long',
+                'One-Time Password'
+            ),
             show_errors: false,
             undo: false
         }

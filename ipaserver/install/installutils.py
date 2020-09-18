@@ -43,7 +43,7 @@ from dns.exception import DNSException
 import ldap
 import six
 
-from ipalib.install import sysrestore
+from ipalib import facts
 from ipalib.install.kinit import kinit_password
 import ipaplatform
 from ipapython import ipautil, admintool, version, ipaldap
@@ -669,8 +669,7 @@ def check_server_configuration():
     Most convenient use case for the function is in install tools that require
     configured IPA for its function.
     """
-    server_fstore = sysrestore.FileStore(paths.SYSRESTORE)
-    if not server_fstore.has_files():
+    if not is_ipa_configured():
         raise ScriptError("IPA is not configured on this system.",
                           rval=SERVER_NOT_CONFIGURED)
 
@@ -700,28 +699,14 @@ def rmtree(path):
 
 def is_ipa_configured():
     """
-    Using the state and index install files determine if IPA is already
-    configured.
+    Use the state to determine if IPA has been configured.
     """
-    installed = False
-
-    sstore = sysrestore.StateFile(paths.SYSRESTORE)
-    fstore = sysrestore.FileStore(paths.SYSRESTORE)
-
-    for module in IPA_MODULES:
-        if sstore.has_state(module):
-            logger.debug('%s is configured', module)
-            installed = True
-        else:
-            logger.debug('%s is not configured', module)
-
-    if fstore.has_files():
-        logger.debug('filestore has files')
-        installed = True
-    else:
-        logger.debug('filestore is tracking no files')
-
-    return installed
+    warnings.warn(
+        "Use 'ipalib.facts.is_ipa_configured'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return facts.is_ipa_configured()
 
 
 def run_script(main_function, operation_name, log_file_name=None,
@@ -1069,13 +1054,26 @@ def load_external_cert(files, ca_subject):
     return cert_file, ca_file
 
 
+def get_current_platform():
+    """Get current platform (without container suffix)
+
+    'fedora' and 'fedora_container' are considered the same platform. This
+    normalization ensures that older freeipa-container images can be upgraded
+    without a platform mismatch.
+    """
+    platform = ipaplatform.NAME
+    if platform.endswith('_container'):
+        platform = platform[:-10]
+    return platform
+
+
 def store_version():
     """Store current data version and platform. This is required for check if
     upgrade is required.
     """
     sysupgrade.set_upgrade_state('ipa', 'data_version',
                                  version.VENDOR_VERSION)
-    sysupgrade.set_upgrade_state('ipa', 'platform', ipaplatform.NAME)
+    sysupgrade.set_upgrade_state('ipa', 'platform', get_current_platform())
 
 
 def check_version():
@@ -1085,12 +1083,14 @@ def check_version():
     :raise UpgradeDataNewerVersionError: older version of IPA was detected than data
     :raise UpgradeMissingVersionError: if platform or version is missing
     """
-    platform = sysupgrade.get_upgrade_state('ipa', 'platform')
-    if platform is not None:
-        if platform != ipaplatform.NAME:
+    state_platform = sysupgrade.get_upgrade_state('ipa', 'platform')
+    current_platform = get_current_platform()
+    if state_platform is not None:
+        if state_platform != current_platform:
             raise UpgradePlatformError(
                 "platform mismatch (expected '%s', current '%s')" % (
-                platform, ipaplatform.NAME)
+                    state_platform, current_platform
+                )
             )
     else:
         raise UpgradeMissingVersionError("no platform stored")

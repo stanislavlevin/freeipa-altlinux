@@ -27,6 +27,7 @@ import os
 class BasePathNamespace:
     BIN_HOSTNAMECTL = "/bin/hostnamectl"
     ECHO = "/bin/echo"
+    FIPS_MODE_SETUP = "/usr/bin/fips-mode-setup"
     GZIP = "/bin/gzip"
     LS = "/bin/ls"
     SYSTEMCTL = "/bin/systemctl"
@@ -117,6 +118,7 @@ class BasePathNamespace:
     CA_CERTIFICATES_BUNDLE_PEM = None
     CA_CERTIFICATES_DIR = None
     NSS_DB_DIR = "/etc/pki/nssdb"
+    PKI_CONFIGURATION = "/etc/pki"
     PKI_TOMCAT = "/etc/pki/pki-tomcat"
     PKI_TOMCAT_ALIAS_DIR = "/etc/pki/pki-tomcat/alias"
     PKI_TOMCAT_ALIAS_PWDFILE_TXT = "/etc/pki/pki-tomcat/alias/pwdfile.txt"
@@ -130,6 +132,8 @@ class BasePathNamespace:
     SSH_CONFIG_DIR = "/etc/ssh"
     SSH_CONFIG = "/etc/ssh/ssh_config"
     SSHD_CONFIG = "/etc/ssh/sshd_config"
+    SSHD_IPA_CONFIG = "/etc/ssh/sshd_config.d/04-ipa.conf"
+    SSHD_IPA_CONFIG_TEMPLATE = "/usr/share/ipa/client/sshd_ipa.conf.template"
     SSSD_CONF = "/etc/sssd/sssd.conf"
     SSSD_CONF_BKP = "/etc/sssd/sssd.conf.bkp"
     SSSD_CONF_DELETED = "/etc/sssd/sssd.conf.deleted"
@@ -324,7 +328,7 @@ class BasePathNamespace:
         "/var/lib/pki/pki-tomcat/ca/profiles/ca/caSignedLogCert.cfg")
     KRA_CS_CFG_PATH = "/var/lib/pki/pki-tomcat/conf/kra/CS.cfg"
     KRACERT_P12 = "/root/kracert.p12"
-    SAMBA_DIR = "/var/lib/samba/"
+    SAMBA_DIR = "/var/lib/samba"
     SSSD_DB = "/var/lib/sss/db"
     SSSD_MC_GROUP = "/var/lib/sss/mc/group"
     SSSD_MC_PASSWD = "/var/lib/sss/mc/passwd"

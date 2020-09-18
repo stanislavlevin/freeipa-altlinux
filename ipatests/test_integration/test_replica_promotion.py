@@ -47,6 +47,21 @@ class ReplicaPromotionBase(IntegrationTest):
         assert(found > 0), result2.stdout_text
 
 
+def sssd_config_allows_ipaapi_access_to_ifp(host):
+    """Checks that the sssd configuration allows the ipaapi user to access
+    ifp
+
+    :param host the machine on which to check that sssd allows ipaapi
+    access to ifp
+    """
+    with tasks.remote_sssd_config(host) as sssd_conf:
+        ifp = sssd_conf.get_service('ifp')
+        uids = [
+            uid.strip() for uid in ifp.get_option('allowed_uids').split(',')
+        ]
+        assert 'ipaapi' in uids
+
+
 class TestReplicaPromotionLevel1(ReplicaPromotionBase):
     """
     TestCase: http://www.freeipa.org/page/V4/Replica_Promotion/Test_plan#
@@ -99,6 +114,10 @@ class TestReplicaPromotionLevel1(ReplicaPromotionBase):
         # Ensure that pkinit is properly configured, test for 7566
         result = self.replicas[0].run_command(['ipa-pkinit-manage', 'status'])
         assert "PKINIT is enabled" in result.stdout_text
+
+        # Verify that the sssd configuration allows the ipaapi user to
+        # access ifp
+        sssd_config_allows_ipaapi_access_to_ifp(self.replicas[0])
 
 
 class TestUnprivilegedUserPermissions(IntegrationTest):
@@ -170,6 +189,9 @@ class TestUnprivilegedUserPermissions(IntegrationTest):
                                       '-n', self.master.domain.name,
                                       '-r', self.master.domain.realm,
                                       '-U'])
+
+    def test_sssd_config_allows_ipaapi_access_to_ifp(self):
+        sssd_config_allows_ipaapi_access_to_ifp(self.replicas[0])
 
 
 class TestProhibitReplicaUninstallation(IntegrationTest):

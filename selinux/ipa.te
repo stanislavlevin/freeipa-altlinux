@@ -115,6 +115,7 @@ optional_policy(`
 
 
 allow ipa_helper_t self:capability { net_admin dac_read_search dac_override chown };
+seutil_read_config(ipa_helper_t);
 
 #kernel bug
 dontaudit ipa_helper_t self:capability2  block_suspend;
@@ -147,6 +148,9 @@ auth_use_nsswitch(ipa_helper_t)
 
 files_list_tmp(ipa_helper_t)
 
+init_read_state(ipa_helper_t)
+init_stream_connect(ipa_helper_t)
+
 ipa_manage_pid_files(ipa_helper_t)
 ipa_read_lib(ipa_helper_t)
 
@@ -154,6 +158,10 @@ logging_send_syslog_msg(ipa_helper_t)
 
 optional_policy(`
     dirsrv_stream_connect(ipa_helper_t)
+')
+
+optional_policy(`
+    dirsrv_systemctl(ipa_helper_t)
 ')
 
 optional_policy(`
@@ -182,6 +190,7 @@ optional_policy(`
 
 optional_policy(`
     sssd_manage_lib_files(ipa_helper_t)
+    sssd_systemctl(ipa_helper_t)
 ')
 
 ########################################
@@ -370,6 +379,13 @@ optional_policy(`
 ')
 
 optional_policy(`
+    gen_require(`
+        type httpd_t;
+    ')
+    ipa_custodia_stream_connect(httpd_t)
+')
+
+optional_policy(`
 	pki_manage_tomcat_etc_rw(ipa_custodia_t)
 	pki_read_tomcat_cert(ipa_custodia_t)
 	pki_rw_tomcat_cert(ipa_custodia_t)
@@ -380,4 +396,8 @@ optional_policy(`
 	sssd_run_stream_connect(ipa_custodia_t)
 	sssd_search_lib(ipa_custodia_t)
 	sssd_stream_connect(ipa_custodia_t)
+')
+
+optional_policy(`
+       systemd_private_tmp(ipa_custodia_tmp_t)
 ')

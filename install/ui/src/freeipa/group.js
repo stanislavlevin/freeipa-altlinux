@@ -205,6 +205,19 @@ return {
             add_title: '@i18n:objects.group.add_into_sudo',
             remove_method: 'remove_user',
             remove_title: '@i18n:objects.group.remove_from_sudo'
+        },
+        {
+            $type: 'association',
+            name: 'member_idoverrideuser',
+            add_title: '@i18n:objects.group.add_idoverride_user',
+            remove_title: '@i18n:objects.group.remove_idoverride_users',
+            columns: [
+                {
+                    name: 'ipaanchoruuid',
+                    label: '@i18n:objects.idoverrideuser.anchor_label',
+                    link: false
+                }
+            ]
         }
     ],
     standard_association_facets: true,

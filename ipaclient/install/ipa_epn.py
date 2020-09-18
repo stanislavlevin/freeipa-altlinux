@@ -38,11 +38,11 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.header import Header
 from email.utils import make_msgid
+from socket import error as socketerror
 
-from ipaclient.install.client import is_ipa_client_installed
 from ipaplatform.paths import paths
 from ipalib import api, errors
-from ipalib.install import sysrestore
+from ipalib.facts import is_ipa_client_configured
 from ipapython import admintool, ipaldap
 from ipapython.dn import DN
 
@@ -123,22 +123,30 @@ class EPNUserList:
         """Return len(self)."""
         return len(self._expiring_password_user_dq)
 
+    def get_ldap_attr(self, entry, attr):
+        """Get a single value from a multi-valued attr in a safe way"""
+        return str(entry.get(attr, [""]).pop(0))
+
     def add(self, entry):
         """Parses and appends an LDAP user entry with the uid, cn,
            givenname, sn, krbpasswordexpiration and mail attributes.
         """
         try:
             self._sorted = False
+            if entry.get("mail") is None:
+                logger.error("IPA-EPN: No mail address defined for: %s",
+                             entry.dn)
+                return
             self._expiring_password_user_dq.append(
                 dict(
-                    uid=str(entry["uid"].pop(0)),
-                    cn=str(entry["cn"].pop(0)),
-                    givenname=str(entry["givenname"].pop(0)),
-                    sn=str(entry["sn"].pop(0)),
-                    krbpasswordexpiration=str(
-                        entry["krbpasswordexpiration"].pop(0)
+                    uid=self.get_ldap_attr(entry, "uid"),
+                    cn=self.get_ldap_attr(entry, "cn"),
+                    givenname=self.get_ldap_attr(entry, "givenname"),
+                    sn=self.get_ldap_attr(entry, "sn"),
+                    krbpasswordexpiration=(
+                        self.get_ldap_attr(entry,"krbpasswordexpiration")
                     ),
-                    mail=str(entry["mail"]),
+                    mail=str(entry.get("mail")),
                 )
             )
         except IndexError as e:
@@ -238,9 +246,33 @@ class EPN(admintool.AdminTool):
 
     def validate_options(self):
         super(EPN, self).validate_options(needs_root=True)
-        if self.options.to_nbdays:
+        if self.options.to_nbdays is not None:
+            try:
+                if int(self.options.to_nbdays) < 0:
+                    raise RuntimeError('Input is negative.')
+            except Exception as e:
+                self.option_parser.error(
+                    "--to-nbdays must be a positive integer. "
+                    "{error}".format(error=e)
+                )
             self.options.dry_run = True
-        if self.options.from_nbdays and not self.options.to_nbdays:
+        if self.options.from_nbdays is not None:
+            try:
+                if int(self.options.from_nbdays) < 0:
+                    raise RuntimeError('Input is negative.')
+            except Exception as e:
+                self.option_parser.error(
+                    "--from-nbdays must be a positive integer. "
+                    "{error}".format(error=e)
+                )
+        if self.options.from_nbdays is not None and \
+                self.options.to_nbdays is not None:
+            if int(self.options.from_nbdays) >= int(self.options.to_nbdays):
+                self.option_parser.error(
+                    "--from-nbdays must be smaller than --to-nbdays."
+                )
+        if self.options.from_nbdays is not None and \
+                self.options.to_nbdays is None:
             self.option_parser.error(
                 "You cannot specify --from-nbdays without --to-nbdays"
             )
@@ -255,8 +287,7 @@ class EPN(admintool.AdminTool):
     def run(self):
         super(EPN, self).run()
 
-        fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
-        if not is_ipa_client_installed(fstore):
+        if not is_ipa_client_configured():
             logger.error("IPA client is not configured on this system.")
             raise admintool.ScriptError()
 
@@ -634,13 +665,15 @@ class MTAClient:
                     port=self._smtp_port,
                     timeout=self._smtp_timeout,
                 )
-        except smtplib.SMTPException as e:
-            logger.error(
-                "IPA-EPN: Unable to connect to %s:%s: %s",
-                self._smtp_hostname,
-                self._smtp_port,
-                e,
-            )
+        except (socketerror, smtplib.SMTPException) as e:
+            msg = \
+                "IPA-EPN: Could not connect to the configured SMTP server: " \
+                "{host}:{port}: {error}".format(
+                    host=self._smtp_hostname,
+                    port=self._smtp_port,
+                    error=e
+                )
+            raise admintool.ScriptError(msg)
 
         try:
             self._conn.ehlo()

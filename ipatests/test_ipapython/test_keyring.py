@@ -42,6 +42,9 @@ SIZE_1024 = 'abcdefgh' * 128
     os.environ.get('RPM_BUILD_DIR') is not None,
     reason='these tests depend on the host Linux key retention service',
 )
+@pytest.mark.skip_if_container(
+    "any", reason="kernel keyrings are not namespaced yet"
+)
 class test_keyring:
     """
     Test the kernel keyring interface

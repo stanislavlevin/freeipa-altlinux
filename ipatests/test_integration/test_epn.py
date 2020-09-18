@@ -15,6 +15,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+######
+# This test suite will _expectedly_ fail if run at the end of the UTC day
+# because users would be created during day N and then EPN output checked
+# during day N+1. This is expected and should be ignored as it does not
+# reflect a product bug. -- fcami
+######
+
 from __future__ import print_function, absolute_import
 
 import base64
@@ -22,6 +29,7 @@ import datetime
 import email
 import json
 import logging
+import os
 import pytest
 import textwrap
 
@@ -31,6 +39,8 @@ from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 
 logger = logging.getLogger(__name__)
+
+EPN_PKG = ["*ipa-client-epn"]
 
 
 def datetime_to_generalized_time(dt):
@@ -173,19 +183,49 @@ class TestEPN(IntegrationTest):
         self,
         host,
         dry_run=False,
+        mailtest=False,
         from_nbdays=None,
         to_nbdays=None,
         raiseonerr=True,
+        validatejson=True
     ):
-        result = tasks.ipa_epn(host, raiseonerr=raiseonerr, dry_run=dry_run,
-                               from_nbdays=from_nbdays,
-                               to_nbdays=to_nbdays)
-        json.dumps(json.loads(result.stdout_text), ensure_ascii=False)
-        return (result.stdout_text, result.stderr_text)
+        result = tasks.ipa_epn(
+            host,
+            from_nbdays=from_nbdays,
+            to_nbdays=to_nbdays,
+            mailtest=mailtest,
+            dry_run=dry_run,
+            raiseonerr=raiseonerr
+        )
+        if validatejson:
+            json.dumps(json.loads(result.stdout_text), ensure_ascii=False)
+        return (result.stdout_text, result.stderr_text, result.returncode)
 
     @classmethod
     def install(cls, mh):
+        # External DNS is only available before install so cache a copy
+        # of the *ipa-epn-client package so we can experimentally remove
+        # it later.
+        #
+        # Notes:
+        # - A package can't be downloaded that is already installed so we
+        #   have to remove it first.
+        # - dnf cleans up previously downloaded locations so make a copy it
+        #   doesn't know about.
+        # - Adds a class variable, pkg, containing the package name of
+        #   the downloaded *ipa-client-epn rpm.
+        tasks.uninstall_packages(cls.clients[0],EPN_PKG)
+        pkgdir = tasks.download_packages(cls.clients[0], EPN_PKG)
+        pkg = cls.clients[0].run_command(r'ls -1 {}'.format(pkgdir))
+        cls.pkg = pkg.stdout_text.strip()
+        cls.clients[0].run_command(['cp',
+                                    os.path.join(pkgdir, cls.pkg),
+                                    '/tmp'])
+        cls.clients[0].run_command(r'rm -rf {}'.format(pkgdir))
+
+        tasks.install_packages(cls.master, EPN_PKG)
         tasks.install_packages(cls.master, ["postfix"])
+        tasks.install_packages(cls.clients[0], EPN_PKG)
         tasks.install_packages(cls.clients[0], ["postfix"])
         for host in (cls.master, cls.clients[0]):
             try:
@@ -201,13 +241,48 @@ class TestEPN(IntegrationTest):
     @classmethod
     def uninstall(cls, mh):
         super(TestEPN, cls).uninstall(mh)
+        tasks.uninstall_packages(cls.master,EPN_PKG)
         tasks.uninstall_packages(cls.master, ["postfix"])
+        tasks.uninstall_packages(cls.clients[0], EPN_PKG)
         tasks.uninstall_packages(cls.clients[0], ["postfix"])
         cls.master.run_command(r'rm -f /etc/postfix/smtp.keytab')
         cls.master.run_command(r'getcert stop-tracking -f '
                                '/etc/pki/tls/certs/postfix.pem')
         cls.master.run_command(r'rm -f /etc/pki/tls/private/postfix.key')
         cls.master.run_command(r'rm -f /etc/pki/tls/certs/postfix.pem')
+
+    @pytest.mark.skip_if_platform(
+        "debian", reason="Cannot check installed packages using RPM"
+    )
+    def test_EPN_config_file(self):
+        """Check that the EPN configuration file is installed.
+           https://pagure.io/freeipa/issue/8374
+        """
+        epn_conf = "/etc/ipa/epn.conf"
+        epn_template = "/etc/ipa/epn/expire_msg.template"
+        if tasks.get_platform(self.master) != "fedora":
+            cmd1 = self.master.run_command(["rpm", "-qc", "ipa-client-epn"])
+        else:
+            cmd1 = self.master.run_command(["rpm", "-qc", "freeipa-client-epn"])
+        assert epn_conf in cmd1.stdout_text
+        assert epn_template in cmd1.stdout_text
+        cmd2 = self.master.run_command(["sha256sum", epn_conf])
+        ck = "192481b52fb591112afd7b55b12a44c6618fdbc7e05a3b1866fd67ec579c51df"
+        assert cmd2.stdout_text.find(ck) == 0
+
+    def test_EPN_connection_refused(self):
+        """Test EPN behavior when the configured SMTP is down
+        """
+
+        self.master.run_command(["systemctl", "stop", "postfix"])
+        (unused, stderr_text, rc) = self._check_epn_output(
+            self.master, mailtest=True,
+            raiseonerr=False, validatejson=False
+        )
+        self.master.run_command(["systemctl", "start", "postfix"])
+        assert "IPA-EPN: Could not connect to the configured SMTP server" in \
+            stderr_text
+        assert rc > 0
 
     def test_EPN_smoketest_1(self):
         """No users except admin. Check --dry-run output.
@@ -219,12 +294,12 @@ class TestEPN(IntegrationTest):
         ''')
         self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
         # check EPN on client (LDAP+GSSAPI)
-        (stdout_text, unused) = self._check_epn_output(
+        (stdout_text, unused, _unused) = self._check_epn_output(
             self.clients[0], dry_run=True
         )
         assert len(json.loads(stdout_text)) == 0
         # check EPN on master (LDAPI)
-        (stdout_text, unused) = self._check_epn_output(
+        (stdout_text, unused, _unused) = self._check_epn_output(
             self.master, dry_run=True
         )
         assert len(json.loads(stdout_text)) == 0
@@ -267,10 +342,10 @@ class TestEPN(IntegrationTest):
                 ),
             ],
         )
-        (stdout_text_client, unused) = self._check_epn_output(
+        (stdout_text_client, unused, _unused) = self._check_epn_output(
             self.clients[0], dry_run=True
         )
-        (stdout_text_master, unused) = self._check_epn_output(
+        (stdout_text_master, unused, _unused) = self._check_epn_output(
             self.master, dry_run=True
         )
         assert stdout_text_master == stdout_text_client
@@ -306,10 +381,10 @@ class TestEPN(IntegrationTest):
                 password=None,
             )
 
-        (stdout_text_client, unused) = self._check_epn_output(
+        (stdout_text_client, unused, _unused) = self._check_epn_output(
             self.clients[0], dry_run=True
         )
-        (stdout_text_master, unused) = self._check_epn_output(
+        (stdout_text_master, unused, _unused) = self._check_epn_output(
             self.master, dry_run=True
         )
         assert stdout_text_master == stdout_text_client
@@ -319,22 +394,114 @@ class TestEPN(IntegrationTest):
         expected_users = ["user1", "user3", "user7", "user14", "user28"]
         assert sorted(user_lst) == sorted(expected_users)
 
-    def test_EPN_nbdays(self):
+    def test_EPN_nbdays_0(self, cleanupmail):
         """Test the to/from nbdays options (implies --dry-run)
 
            We have a set of users installed with varying expiration
            dates. Confirm that to/from nbdays finds them.
+
+           Make sure --dry-run does not accidentally send emails.
         """
 
-        # Compare the notify_ttls values
+        # Use the notify_ttls values with a 1-day sliding window
         for i in self.notify_ttls:
             user_list = []
-            (stdout_text_client, unused) = self._check_epn_output(
-                self.clients[0], from_nbdays=i, to_nbdays=i + 1, dry_run=True)
+            (stdout_text_client, unused, _unused) = self._check_epn_output(
+                self.clients[0], from_nbdays=i, to_nbdays=i + 1, dry_run=True
+            )
             for user in json.loads(stdout_text_client):
                 user_list.append(user["uid"])
             assert len(user_list) == 1
-            assert user_list[0] == "user%d" % i
+            userid = "user{id}".format(id=i)
+            assert user_list[0] == userid
+
+            # Check that the user list is expected for any given notify_ttls.
+            (stdout_text_client, unused, _unused) = self._check_epn_output(
+                self.clients[0], to_nbdays=i
+            )
+            user_list = [user["uid"] for user in json.loads(stdout_text_client)]
+            assert len(user_list) == 1
+            assert user_list[0] == "user{id}".format(id=i - 1)
+
+            # make sure no emails were sent
+            result = self.clients[0].run_command(['ls', '-lha', '/var/mail/'])
+            assert userid not in result.stdout_text
+
+    def test_EPN_nbdays_1(self, cleanupmail):
+        """Test that for a given range, we find the users in that range"""
+
+        # Use hardcoded date ranges for now
+        for date_range in [(0, 5), (7, 15), (1, 20)]:
+            expected_user_list = ["user{i}".format(i=i)
+                                  for i in range(date_range[0], date_range[1])]
+            (stdout_text_client, unused, _unused) = self._check_epn_output(
+                self.clients[0],
+                from_nbdays=date_range[0],
+                to_nbdays=date_range[1]
+            )
+            user_list = [user["uid"] for user in json.loads(stdout_text_client)]
+            for user in expected_user_list:
+                assert user in user_list
+            for user in user_list:
+                assert user in expected_user_list
+
+    # Test the to/from nbdays options behavior with illegal input
+
+    def test_EPN_nbdays_input_0(self):
+        """Make sure that --to-nbdays implies --dry-run ;
+           therefore check that the output is valid JSON and contains the
+           expected user.
+        """
+
+        (stdout_text_client, unused, _unused) = self._check_epn_output(
+            self.clients[0], to_nbdays=5, dry_run=False
+        )
+        assert len(json.loads(stdout_text_client)) == 1
+        assert json.loads(stdout_text_client)[0]["uid"] == "user4"
+
+    def test_EPN_nbdays_input_1(self):
+        """Make sure that --from-nbdays cannot be used without --to-nbdays"""
+
+        (unused, stderr_text_client, rc) = \
+            self._check_epn_output(
+            self.clients[0], from_nbdays=3,
+            raiseonerr=False, validatejson=False
+        )
+        assert "You cannot specify --from-nbdays without --to-nbdays" \
+            in stderr_text_client
+        assert rc > 0
+
+    def test_EPN_nbdays_input_2(self):
+        """alpha input"""
+
+        (unused, stderr, rc) = self._check_epn_output(
+            self.clients[0], to_nbdays="abc",
+            raiseonerr=False, validatejson=False
+        )
+        assert "error: --to-nbdays must be a positive integer." in stderr
+        assert rc > 0
+
+    def test_EPN_nbdays_input_3(self):
+        """from_nbdays > to_nbdays"""
+
+        (unused, stderr, rc) = self._check_epn_output(
+            self.clients[0], from_nbdays=9, to_nbdays=7,
+            raiseonerr=False, validatejson=False
+        )
+        assert "error: --from-nbdays must be smaller than --to-nbdays." in \
+            stderr
+        assert rc > 0
+
+    def test_EPN_nbdays_input_4(self):
+        """decimal input"""
+
+        (unused, stderr, rc) = self._check_epn_output(
+            self.clients[0], to_nbdays=7.3,
+            raiseonerr=False, validatejson=False
+        )
+        logger.info(stderr)
+        assert rc > 0
+        assert "error: --to-nbdays must be a positive integer." in stderr
 
     # From here the tests build on one another:
     #  1) add auth
@@ -462,3 +629,48 @@ class TestEPN(IntegrationTest):
         self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
         result = tasks.ipa_epn(self.master, raiseonerr=False)
         assert "smtp_delay cannot be less than zero" in result.stderr_text
+
+    def test_EPN_admin(self):
+        """The admin user is special and has no givenName by default
+           It also doesn't by default have an e-mail address
+           Check --dry-run output.
+        """
+        epn_conf = textwrap.dedent('''
+            [global]
+        ''')
+        self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
+        self.master.run_command(
+            ['ipa', 'user-mod', 'admin', '--password-expiration',
+             datetime_to_generalized_time(
+                 datetime.datetime.utcnow() + datetime.timedelta(days=7)
+             )]
+        )
+        (unused, stderr_text, _unused) = self._check_epn_output(
+            self.master, dry_run=True
+        )
+        assert "uid=admin" in stderr_text
+
+    @pytest.mark.skip_if_platform(
+        "debian", reason="Don't know how to download-only pkgs in Debian"
+    )
+    def test_EPN_reinstall(self):
+        """Test that EPN can be installed, uninstalled and reinstalled.
+
+           Since post-install we no longer have access to the repos
+           the package is downloaded and stored prior to server
+           installation.
+        """
+        tasks.uninstall_packages(self.clients[0], EPN_PKG)
+        tasks.install_packages(self.clients[0],
+                               [os.path.join('/tmp', self.pkg)])
+        self.clients[0].run_command(r'rm -f /tmp/{}'.format(self.pkg))
+
+        # re-installing will create a new epn.conf so any execution
+        # of ipa-epn will verify the reinstall was ok. Since the previous
+        # test would have failed this one should be ok with new config.
+
+        # Re-run the admin user expected failure
+        (unused, stderr_text, _unused) = self._check_epn_output(
+            self.master, dry_run=True
+        )
+        assert "uid=admin" in stderr_text

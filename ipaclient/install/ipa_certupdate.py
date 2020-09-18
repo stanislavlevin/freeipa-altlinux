@@ -26,7 +26,8 @@ import shutil
 
 from urllib.parse import urlsplit
 
-from ipalib.install import certmonger, certstore, sysrestore
+from ipalib.install import certmonger, certstore
+from ipalib.facts import is_ipa_configured
 from ipalib.install.kinit import kinit_keytab
 from ipapython import admintool, certdb, ipaldap, ipautil
 from ipaplatform import services
@@ -104,17 +105,21 @@ def run_with_args(api):
             os.environ['KRB5CCNAME'] = old_krb5ccname
         shutil.rmtree(tmpdir)
 
-    server_fstore = sysrestore.FileStore(paths.SYSRESTORE)
-    if server_fstore.has_files():
+    if is_ipa_configured():
         update_server(certs)
-        try:
-            # pylint: disable=import-error,ipa-forbidden-import
-            from ipaserver.install import cainstance
-            # pylint: enable=import-error,ipa-forbidden-import
-            cainstance.add_lightweight_ca_tracking_requests(lwcas)
-        except Exception:
-            logger.exception(
-                "Failed to add lightweight CA tracking requests")
+
+        # pylint: disable=import-error,ipa-forbidden-import
+        from ipaserver.install import cainstance
+        # pylint: enable=import-error,ipa-forbidden-import
+
+        # Add LWCA tracking requests.  Only execute if *this server*
+        # has CA installed (ca_enabled indicates CA-ful topology).
+        if cainstance.CAInstance().is_configured():
+            try:
+                cainstance.add_lightweight_ca_tracking_requests(lwcas)
+            except Exception:
+                logger.exception(
+                    "Failed to add lightweight CA tracking requests")
 
     update_client(certs)
 

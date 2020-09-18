@@ -26,6 +26,7 @@ import shutil
 import socket
 import sys
 import tempfile
+import textwrap
 import time
 import traceback
 import warnings
@@ -34,9 +35,11 @@ from configparser import RawConfigParser
 from urllib.parse import urlparse, urlunparse
 
 from ipalib import api, errors, x509, createntp
+from ipalib import sysrestore
 from ipalib.constants import IPAAPI_USER, MAXHOSTNAMELEN
-from ipalib.install import certmonger, certstore, service, sysrestore
+from ipalib.install import certmonger, certstore, service
 from ipalib.install import hostname as hostname_
+from ipalib.facts import is_ipa_client_configured, is_ipa_configured
 from ipalib.install.kinit import kinit_keytab, kinit_password
 from ipalib.install.service import enroll_only, prepare_only
 from ipalib.rpc import delete_persistent_client_session_data
@@ -266,21 +269,19 @@ def delete_ipa_domain():
             "No access to the /etc/sssd/sssd.conf file.")
 
 
-def is_ipa_client_installed(fstore, on_master=False):
+def is_ipa_client_installed(on_master=False):
     """
     Consider IPA client not installed if nothing is backed up
     and default.conf file does not exist. If on_master is set to True,
     the existence of default.conf file is not taken into consideration,
     since it has been already created by ipa-server-install.
     """
-
-    installed = (
-        fstore.has_files() or (
-            not on_master and os.path.exists(paths.IPA_DEFAULT_CONF)
-        )
+    warnings.warn(
+        "Use 'ipalib.facts.is_ipa_client_configured'",
+        DeprecationWarning,
+        stacklevel=2
     )
-
-    return installed
+    return is_ipa_client_configured(on_master)
 
 
 def configure_nsswitch_database(fstore, database, services, preserve=True,
@@ -1131,6 +1132,29 @@ def configure_sshd_config(fstore, options):
 
     fstore.backup_file(paths.SSHD_CONFIG)
 
+    # If openssh-server >= 8.2, the config needs to go in a new snippet
+    # in /etc/ssh/sshd_config.d/04-ipa.conf
+    # instead of /etc/ssh/sshd_config file
+    def sshd_version_supports_include():
+        with open(paths.SSHD_CONFIG, 'r') as f:
+            for line in f:
+                if re.match(r"^Include\s", line):
+                    return True
+        return False
+
+    if sshd_version_supports_include():
+        create_sshd_ipa_config(options)
+    else:
+        modify_sshd_config(options)
+
+    if sshd.is_running():
+        try:
+            sshd.restart()
+        except Exception as e:
+            log_service_error(sshd.service_name, 'restart', e)
+
+
+def modify_sshd_config(options):
     changes = {
         'PubkeyAuthentication': 'yes',
         'KerberosAuthentication': 'no',
@@ -1179,11 +1203,24 @@ def configure_sshd_config(fstore, options):
     change_ssh_config(paths.SSHD_CONFIG, changes, ['Match'])
     logger.info('Configured %s', paths.SSHD_CONFIG)
 
-    if sshd.is_running():
-        try:
-            sshd.restart()
-        except Exception as e:
-            log_service_error(sshd.service_name, 'restart', e)
+
+def create_sshd_ipa_config(options):
+    """Add the IPA snippet for sshd"""
+    sssd_sshd_options = ""
+    if options.sssd and os.path.isfile(paths.SSS_SSH_AUTHORIZEDKEYS):
+        sssd_sshd_options = textwrap.dedent("""\
+            AuthorizedKeysCommand {}
+            AuthorizedKeysCommandUser nobody
+        """).format(paths.SSS_SSH_AUTHORIZEDKEYS)
+
+    ipautil.copy_template_file(
+        os.path.join(paths.SSHD_IPA_CONFIG_TEMPLATE),
+        paths.SSHD_IPA_CONFIG,
+        dict(
+            SSSD_SSHD_OPTIONS=sssd_sshd_options,
+        )
+    )
+    logger.info('Configured %s', paths.SSHD_IPA_CONFIG)
 
 
 def configure_automount(options):
@@ -2050,7 +2087,7 @@ def install_check(options):
 
     tasks.check_selinux_status()
 
-    if is_ipa_client_installed(fstore, on_master=options.on_master):
+    if is_ipa_client_configured(on_master=options.on_master):
         logger.error("IPA client is already configured on this system.")
         logger.info(
             "If you want to reinstall the IPA client, uninstall it first "
@@ -2123,6 +2160,14 @@ def install_check(options):
     if not tasks.is_nosssd_supported() and options.no_ac:
         raise ScriptError(
             "Option '--noac' is incompatible with the 'authselect' tool "
+            "provided by this distribution for configuring system "
+            "authentication resources",
+            rval=CLIENT_INSTALL_ERROR)
+
+    # --mkhomedir is not supported by fedora_container and rhel_container
+    if not tasks.is_mkhomedir_supported() and options.mkhomedir:
+        raise ScriptError(
+            "Option '--mkhomedir' is incompatible with the 'authselect' tool "
             "provided by this distribution for configuring system "
             "authentication resources",
             rval=CLIENT_INSTALL_ERROR)
@@ -2499,6 +2544,8 @@ def _install(options):
     fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
     statestore = sysrestore.StateFile(paths.IPA_CLIENT_SYSRESTORE)
 
+    statestore.backup_state('installation', 'complete', False)
+
     if not options.on_master:
         # Try removing old principals from the keytab
         purge_host_keytab(cli_realm)
@@ -2558,10 +2605,13 @@ def _install(options):
                 force=options.force)
             env['KRB5_CONFIG'] = krb_name
             ccache_name = os.path.join(ccache_dir, 'ccache')
-            join_args = [paths.SBIN_IPA_JOIN,
-                         "-s", cli_server[0],
-                         "-b", str(realm_to_suffix(cli_realm)),
-                         "-h", hostname]
+            join_args = [
+                paths.SBIN_IPA_JOIN,
+                "-s", cli_server[0],
+                "-b", str(realm_to_suffix(cli_realm)),
+                "-h", hostname,
+                "-k", paths.KRB5_KEYTAB
+            ]
             if options.debug:
                 join_args.append("-d")
                 env['XMLRPC_TRACE_CURL'] = 'yes'
@@ -3092,13 +3142,15 @@ def _install(options):
         configure_nisdomain(
             options=options, domain=cli_domain, statestore=statestore)
 
+    statestore.delete_state('installation', 'complete')
+    statestore.backup_state('installation', 'complete', True)
     logger.info('Client configuration complete.')
 
 
 def uninstall_check(options):
     fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
 
-    if not is_ipa_client_installed(fstore):
+    if not is_ipa_client_configured():
         if options.on_master:
             rval = SUCCESS
         else:
@@ -3107,8 +3159,7 @@ def uninstall_check(options):
             "IPA client is not configured on this system.",
             rval=rval)
 
-    server_fstore = sysrestore.FileStore(paths.SYSRESTORE)
-    if server_fstore.has_files() and not options.on_master:
+    if is_ipa_configured() and not options.on_master:
         logger.error(
             "IPA client is configured as a part of IPA server on this system.")
         logger.info("Refer to ipa-server-install for uninstallation.")
@@ -3216,7 +3267,12 @@ def uninstall(options):
 
     if not options.on_master and os.path.exists(paths.IPA_DEFAULT_CONF):
         logger.info("Unenrolling client from IPA server")
-        join_args = [paths.SBIN_IPA_JOIN, "--unenroll", "-h", hostname]
+        join_args = [
+            paths.SBIN_IPA_JOIN,
+            "--unenroll",
+            "-h", hostname,
+            "-k", paths.KRB5_KEYTAB
+        ]
         if options.debug:
             join_args.append("-d")
             env['XMLRPC_TRACE_CURL'] = 'yes'
@@ -3399,6 +3455,7 @@ def uninstall(options):
     restore_state(SERVICE_API, statestore)
 
     if was_sshd_configured and services.knownservices.sshd.is_running():
+        remove_file(paths.SSHD_IPA_CONFIG)
         services.knownservices.sshd.restart()
 
     # Remove the Firefox configuration
@@ -3422,6 +3479,8 @@ def uninstall(options):
     if fstore.has_files():
         logger.error('Some files have not been restored, see %s',
                      paths.SYSRESTORE_INDEX)
+
+    statestore.delete_state('installation', 'complete')
     has_state = False
     for module in statestore.modules:
             logger.error(

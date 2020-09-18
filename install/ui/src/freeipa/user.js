@@ -367,36 +367,39 @@ return {
                 {
                     name: 'smb_attributes',
                     label: '@i18n:objects.smb_attributes.title',
-                    show_cond: ['oc_ipantuserattrs'],
                     fields: [{
                             name: 'ipantlogonscript',
                             tooltip: {
                                 title: '@i18n:objects.smb_attributes.ipantlogonscript_tooltip'
-                            }
+                            },
+                            hidden_if_empty: true
                         },
                         {
                             name: 'ipantprofilepath',
                             tooltip: {
                                 title: '@i18n:objects.smb_attributes.ipantprofilepath_tooltip'
-                            }
+                            },
+                            hidden_if_empty: true
                         },
                         {
                             name: 'ipanthomedirectory',
                             tooltip: {
                                 title: '@i18n:objects.smb_attributes.ipanthomedirectory_tooltip'
-                            }
+                            },
+                            hidden_if_empty: true
                         },
                         {
                             name: 'ipanthomedirectorydrive',
                             $type: 'select',
                             options: IPA.create_options([
-                                'A:', 'B:', 'C:', 'D:', 'E:', 'F:', 'G:', 'H:', 'I:',
-                                'J:', 'K:', 'L:', 'M:', 'N:', 'O:', 'P:', 'Q:', 'R:',
-                                'S:', 'T:', 'U:', 'V:', 'W:', 'X:', 'Y:', 'Z:'
+                                '', 'A:', 'B:', 'C:', 'D:', 'E:', 'F:', 'G:', 'H:',
+                                'I:', 'J:', 'K:', 'L:', 'M:', 'N:', 'O:', 'P:', 'Q:',
+                                'R:', 'S:', 'T:', 'U:', 'V:', 'W:', 'X:', 'Y:', 'Z:'
                             ]),
                             tooltip: {
                                 title: '@i18n:objects.smb_attributes.ipanthomedirectorydrive_tooltip'
-                            }
+                            },
+                            hidden_if_empty: true
                         }
                     ]
                 }
@@ -482,7 +485,6 @@ return {
                     IPA.user.self_service_other_user_evaluator,
                     IPA.user.preserved_user_evaluator,
                     IPA.user.is_locked_evaluator,
-                    IPA.object_class_evaluator,
                     IPA.cert.certificate_evaluator
                 ],
                 summary_conditions: [
@@ -774,13 +776,15 @@ IPA.user.password_dialog_pre_op0 = function(spec) {
 
 IPA.user.password_dialog_pre_op = function(spec) {
 
-    spec.sections[0].fields.splice(0, 0, {
+    spec.sections[0].fields.unshift({
         name: 'current_password',
         label: '@i18n:password.current_password',
         $type: 'password',
         required: true
-    }, {
-         name: 'otp',
+    });
+
+    spec.sections[0].fields.push({
+        name: 'otp',
         label: '@i18n:password.otp',
         $type: 'password'
     });
@@ -944,7 +948,6 @@ IPA.user.self_service_other_user_evaluator = function(spec) {
     var that = IPA.state_evaluator(spec);
     that.name = spec.name || 'self_service_other_user_evaluator';
     that.param = spec.param || 'uid';
-    that.adapter = builder.build('adapter', spec.adapter || 'adapter', { context: that });
 
     /**
      * Evaluates if user is in self-service and viewing himself
@@ -978,7 +981,6 @@ IPA.user.preserved_user_evaluator = function(spec) {
     var that = IPA.state_evaluator(spec);
     that.name = spec.name || 'preserved_user_evaluator';
     that.param = spec.param || 'dn';
-    that.adapter = builder.build('adapter', { $type: 'adapter'}, { context: that });
 
     /**
      * Evaluates if user is preserved, i.e. is in provisioning tree

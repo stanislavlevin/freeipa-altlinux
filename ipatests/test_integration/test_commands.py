@@ -10,16 +10,17 @@ import re
 import os
 import logging
 import random
+import shlex
 import ssl
 from itertools import chain, repeat
 import textwrap
 import time
-import paramiko
 import pytest
 from subprocess import CalledProcessError
 
 from cryptography.hazmat.backends import default_backend
 from cryptography import x509
+from datetime import datetime, timedelta
 
 from ipalib.constants import IPAAPI_USER
 
@@ -36,6 +37,7 @@ from ipaplatform.tasks import tasks as platform_tasks
 from ipatests.create_external_ca import ExternalCA
 from ipatests.test_ipalib.test_x509 import good_pkcs7, badcert
 from ipapython.ipautil import realm_to_suffix, ipa_generate_password
+from ipaserver.install.installutils import realm_to_serverid
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,8 @@ logger = logging.getLogger(__name__)
 CONFIGURED_SERVICE = u'configuredService'
 ENABLED_SERVICE = u'enabledService'
 HIDDEN_SERVICE = u'hiddenService'
+
+DIRSRV_SLEEP = 5
 
 isrgrootx1 = (
     b'-----BEGIN CERTIFICATE-----\n'
@@ -606,12 +610,8 @@ class TestIPACommand(IntegrationTest):
         """
         Integration test for https://pagure.io/SSSD/sssd/issue/3747
         """
-        if self.master.is_fips_mode:  # pylint: disable=no-member
-            pytest.skip("paramiko is not compatible with FIPS mode")
 
         test_user = 'test-ssh'
-        external_master_hostname = \
-            self.master.external_hostname
 
         pub_keys = []
 
@@ -621,37 +621,26 @@ class TestIPACommand(IntegrationTest):
             with open(os.path.join(
                     tmpdir, 'ssh_priv_{}'.format(i)), 'w') as fp:
                 fp.write(ssh_key_pair[0])
+                fp.write(os.linesep)
 
         tasks.kinit_admin(self.master)
         self.master.run_command(['ipa', 'user-add', test_user,
                                  '--first=tester', '--last=tester'])
 
         keys_opts = ' '.join(['--ssh "{}"'.format(k) for k in pub_keys])
-        cmd = 'ipa user-mod {} {}'.format(test_user, keys_opts)
-        self.master.run_command(cmd)
+        self.master.run_command(
+            shlex.split('ipa user-mod {} {}'.format(test_user, keys_opts))
+        )
 
         # connect with first SSH key
         first_priv_key_path = os.path.join(tmpdir, 'ssh_priv_1')
         # change private key permission to comply with SS rules
         os.chmod(first_priv_key_path, 0o600)
 
-        sshcon = paramiko.SSHClient()
-        sshcon.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-        # first connection attempt is a workaround for
-        # https://pagure.io/SSSD/sssd/issue/3669
-        try:
-            sshcon.connect(external_master_hostname, username=test_user,
-                           key_filename=first_priv_key_path, timeout=1)
-        except (paramiko.AuthenticationException, paramiko.SSHException):
-            pass
-
-        try:
-            sshcon.connect(external_master_hostname, username=test_user,
-                           key_filename=first_priv_key_path, timeout=1)
-        except (paramiko.AuthenticationException,
-                paramiko.SSHException) as e:
-            pytest.fail('Authentication using SSH key not successful', e)
+        tasks.run_ssh_cmd(
+            to_host=self.master.external_hostname, username=test_user,
+            auth_method="key", private_key_path=first_priv_key_path
+        )
 
         journal_cmd = ['journalctl', '--since=today', '-u', 'sshd']
         result = self.master.run_command(journal_cmd)
@@ -903,8 +892,6 @@ class TestIPACommand(IntegrationTest):
         3. add an ipa user
         4. ssh from controller to master using the user created in step 3
         """
-        if self.master.is_fips_mode:  # pylint: disable=no-member
-            pytest.skip("paramiko is not compatible with FIPS mode")
 
         cmd = self.master.run_command(['sssd', '--version'])
         sssd_version = platform_tasks.parse_ipa_version(
@@ -912,12 +899,14 @@ class TestIPACommand(IntegrationTest):
         if sssd_version < platform_tasks.parse_ipa_version('2.2.0'):
             pytest.xfail(reason="sssd 2.2.0 unavailable in F29 nightly")
 
-        username = "testuser" + str(random.randint(200000, 9999999))
         # add ldap_deref_threshold=0 to /etc/sssd/sssd.conf
         sssd_conf_backup = tasks.FileBackup(self.master, paths.SSSD_CONF)
         with tasks.remote_sssd_config(self.master) as sssd_config:
             sssd_config.edit_domain(
                 self.master.domain, 'ldap_deref_threshold', 0)
+
+        test_user = "testuser" + str(random.randint(200000, 9999999))
+        password = "Secret123"
         try:
             self.master.run_command(['systemctl', 'restart', 'sssd.service'])
 
@@ -925,23 +914,20 @@ class TestIPACommand(IntegrationTest):
             tasks.kinit_admin(self.master)
 
             # add ipa user
-            cmd = ['ipa', 'user-add',
-                   '--first', username,
-                   '--last', username,
-                   '--password', username]
-            input_passwd = 'Secret123\nSecret123\n'
-            cmd_output = self.master.run_command(cmd, stdin_text=input_passwd)
-            assert 'Added user "%s"' % username in cmd_output.stdout_text
-            input_passwd = 'Secret123\nSecret123\nSecret123\n'
-            self.master.run_command(['kinit', username],
-                                    stdin_text=input_passwd)
+            tasks.create_active_user(
+                self.master, test_user, password=password
+            )
+            tasks.kdestroy_all(self.master)
+            tasks.kinit_as_user(
+                self.master, test_user, password
+            )
+            tasks.kdestroy_all(self.master)
 
-            client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            client.connect(self.master.hostname,
-                           username=username,
-                           password='Secret123')
-            client.close()
+            tasks.run_ssh_cmd(
+                to_host=self.master.external_hostname, username=test_user,
+                auth_method="password", password=password
+            )
+
         finally:
             sssd_conf_backup.restore()
             self.master.run_command(['systemctl', 'restart', 'sssd.service'])
@@ -1020,7 +1006,6 @@ class TestIPACommand(IntegrationTest):
         assert is_tls_version_enabled('tls1_2')
         assert is_tls_version_enabled('tls1_3')
 
-    @pytest.mark.skip(reason='https://pagure.io/freeipa/issue/8151')
     def test_sss_ssh_authorizedkeys(self):
         """Login via Ssh using private-key for ipa-user should work.
 
@@ -1065,7 +1050,7 @@ class TestIPACommand(IntegrationTest):
             assert ssh_pub_key in result.stdout_text
             # login to the system
             self.master.run_command(
-                ['ssh', '-o', 'PasswordAuthentication=no',
+                ['ssh', '-v', '-o', 'PasswordAuthentication=no',
                  '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=no',
                  '-o', 'ConnectTimeout=10', '-l', user, '-i', user_key,
                  self.master.hostname, 'true'])
@@ -1170,3 +1155,143 @@ class TestIPACommand(IntegrationTest):
             assert msg2 not in result.stderr_text
         finally:
             bashrc_backup.restore()
+
+    @pytest.fixture
+    def user_creation_deletion(self):
+        # create user
+        self.testuser = 'testuser'
+        tasks.create_active_user(self.master, self.testuser, 'Secret123')
+
+        yield
+
+        # cleanup
+        tasks.kinit_admin(self.master)
+        self.master.run_command(['ipa', 'user-del', self.testuser])
+
+    def test_login_wrong_password(self, user_creation_deletion):
+        """Test ipa user login with wrong password
+
+        When ipa user login to machine using wrong password, it
+        should log proper message
+
+        related: https://github.com/SSSD/sssd/issues/5139
+        """
+        # try to login with wrong password
+        sssd_version = tasks.get_sssd_version(self.master)
+        if (sssd_version < tasks.parse_version('2.3.0')):
+            pytest.xfail('Fix is part of sssd 2.3.0 and is'
+                         ' available from fedora32 onwards')
+
+        # start to look at logs a bit before "now"
+        # https://pagure.io/freeipa/issue/8432
+        since = time.strftime(
+            '%H:%M:%S', (datetime.now() - timedelta(seconds=10)).timetuple()
+        )
+
+        password = 'WrongPassword'
+
+        tasks.run_ssh_cmd(
+            to_host=self.master.external_hostname, username=self.testuser,
+            auth_method="password", password=password,
+            expect_auth_failure=True
+        )
+
+        # check if proper message logged
+        exp_msg = ("pam_sss(sshd:auth): received for user {}: 7"
+                   " (Authentication failure)".format(self.testuser))
+        result = self.master.run_command(['journalctl',
+                                          '-u', 'sshd',
+                                          '--since={}'.format(since)])
+        assert exp_msg in result.stdout_text
+
+    def get_dirsrv_id(self):
+        serverid = realm_to_serverid(self.master.domain.realm)
+        return("dirsrv@%s.service" % serverid)
+
+    def test_ipa_nis_manage_enable(self):
+        """
+        This testcase checks if ipa-nis-manage enable
+        command enables plugin on an IPA master
+        """
+        dirsrv_service = self.get_dirsrv_id()
+        console_msg = (
+            "Enabling plugin\n"
+            "This setting will not take effect until "
+            "you restart Directory Server.\n"
+            "The rpcbind service may need to be started"
+        )
+        status_msg = "Plugin is enabled"
+        tasks.kinit_admin(self.master)
+        result = self.master.run_command(
+            ["ipa-nis-manage", "enable"],
+            stdin_text=self.master.config.admin_password,
+        )
+        assert console_msg in result.stdout_text
+        # verify using backend
+        conn = self.master.ldap_connect()  # pylint: disable=no-member
+        dn = DN(('cn', 'NIS Server'), ('cn', 'plugins'), ('cn', 'config'))
+        entry = conn.get_entry(dn)  # pylint: disable=no-member
+        nispluginstring = entry.get('nsslapd-pluginEnabled')
+        assert 'on' in nispluginstring
+        # restart for changes to take effect
+        self.master.run_command(["systemctl", "restart", dirsrv_service])
+        self.master.run_command(["systemctl", "restart", "rpcbind"])
+        time.sleep(DIRSRV_SLEEP)
+        # check status msg on the console
+        result = self.master.run_command(
+            ["ipa-nis-manage", "status"],
+            stdin_text=self.master.config.admin_password,
+        )
+        assert status_msg in result.stdout_text
+
+    def test_ipa_nis_manage_disable(self):
+        """
+        This testcase checks if ipa-nis-manage disable
+        command disable plugin on an IPA Master
+        """
+        dirsrv_service = self.get_dirsrv_id()
+        msg = (
+            "This setting will not take effect "
+            "until you restart Directory Server."
+        )
+        status_msg = "Plugin is not enabled"
+        tasks.kinit_admin(self.master)
+        result = self.master.run_command(
+            ["ipa-nis-manage", "disable"],
+            stdin_text=self.master.config.admin_password,
+        )
+        assert msg in result.stdout_text
+        # verify using backend
+        conn = self.master.ldap_connect()  # pylint: disable=no-member
+        dn = DN(('cn', 'NIS Server'), ('cn', 'plugins'), ('cn', 'config'))
+        entry = conn.get_entry(dn)  # pylint: disable=no-member
+        nispluginstring = entry.get('nsslapd-pluginEnabled')
+        assert 'off' in nispluginstring
+        # restart dirsrv for changes to take effect
+        self.master.run_command(["systemctl", "restart", dirsrv_service])
+        time.sleep(DIRSRV_SLEEP)
+        # check status msg on the console
+        result = self.master.run_command(
+            ["ipa-nis-manage", "status"],
+            stdin_text=self.master.config.admin_password,
+            raiseonerr=False,
+        )
+        assert result.returncode == 4
+        assert status_msg in result.stdout_text
+
+    def test_ipa_nis_manage_enable_incorrect_password(self):
+        """
+        This testcase checks if ipa-nis-manage enable
+        command throws error on console for invalid DS admin password
+        """
+        msg = (
+            "Insufficient access: Invalid credentials "
+            "Invalid credentials\n"
+        )
+        result = self.master.run_command(
+            ["ipa-nis-manage", "enable"],
+            stdin_text='Invalid_pwd',
+            raiseonerr=False,
+        )
+        assert result.returncode == 1
+        assert msg in result.stderr_text

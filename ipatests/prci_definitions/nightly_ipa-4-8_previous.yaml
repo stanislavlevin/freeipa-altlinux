@@ -51,7 +51,7 @@ jobs:
         git_refspec: '{git_refspec}'
         template: &ci-ipa-4-8-previous
           name: freeipa/ci-ipa-4-8-f31
-          version: 0.0.4
+          version: 0.0.8
         timeout: 1800
         topology: *build
 
@@ -568,7 +568,7 @@ jobs:
         build_url: '{fedora-previous-ipa-4-8/build_url}'
         test_suite: test_integration/test_caless.py::TestReplicaInstall
         template: *ci-ipa-4-8-previous
-        timeout: 5400
+        timeout: 7200
         topology: *master_1repl
 
   fedora-previous-ipa-4-8/test_caless_TestClientInstall:
@@ -1336,10 +1336,22 @@ jobs:
       class: RunPytest
       args:
         build_url: '{fedora-previous-ipa-4-8/build_url}'
-        test_suite: test_integration/test_ipahealthcheck.py
+        test_suite: test_integration/test_ipahealthcheck.py::TestIpaHealthCheck test_integration/test_ipahealthcheck.py::TestIpaHealthCheckWithoutDNS test_integration/test_ipahealthcheck.py::TestIpaHealthCheckWithExternalCA
+        template: *ci-ipa-4-8-previous
+        timeout: 7200
+        topology: *master_1repl
+
+  fedora-previous-ipa-4-8/test_ipahealthcheck_trust:
+    requires: [fedora-previous-ipa-4-8/build]
+    priority: 50
+    job:
+      class: RunADTests
+      args:
+        build_url: '{fedora-previous-ipa-4-8/build_url}'
+        test_suite: test_integration/test_ipahealthcheck.py::TestIpaHealthCheckWithADtrust
         template: *ci-ipa-4-8-previous
         timeout: 4800
-        topology: *master_1repl
+        topology: *ad_master
 
   fedora-previous-ipa-4-8/test_ntp_options:
     requires: [fedora-previous-ipa-4-8/build]
@@ -1530,7 +1542,7 @@ jobs:
         build_url: '{fedora-previous-ipa-4-8/build_url}'
         test_suite: test_integration/test_trust.py
         template: *ci-ipa-4-8-previous
-        timeout: 7200
+        timeout: 9000
         topology: *adroot_adchild_adtree_master_1client
 
   fedora-previous-ipa-4-8/test_backup_and_restore_TestBackupAndRestoreTrust:
@@ -1581,3 +1593,15 @@ jobs:
         template: *ci-ipa-4-8-previous
         timeout: 7200
         topology: *master_3client
+
+  fedora-previous-ipa-4-8/test_dns:
+     requires: [fedora-previous-ipa-4-8/build]
+     priority: 50
+     job:
+       class: RunPytest
+       args:
+         build_url: '{fedora-previous-ipa-4-8/build_url}'
+         test_suite: test_integration/test_dns.py
+         template: *ci-ipa-4-8-previous
+         timeout: 3600
+         topology: *master_1repl

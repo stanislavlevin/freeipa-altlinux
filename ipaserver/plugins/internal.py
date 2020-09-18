@@ -406,7 +406,7 @@ class i18n_messages(Command):
             "logout": _("Log out"),
             "logout_error": _("Log out error"),
             "password": _("Password"),
-            "password_and_otp": _("Password or Password+One-Time-Password"),
+            "password_and_otp": _("Password or Password+One-Time Password"),
             "redirect_msg": _("You will be redirected in ${count}s"),
             "sync_otp_token": _("Sync OTP Token"),
             "synchronizing": _("Synchronizing"),
@@ -835,6 +835,9 @@ class i18n_messages(Command):
                     "Remove users from member managers for user group "
                     "'${primary_key}'"
                 ),
+                "add_idoverride_user": _(
+                    "Add user ID override into user group '${primary_key}'"
+                ),
                 "details": _("Group Settings"),
                 "external": _("External"),
                 "groups": _("Groups"),
@@ -867,6 +870,9 @@ class i18n_messages(Command):
                 ),
                 "remove_users": _(
                     "Remove users from user group '${primary_key}'"
+                ),
+                "remove_idoverride_users": _(
+                    "Remove user ID overrides from user group '${primary_key}'"
                 ),
                 "type": _("Group Type"),
                 "user_groups": _("User Groups"),
@@ -994,14 +1000,14 @@ class i18n_messages(Command):
                 "keytab": _("Kerberos Key"),
                 "keytab_missing": _("Kerberos Key Not Present"),
                 "keytab_present": _("Kerberos Key Present, Host Provisioned"),
-                "password": _("One-Time-Password"),
-                "password_missing": _("One-Time-Password Not Present"),
-                "password_present": _("One-Time-Password Present"),
+                "password": _("One-Time Password"),
+                "password_missing": _("One-Time Password Not Present"),
+                "password_present": _("One-Time Password Present"),
                 "password_reset_button": _("Reset OTP"),
-                "password_reset_title": _("Reset One-Time-Password"),
+                "password_reset_title": _("Reset One-Time Password"),
                 "password_set_button": _("Set OTP"),
                 "password_set_success": _("OTP set"),
-                "password_set_title": _("Set One-Time-Password"),
+                "password_set_title": _("Set One-Time Password"),
                 "remove": _("Remove hosts"),
                 "remove_hosts_managing": _(
                     "Remove hosts managing host '${primary_key}'"
@@ -1672,13 +1678,21 @@ class i18n_messages(Command):
             "new_password": _("New Password"),
             "new_password_required": _("New password is required"),
             "otp": _("OTP"),
-            "otp_info": _("<i class=\"fa fa-info-circle\"></i> <strong>One-Time-Password(OTP):</strong> Generate new OTP code for each OTP field."),
-            "otp_long": _("One-Time-Password"),
+            "otp_info":
+                _("<i class=\"fa fa-info-circle\"></i> <strong>"
+                  "OTP (One-Time Password):</strong>"
+                  "Generate new OTP code for each OTP field."),
+            "otp_reset_info":
+                _("<i class=\"fa fa-info-circle\"></i> <strong>"
+                  "OTP (One-Time Password):</strong>"
+                  "Leave blank if you are not using OTP tokens"
+                  "for authentication."),
+            "otp_long": _("One-Time Password"),
             "otp_sync_fail": _("Token synchronization failed"),
             "otp_sync_invalid": _("The username, password or token codes are not correct"),
             "otp_sync_success":_("Token was synchronized"),
             "password": _("Password"),
-            "password_and_otp": _("Password or Password+One-Time-Password"),
+            "password_and_otp": _("Password or Password+One-Time Password"),
             "password_change_complete": _("Password change complete"),
             "password_expired": _(
                 "Your password has expired. Please enter a new password."),

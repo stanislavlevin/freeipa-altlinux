@@ -22,7 +22,9 @@ from augeas import Augeas
 
 from ipalib import api, x509
 from ipalib.constants import RENEWAL_CA_NAME, RA_AGENT_PROFILE, IPA_CA_RECORD
-from ipalib.install import certmonger, sysrestore
+from ipalib.install import certmonger
+from ipalib import sysrestore
+from ipalib.facts import is_ipa_configured
 import SSSDConfig
 import ipalib.util
 import ipalib.errors
@@ -667,7 +669,7 @@ def http_certificate_ensure_ipa_ca_dnsname(http):
 
     try:
         cert.match_hostname(expect)
-    except ssl.SSLCertVerificationError:
+    except ssl.CertificateError:
         if certs.is_ipa_issued_cert(api, cert):
             request_id = certmonger.get_request_id(
                 {'cert-file': paths.HTTPD_CERT_FILE})
@@ -1472,6 +1474,10 @@ def upgrade_configuration():
     logger.debug('IPA version %s', version.VENDOR_VERSION)
 
     fstore = sysrestore.FileStore(paths.SYSRESTORE)
+    sstore = sysrestore.StateFile(paths.SYSRESTORE)
+
+    if is_ipa_configured() is None:
+        sstore.backup_state('installation', 'complete', True)
 
     fqdn = api.env.host
 

@@ -244,7 +244,8 @@ class CALessBase(IntegrationTest):
                         pkinit_pin=None, root_ca_file='root.pem',
                         pkinit_pkcs12_exists=False,
                         pkinit_pkcs12='replica-kdc.p12', unattended=True,
-                        stdin_text=None, domain_level=None):
+                        stdin_text=None, domain_level=None,
+                        force_setup_ca=False):
         """Prepare a CA-less replica
 
         Puts the bundle file into test_dir on the replica if successful,
@@ -315,7 +316,8 @@ class CALessBase(IntegrationTest):
         if pkinit_pin is not None:
             extra_args.extend(['--pkinit-pin', dirsrv_pin])
 
-        result = tasks.install_replica(master, replica, setup_ca=False,
+        result = tasks.install_replica(master, replica,
+                                       setup_ca=force_setup_ca,
                                        extra_args=extra_args,
                                        unattended=unattended,
                                        stdin_text=stdin_text,
@@ -391,6 +393,14 @@ class CALessBase(IntegrationTest):
             logger.debug('CA cert from LDAP on %s:\n%r',
                          host, cert_from_ldap.public_bytes(x509.Encoding.PEM))
             assert cert_from_ldap == expected_cacrt
+
+            result = host.run_command(
+                ["/usr/bin/stat", "-c", "%U:%G:%a", paths.IPA_CA_CRT]
+            )
+            (owner, group, mode) = result.stdout_text.strip().split(':')
+            assert owner == "root"
+            assert group == "root"
+            assert mode == "644"
 
             # Verify certmonger was not started
             result = host.run_command(['getcert', 'list'], raiseonerr=False)
@@ -1000,6 +1010,18 @@ class TestReplicaInstall(CALessBase):
                              ' signed by the same CA certificate')
 
     @replica_install_teardown
+    def test_caless_with_incompatible_options(self):
+        "IPA replica install with certificates but conflicting --setup-ca"
+
+        self.create_pkcs12('ca1/replica', filename='server.p12')
+
+        result = self.prepare_replica(http_pkcs12='server.p12',
+                                      dirsrv_pkcs12='server.p12',
+                                      force_setup_ca=True)
+        assert_error(result, '--setup-ca and --*-cert-file options are '
+                             'mutually exclusive')
+
+    @replica_install_teardown
     def test_valid_certs(self):
         "IPA replica install with valid certificates"
 
@@ -1513,6 +1535,13 @@ class TestCertInstall(CALessBase):
         assert result.returncode == 0
 
 
+def verify_kdc_cert_perms(host):
+    """Verify that the KDC cert pem file has 0644 perms"""
+    cmd = host.run_command(['stat', '-c',
+                           '"%a %G:%U"', paths.KDC_CERT])
+    assert "644 root:root" in cmd.stdout_text
+
+
 class TestPKINIT(CALessBase):
     """Install master and replica with PKINIT"""
     num_replicas = 1
@@ -1526,6 +1555,7 @@ class TestPKINIT(CALessBase):
         result = cls.install_server(pkinit_pkcs12_exists=True,
                                     pkinit_pin=_DEFAULT)
         assert result.returncode == 0
+        verify_kdc_cert_perms(cls.master)
 
     @replica_install_teardown
     def test_server_replica_install_pkinit(self):
@@ -1535,6 +1565,7 @@ class TestPKINIT(CALessBase):
                                       pkinit_pin=_DEFAULT)
         assert result.returncode == 0
         self.verify_installation()
+        verify_kdc_cert_perms(self.replicas[0])
 
 
 class TestServerReplicaCALessToCAFull(CALessBase):

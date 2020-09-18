@@ -31,28 +31,23 @@ from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
 from ipalib import api, errors, x509, createntp
 from ipalib.constants import DOMAIN_LEVEL_0
+from ipalib.facts import is_ipa_configured, is_ipa_client_configured
 from ipalib.util import (
     validate_domain_name,
     no_matching_interface_for_ip_address_warning,
 )
 from ipaserver.install import (
-    adtrust, bindinstance, ca, dns, dsinstance,
+    adtrust, adtrustinstance, bindinstance, ca, dns, dsinstance,
     httpinstance, installutils, kra, krbinstance,
     otpdinstance, custodiainstance, replication, service,
     sysupgrade)
 from ipaserver.install.installutils import (
     IPA_MODULES, BadHostError, get_fqdn, get_server_ip_address,
-    is_ipa_configured, load_pkcs12, read_password, verify_fqdn,
-    update_hosts_file, validate_mask)
+    load_pkcs12, read_password, verify_fqdn, update_hosts_file,
+    validate_mask)
 
 if six.PY3:
     unicode = str
-
-try:
-    from ipaserver.install import adtrustinstance
-    _server_trust_ad_installed = True
-except ImportError:
-    _server_trust_ad_installed = False
 
 NoneType = type(None)
 
@@ -366,8 +361,7 @@ def install_check(installer):
             "If you want to reinstall the IPA server, please uninstall "
             "it first using 'ipa-server-install --uninstall'.")
 
-    client_fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
-    if client_fstore.has_files():
+    if is_ipa_client_configured(on_master=True):
         installer._installation_cleanup = False
         raise ScriptError(
             "IPA client is already configured on this system.\n"
@@ -801,6 +795,9 @@ def install(installer):
     # failure to enable root cause investigation
     installer._installation_cleanup = False
 
+    # Be clear that the installation process is beginning but not done
+    sstore.backup_state('installation', 'complete', False)
+
     if installer.interactive:
         print("")
         print("The following operations may take some minutes to complete.")
@@ -903,9 +900,8 @@ def install(installer):
 
         ca.install_step_0(False, None, options, custodia=custodia)
     else:
-        # Put the CA cert where other instances expect it
-        x509.write_certificate(http_ca_cert, paths.IPA_CA_CRT)
-        os.chmod(paths.IPA_CA_CRT, 0o444)
+        # /etc/ipa/ca.crt is created as a side-effect of
+        # dsinstance::enable_ssl() via export_ca_cert()
 
         if not options.no_pkinit:
             x509.write_certificate(http_ca_cert, paths.KDC_CA_BUNDLE_PEM)
@@ -1010,6 +1006,8 @@ def install(installer):
         bind.create_file_with_system_records()
 
     # Everything installed properly, activate ipa service.
+    sstore.delete_state('installation', 'complete')
+    sstore.backup_state('installation', 'complete', True)
     services.knownservices.ipa.enable()
 
     print("======================================="
@@ -1178,8 +1176,7 @@ def uninstall(installer):
     httpinstance.HTTPInstance(fstore).uninstall()
     krbinstance.KrbInstance(fstore).uninstall()
     dsinstance.DsInstance(fstore=fstore).uninstall()
-    if _server_trust_ad_installed:
-        adtrustinstance.ADTRUSTInstance(fstore).uninstall()
+    adtrustinstance.ADTRUSTInstance(fstore).uninstall()
     # realm isn't used, but IPAKEMKeys parses /etc/ipa/default.conf
     # otherwise, see https://pagure.io/freeipa/issue/7474 .
     custodiainstance.CustodiaInstance(realm='REALM.INVALID').uninstall()
@@ -1211,6 +1208,7 @@ def uninstall(installer):
     if fstore.has_files():
         logger.error('Some files have not been restored, see '
                      '%s/sysrestore.index', SYSRESTORE_DIR_PATH)
+    sstore.delete_state('installation', 'complete')
     has_state = False
     for module in IPA_MODULES:  # from installutils
         if sstore.has_state(module):

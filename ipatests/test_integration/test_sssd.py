@@ -387,6 +387,45 @@ class TestSSSDWithAdTrust(IntegrationTest):
         with self.disabled_trustdomain():
             self.master.run_command(['id', user])
 
+    def test_aduser_with_idview(self):
+        """Test that trusted AD users should not lose their AD domains.
+
+        This is a regression test for sssd bug:
+        https://pagure.io/SSSD/sssd/issue/4173
+        1. Override AD user's UID, GID by adding it in ID view on IPA server.
+        2. Stop the SSSD, and clear SSSD cache and restart SSSD on a IPA client
+        3. getent with UID from ID view should return AD domain
+        after default memcache_timeout.
+        """
+        client = self.clients[0]
+        user = self.users['ad']['name']
+        idview = 'testview'
+
+        def verify_retrieved_users_domain():
+            # Wait for the record to expire in SSSD's cache
+            # (memcache_timeout default value is 300s).
+            test_user = ['su', user, '-c', 'sleep 360; getent passwd 10001']
+            result = client.run_command(test_user)
+            assert user in result.stdout_text
+
+        # verify the user can be retrieved initially
+        tasks.clear_sssd_cache(self.master)
+        self.master.run_command(['id', user])
+        self.master.run_command(['ipa', 'idview-add', idview])
+        self.master.run_command(['ipa', 'idoverrideuser-add', idview, user])
+        self.master.run_command(['ipa', 'idview-apply', idview,
+                                 '--hosts={0}'.format(client.hostname)])
+        self.master.run_command(['ipa', 'idoverrideuser-mod', idview, user,
+                                 '--uid=10001', '--gid=10000'])
+        try:
+            clear_sssd_cache(client)
+            sssd_version = tasks.get_sssd_version(client)
+            with xfail_context(sssd_version < tasks.parse_version('2.3.0'),
+                               'https://pagure.io/SSSD/sssd/issue/4173'):
+                verify_retrieved_users_domain()
+        finally:
+            self.master.run_command(['ipa', 'idview-del', idview])
+
     def test_trustdomain_disable_disables_subdomain(self):
         """Test that users from disabled trustdomains can not use ipa resources
 
@@ -432,15 +471,50 @@ class TestSSSDWithAdTrust(IntegrationTest):
             "--matchrule='<ISSUER>{}'".format(cert_subject),
             "--domain={}".format(self.master.domain.name)
         ])
+        try:
+            tasks.clear_sssd_cache(self.master)
+            # verify the user can be retrieved after the certmaprule is added
+            second_res = self.master.run_command(
+                ['id', self.users['ad']['name']])
+            assert first_res.stdout_text == second_res.stdout_text
+            verify_in_stdout = ['gid', 'uid', 'groups',
+                                self.users['ad']['name']]
+            for text in verify_in_stdout:
+                assert text in second_res.stdout_text
+        finally:
+            self.master.run_command(
+                ['ipa', 'certmaprule-del', "'{}'".format(cert_subject)])
+
+    @contextmanager
+    def override_gid_setup(self, gid):
+        sssd_conf_backup = tasks.FileBackup(self.master, paths.SSSD_CONF)
+        try:
+            with tasks.remote_sssd_config(self.master) as sssd_conf:
+                sssd_conf.edit_domain(self.master.domain,
+                                      'override_gid', gid)
+            tasks.clear_sssd_cache(self.master)
+            yield
+        finally:
+            sssd_conf_backup.restore()
+            tasks.clear_sssd_cache(self.master)
+
+    def test_override_gid_subdomain(self):
+        """Test that override_gid is working for subdomain
+
+        This is a regression test for sssd bug:
+        https://pagure.io/SSSD/sssd/issue/4061
+        """
         tasks.clear_sssd_cache(self.master)
-
-        # verify the user can be retrieved after the certmaprule is added
-        second_res = self.master.run_command(['id', self.users['ad']['name']])
-
-        assert first_res.stdout_text == second_res.stdout_text
-        verify_in_stdout = ['gid', 'uid', 'groups', self.users['ad']['name']]
-        for text in verify_in_stdout:
-            assert text in second_res.stdout_text
+        user = self.users['child_ad']['name']
+        gid = 10264
+        # verify the user can be retrieved initially
+        self.master.run_command(['id', user])
+        with self.override_gid_setup(gid):
+            test_gid = self.master.run_command(['id', user])
+            sssd_version = tasks.get_sssd_version(self.master)
+            with xfail_context(sssd_version < tasks.parse_version('2.3.0'),
+                               'https://pagure.io/SSSD/sssd/issue/4061'):
+                assert 'gid={id}'.format(id=gid) in test_gid.stdout_text
 
 
 class TestNestedMembers(IntegrationTest):

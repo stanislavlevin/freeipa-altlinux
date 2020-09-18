@@ -32,7 +32,6 @@ import os
 from functools import wraps
 from urllib.error import URLError
 
-import paramiko
 import pytest
 
 try:
@@ -61,7 +60,9 @@ except ImportError:
     NO_YAML = True
 
 from ipaplatform.paths import paths
-from ipaplatform.tasks import tasks
+
+from ipatests.pytest_ipa.integration import tasks
+
 
 ENV_MAP = {
     'MASTER': 'ipa_server',
@@ -515,7 +516,7 @@ class UI_driver:
                 parent = parts[0:-1]
                 self.navigate_by_menu('/'.join(parent), complete)
 
-        s = ".navbar a[href='#%s']" % item
+        s = ".navbar li[data-name='%s'] a" % item
         link = self.find(s, By.CSS_SELECTOR, strict=True)
         assert link.is_displayed(), 'Navigation link is not displayed: %s' % item
         link.click()
@@ -1972,26 +1973,16 @@ class UI_driver:
 
         cmd (str): command to run
         """
-        if tasks.is_fips_enabled():
-            pytest.skip("paramiko is not compatible with FIPS mode")
 
         login = self.config.get('ipa_admin')
         hostname = self.config.get('ipa_server')
         password = self.config.get('ipa_password')
 
-        try:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(hostname=hostname, username=login, password=password)
-            ssh.exec_command(cmd)
-        except paramiko.AuthenticationException:
-            self.skip('Authentication to server {} failed'.format(hostname))
-        except paramiko.SSHException as e:
-            self.skip('Unable to establish SSH connection: {}'.format(e))
-        except Exception as e:
-            self.skip('Unable to proceed: {}'.format(e))
-        finally:
-            ssh.close()
+        tasks.run_ssh_cmd(
+            to_host=hostname, username=login,
+            auth_method="password", password=password,
+            cmd=cmd
+        )
 
     @dismiss_unexpected_alert
     def has_class(self, el, cls):

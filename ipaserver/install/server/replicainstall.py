@@ -22,7 +22,7 @@ import traceback
 from pkg_resources import parse_version
 import six
 
-from ipaclient.install.client import check_ldap_conf
+from ipaclient.install.client import check_ldap_conf, sssd_enable_ifp
 from ipalib.install import certstore, sysrestore
 from ipalib.install.kinit import kinit_keytab
 from ipapython import ipaldap, ipautil, ntpmethods
@@ -35,13 +35,14 @@ from ipaplatform.tasks import tasks
 from ipaplatform.paths import paths
 from ipalib import api, constants, create_api, errors, rpc, x509
 from ipalib.config import Env
+from ipalib.facts import is_ipa_configured, is_ipa_client_configured
 from ipalib.util import no_matching_interface_for_ip_address_warning
 from ipaclient.install.client import configure_krb5_conf, purge_host_keytab
 from ipaserver.install import (
     adtrust, bindinstance, ca, dns, dsinstance, httpinstance,
     installutils, kra, krbinstance, otpdinstance, custodiainstance, service)
 from ipaserver.install.installutils import (
-    ReplicaConfig, load_pkcs12, is_ipa_configured, validate_mask)
+    ReplicaConfig, load_pkcs12, validate_mask)
 from ipaserver.install.replication import (
     ReplicationManager, replica_conn_check)
 from ipaserver.masters import find_providing_servers, find_providing_server
@@ -462,6 +463,9 @@ def promote_sssd(host_name):
     domain.set_option('ipa_server', host_name)
     domain.set_option('ipa_server_mode', True)
     sssdconfig.save_domain(domain)
+
+    sssd_enable_ifp(sssdconfig)
+
     sssdconfig.write()
 
     sssd = services.service('sssd', api)
@@ -776,8 +780,13 @@ def promote_check(installer):
     # check selinux status, http and DS ports, NTP conflicting services
     common_check(options.no_ntp)
 
-    client_fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
-    if not client_fstore.has_files():
+    if options.setup_ca and any([options.dirsrv_cert_files,
+                                 options.http_cert_files,
+                                 options.pkinit_cert_files]):
+        raise ScriptError("--setup-ca and --*-cert-file options are "
+                          "mutually exclusive")
+
+    if not is_ipa_client_configured(on_master=True):
         # One-step replica installation
         if options.password and options.admin_password:
             raise ScriptError("--password and --admin-password options are "
@@ -1196,6 +1205,7 @@ def install(installer):
     ca_enabled = installer._ca_enabled
     kra_enabled = installer._kra_enabled
     fstore = installer._fstore
+    sstore = installer._sstore
     config = installer._config
     cafile = installer._ca_file
     dirsrv_pkcs12_info = installer._dirsrv_pkcs12_info
@@ -1205,6 +1215,9 @@ def install(installer):
     remote_api = installer._remote_api
     conn = remote_api.Backend.ldap2
     ccache = os.environ['KRB5CCNAME']
+
+    # Be clear that the installation process is beginning but not done
+    sstore.backup_state('installation', 'complete', False)
 
     if tasks.configure_pkcs11_modules(fstore):
         print("Disabled p11-kit-proxy")
@@ -1362,6 +1375,8 @@ def install(installer):
     api.Backend.ldap2.disconnect()
 
     # Everything installed properly, activate ipa service.
+    sstore.delete_state('installation', 'complete')
+    sstore.backup_state('installation', 'complete', True)
     services.knownservices.ipa.enable()
 
     # Print a warning if CA role is only installed on one server
