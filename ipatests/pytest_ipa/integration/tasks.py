@@ -1955,7 +1955,7 @@ def create_temp_file(host, directory=None, create_file=True):
 
 
 def create_active_user(host, login, password, first='test', last='user',
-                       extra_args=(), krb5_trace=False):
+                       mkhomedir=False, extra_args=(), krb5_trace=False):
     """Create user and do login to set password"""
     temp_password = 'Secret456789'
     kinit_admin(host)
@@ -1971,6 +1971,9 @@ def create_active_user(host, login, password, first='test', last='user',
             ['kinit', login],
             stdin_text='{0}\n{1}\n{1}\n'.format(temp_password, password)
         )
+
+    if mkhomedir:
+        host.run_command([paths.MKHOMEDIR_HELPER, login])
     kdestroy_all(host)
 
 

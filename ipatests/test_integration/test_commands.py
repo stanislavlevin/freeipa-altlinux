@@ -1050,8 +1050,10 @@ class TestIPACommand(IntegrationTest):
         )
         pem_file = tasks.create_temp_file(self.master)
         # Create a user with a password
-        tasks.create_active_user(self.master, user, passwd, extra_args=[
-            '--homedir', '/home/{}'.format(user)])
+        tasks.create_active_user(
+            self.master, user, passwd, mkhomedir=True,
+            extra_args=['--homedir', '/home/{}'.format(user)],
+        )
         tasks.kinit_admin(self.master)
         tasks.run_command_as_user(
             self.master, user, ['ssh-keygen', '-N', '',
