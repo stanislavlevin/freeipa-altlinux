@@ -143,6 +143,27 @@ class TestIPACommand(IntegrationTest):
             ["ipa", "pwpolicy-mod", "--history=0", "--minlife=1"],
         )
 
+    def allow_sshd_interactive_auth(self, host):
+        """Modifies sshd PAM stack to allow keyboard-interactive auth
+
+        Hack: this is the common task which should be implemented as
+        the control policy
+
+        See, https://bugzilla.altlinux.org/38977
+        """
+        pam_sshd_path = "/etc/pam.d/sshd"
+        pam_sshd = textwrap.dedent(
+            """\
+            #%PAM-1.0
+            auth\tinclude\tcommon-login
+            account\tinclude\tcommon-login
+            password\tinclude\tcommon-login
+            session\tinclude\tcommon-login
+            """
+        )
+        host.put_file_contents(pam_sshd_path, pam_sshd)
+        host.run_command(["cat", pam_sshd_path])
+
     def get_cert_base64(self, host, path):
         """Retrieve cert and return content as single line, base64 encoded
         """
@@ -908,6 +929,7 @@ class TestIPACommand(IntegrationTest):
 
         test_user = "testuser" + str(random.randint(200000, 9999999))
         password = "Secret123"
+        pam_sshd_backup = tasks.FileBackup(self.master, "/etc/pam.d/sshd")
         try:
             self.master.run_command(['systemctl', 'restart', 'sssd.service'])
 
@@ -924,12 +946,14 @@ class TestIPACommand(IntegrationTest):
             )
             tasks.kdestroy_all(self.master)
 
+            self.allow_sshd_interactive_auth(self.master)
             tasks.run_ssh_cmd(
                 to_host=self.master.external_hostname, username=test_user,
                 auth_method="password", password=password
             )
 
         finally:
+            pam_sshd_backup.restore()
             sssd_conf_backup.restore()
             self.master.run_command(['systemctl', 'restart', 'sssd.service'])
 
@@ -1195,16 +1219,21 @@ class TestIPACommand(IntegrationTest):
         )
 
         password = 'WrongPassword'
+        pam_sshd_backup = tasks.FileBackup(self.master, "/etc/pam.d/sshd")
+        try:
+            self.allow_sshd_interactive_auth(self.master)
+            tasks.run_ssh_cmd(
+                to_host=self.master.external_hostname, username=self.testuser,
+                auth_method="password", password=password,
+                expect_auth_failure=True
+            )
 
-        tasks.run_ssh_cmd(
-            to_host=self.master.external_hostname, username=self.testuser,
-            auth_method="password", password=password,
-            expect_auth_failure=True
-        )
+            # check if proper message logged
+            exp_msg = ("pam_sss(sshd:auth): received for user {}: 7"
+                       " (Authentication failure)".format(self.testuser))
+        finally:
+            pam_sshd_backup.restore()
 
-        # check if proper message logged
-        exp_msg = ("pam_sss(sshd:auth): received for user {}: 7"
-                   " (Authentication failure)".format(self.testuser))
         result = self.master.run_command(['journalctl',
                                           '-u', 'sshd',
                                           '--since={}'.format(since)])
