@@ -203,6 +203,7 @@ class BasePathNamespace:
     BIN_KVNO = "/usr/bin/kvno"
     LDAPMODIFY = "/usr/bin/ldapmodify"
     LDAPPASSWD = "/usr/bin/ldappasswd"
+    MKHOMEDIR_HELPER = "/usr/sbin/mkhomedir_helper"
     MODUTIL = "/usr/bin/modutil"
     NET = "/usr/bin/net"
     BIN_NISDOMAINNAME = "/usr/bin/nisdomainname"
