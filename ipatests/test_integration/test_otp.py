@@ -146,6 +146,27 @@ class TestOTPToken(IntegrationTest):
         cls.master.run_command(["rm", "-f", ARMOR])
         super(TestOTPToken, cls).uninstall(mh)
 
+    def allow_sshd_interactive_auth(self, host):
+        """Modifies sshd PAM stack to allow keyboard-interactive auth
+
+        Hack: this is the common task which should be implemented as
+        the control policy
+
+        See, https://bugzilla.altlinux.org/38977
+        """
+        pam_sshd_path = "/etc/pam.d/sshd"
+        pam_sshd = textwrap.dedent(
+            """\
+            #%PAM-1.0
+            auth\tinclude\tcommon-login
+            account\tinclude\tcommon-login
+            password\tinclude\tcommon-login
+            session\tinclude\tcommon-login
+            """
+        )
+        host.put_file_contents(pam_sshd_path, pam_sshd)
+        host.run_command(["cat", pam_sshd_path])
+
     def test_otp_auth_ind(self):
         tasks.kinit_admin(self.master)
         result = self.master.run_command(
@@ -246,11 +267,13 @@ class TestOTPToken(IntegrationTest):
         tasks.create_active_user(master, USER1, PASSWORD)
         tasks.kinit_admin(master)
         master.run_command(['ipa', 'user-mod', USER1, '--user-auth-type=otp'])
+        pam_sshd_backup = tasks.FileBackup(master, "/etc/pam.d/sshd")
         try:
             otpuid, totp = add_otptoken(master, USER1, otptype='totp')
             master.run_command(['ipa', 'otptoken-show', otpuid])
             otpvalue = totp.generate(int(time.time())).decode('ascii')
             password = '{0}{1}'.format(PASSWORD, otpvalue)
+            self.allow_sshd_interactive_auth(master)
             tasks.run_ssh_cmd(
                 to_host=self.master.external_hostname, username=USER1,
                 auth_method="password", password=password
@@ -260,7 +283,8 @@ class TestOTPToken(IntegrationTest):
             assert USER1 in cmd.stdout_text
         finally:
             master.run_command(['ipa', 'user-del', USER1])
-            self.master.run_command(['semanage', 'login', '-D'])
+            master.run_command(['semanage', 'login', '-D'])
+            pam_sshd_backup.restore()
             sssd_conf_backup.restore()
 
     def test_2fa_disable_single_prompt(self):
@@ -293,6 +317,7 @@ class TestOTPToken(IntegrationTest):
         tasks.create_active_user(master, USER2, PASSWORD)
         tasks.kinit_admin(master)
         master.run_command(['ipa', 'user-mod', USER2, '--user-auth-type=otp'])
+        pam_sshd_backup = tasks.FileBackup(master, "/etc/pam.d/sshd")
         try:
             otpuid, totp = add_otptoken(master, USER2, otptype='totp')
             master.run_command(['ipa', 'otptoken-show', otpuid])
@@ -301,6 +326,7 @@ class TestOTPToken(IntegrationTest):
                 first_prompt: PASSWORD,
                 second_prompt: otpvalue
             }
+            self.allow_sshd_interactive_auth(master)
             ssh_2f(master.hostname, USER2, answers)
             # check if user listed in output
             cmd = self.master.run_command(['semanage', 'login', '-l'])
@@ -308,4 +334,5 @@ class TestOTPToken(IntegrationTest):
         finally:
             master.run_command(['ipa', 'user-del', USER2])
             self.master.run_command(['semanage', 'login', '-D'])
+            pam_sshd_backup.restore()
             sssd_conf_backup.restore()
