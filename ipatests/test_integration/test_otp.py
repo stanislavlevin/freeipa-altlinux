@@ -246,11 +246,13 @@ class TestOTPToken(IntegrationTest):
         tasks.create_active_user(master, USER1, PASSWORD)
         tasks.kinit_admin(master)
         master.run_command(['ipa', 'user-mod', USER1, '--user-auth-type=otp'])
+        pam_sshd_backup = tasks.FileBackup(master, "/etc/pam.d/sshd")
         try:
             otpuid, totp = add_otptoken(master, USER1, otptype='totp')
             master.run_command(['ipa', 'otptoken-show', otpuid])
             otpvalue = totp.generate(int(time.time())).decode('ascii')
             password = '{0}{1}'.format(PASSWORD, otpvalue)
+            tasks.allow_sshd_interactive_auth(master)
             tasks.run_ssh_cmd(
                 to_host=self.master.external_hostname, username=USER1,
                 auth_method="password", password=password
@@ -261,6 +263,7 @@ class TestOTPToken(IntegrationTest):
         finally:
             master.run_command(['ipa', 'user-del', USER1])
             self.master.run_command(['semanage', 'login', '-D'])
+            pam_sshd_backup.restore()
             sssd_conf_backup.restore()
 
     def test_2fa_disable_single_prompt(self):
@@ -293,6 +296,7 @@ class TestOTPToken(IntegrationTest):
         tasks.create_active_user(master, USER2, PASSWORD)
         tasks.kinit_admin(master)
         master.run_command(['ipa', 'user-mod', USER2, '--user-auth-type=otp'])
+        pam_sshd_backup = tasks.FileBackup(master, "/etc/pam.d/sshd")
         try:
             otpuid, totp = add_otptoken(master, USER2, otptype='totp')
             master.run_command(['ipa', 'otptoken-show', otpuid])
@@ -301,6 +305,7 @@ class TestOTPToken(IntegrationTest):
                 first_prompt: PASSWORD,
                 second_prompt: otpvalue
             }
+            tasks.allow_sshd_interactive_auth(master)
             ssh_2f(master.hostname, USER2, answers)
             # check if user listed in output
             cmd = self.master.run_command(['semanage', 'login', '-l'])
@@ -308,4 +313,5 @@ class TestOTPToken(IntegrationTest):
         finally:
             master.run_command(['ipa', 'user-del', USER2])
             self.master.run_command(['semanage', 'login', '-D'])
+            pam_sshd_backup.restore()
             sssd_conf_backup.restore()
