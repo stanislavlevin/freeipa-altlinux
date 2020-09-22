@@ -52,6 +52,7 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     VAR_LOG_HTTPD_DIR = "/var/log/httpd2"
     VAR_LOG_HTTPD_ERROR = "/var/log/httpd2/error_log"
     SYSCONFIG_HTTPD = "/etc/sysconfig/httpd2"
+    MKHOMEDIR_HELPER = "/sbin/mkhomedir_helper"
     NAMED_CUSTOM_CONF = "/etc/bind/ipa-ext.conf"
     NAMED_CUSTOM_OPTIONS_CONF = "/etc/bind/ipa-options-ext.conf"
     NAMED_PKCS11 = "/bin/true"
