@@ -1045,7 +1045,9 @@ class TestIPACommand(IntegrationTest):
         """
         user = 'testsshuser'
         passwd = 'Secret123'
-        user_key = tasks.create_temp_file(self.master, create_file=False)
+        user_key = tasks.create_temp_file(
+            self.master, create_file=False, directory="/tmp",
+        )
         pem_file = tasks.create_temp_file(self.master)
         # Create a user with a password
         tasks.create_active_user(
