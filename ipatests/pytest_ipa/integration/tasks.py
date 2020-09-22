@@ -2656,3 +2656,25 @@ def run_ssh_cmd(
             assert "Authentication succeeded" not in stderr
             assert "No more authentication methods to try." in stderr
     return (return_code, stdout, stderr)
+
+
+def allow_sshd_interactive_auth(host):
+    """Modifies sshd PAM stack to allow keyboard-interactive auth
+
+    Hack: this is the common task which should be implemented as
+    the control policy
+
+    See, https://bugzilla.altlinux.org/38977
+    """
+    pam_sshd_path = "/etc/pam.d/sshd"
+    pam_sshd = textwrap.dedent(
+        """\
+        #%PAM-1.0
+        auth\tinclude\tcommon-login
+        account\tinclude\tcommon-login
+        password\tinclude\tcommon-login
+        session\tinclude\tcommon-login
+        """
+    )
+    host.put_file_contents(pam_sshd_path, pam_sshd)
+    host.run_command(["cat", pam_sshd_path])
