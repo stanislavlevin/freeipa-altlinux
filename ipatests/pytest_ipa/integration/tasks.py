@@ -2178,7 +2178,8 @@ def remote_ini_file(host, filename):
 
 
 def is_selinux_enabled(host):
-    res = host.run_command('selinuxenabled', ok_returncode=(0, 1))
+    # 127 - bash: command not found
+    res = host.run_command('selinuxenabled', ok_returncode=(0, 1, 127))
     return res.returncode == 0
 
 

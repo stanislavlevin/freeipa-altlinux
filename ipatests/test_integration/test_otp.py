@@ -279,11 +279,13 @@ class TestOTPToken(IntegrationTest):
                 auth_method="password", password=password
             )
             # check if user listed in output
-            cmd = self.master.run_command(['semanage', 'login', '-l'])
-            assert USER1 in cmd.stdout_text
+            if tasks.is_selinux_enabled(master):
+                cmd = master.run_command(['semanage', 'login', '-l'])
+                assert USER1 in cmd.stdout_text
         finally:
             master.run_command(['ipa', 'user-del', USER1])
-            master.run_command(['semanage', 'login', '-D'])
+            if tasks.is_selinux_enabled(master):
+                master.run_command(['semanage', 'login', '-D'])
             pam_sshd_backup.restore()
             sssd_conf_backup.restore()
 
@@ -329,10 +331,12 @@ class TestOTPToken(IntegrationTest):
             self.allow_sshd_interactive_auth(master)
             ssh_2f(master.hostname, USER2, answers)
             # check if user listed in output
-            cmd = self.master.run_command(['semanage', 'login', '-l'])
-            assert USER2 in cmd.stdout_text
+            if tasks.is_selinux_enabled(master):
+                cmd = master.run_command(['semanage', 'login', '-l'])
+                assert USER2 in cmd.stdout_text
         finally:
             master.run_command(['ipa', 'user-del', USER2])
-            self.master.run_command(['semanage', 'login', '-D'])
+            if tasks.is_selinux_enabled(master):
+                self.master.run_command(['semanage', 'login', '-D'])
             pam_sshd_backup.restore()
             sssd_conf_backup.restore()
