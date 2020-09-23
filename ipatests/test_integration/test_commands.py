@@ -1322,8 +1322,7 @@ class TestIPACommand(IntegrationTest):
         command throws error on console for invalid DS admin password
         """
         msg = (
-            "Insufficient access: Invalid credentials "
-            "Invalid credentials\n"
+            "Insufficient access:  Invalid credentials\n"
         )
         result = self.master.run_command(
             ["ipa-nis-manage", "enable"],
