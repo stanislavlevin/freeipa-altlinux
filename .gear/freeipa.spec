@@ -174,7 +174,6 @@ Requires: %name-client = %EVR
 Requires: acl
 Requires: gssproxy >= %gssproxy_version
 Requires: sssd-dbus >= %sssd_version
-Requires: selinux-policy-alt
 Requires: pki-ca >= %pki_version
 Requires: pki-kra >= %pki_version
 Requires: certmonger >= %certmonger_version
@@ -309,7 +308,6 @@ Requires: certmonger >= %certmonger_version
 Requires: nss-utils
 Requires: bind-utils
 Requires: oddjob-mkhomedir
-Requires: policycoreutils
 Requires: python3-module-gssapi
 Requires: python3-module-ipaclient = %EVR
 Requires: python3-module-ldap >= %python_ldap_version
