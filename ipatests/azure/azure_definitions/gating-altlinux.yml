@@ -120,11 +120,28 @@ vms:
       replicas: 1
       clients: 1
 
+  - container_job: otp
+    tests:
+    - test_integration/test_otp.py
+
+  - container_job: adtrust_install
+    tests:
+    - test_integration/test_adtrust_install.py
+    containers:
+      replicas: 1
+
 - vm_jobs:
   - container_job: ntp_options_chrony
     tests:
     - test_integration/test_ntp_options.py::TestNTPoptions
     args: '-k chrony'
+    containers:
+      replicas: 1
+      clients: 1
+
+  - container_job: cert
+    tests:
+    - test_integration/test_cert.py
     containers:
       replicas: 1
       clients: 1
@@ -138,6 +155,16 @@ vms:
       replicas: 1
       clients: 1
 
+  - container_job: upgrade
+    tests:
+    - test_integration/test_upgrade.py
+
+  - container_job: http_kdc_proxy
+    tests:
+    - test_integration/test_http_kdc_proxy.py
+    containers:
+      clients: 1
+
 - vm_jobs:
   - container_job: ntp_options_openntpd
     tests:
@@ -146,3 +173,95 @@ vms:
     containers:
       replicas: 1
       clients: 1
+
+  - container_job: vault
+    tests:
+    - test_integration/test_vault.py
+    containers:
+      replicas: 1
+
+- vm_jobs:
+  - container_job: server_del
+    tests:
+    - test_integration/test_server_del.py
+    containers:
+      replicas: 2
+      clients: 1
+
+  - container_job: idviews_TestRulesWithServicePrincipals
+    tests:
+    - test_integration/test_idviews.py::TestRulesWithServicePrincipals
+
+  - container_job: idviews_TestIDViews
+    tests:
+    - test_integration/test_idviews.py::TestIDViews
+    containers:
+      clients: 1
+
+- vm_jobs:
+  - container_job: backup_and_restore_TestBackupAndRestore
+    tests:
+    - test_integration/test_backup_and_restore.py::TestBackupAndRestore
+
+  - container_job: user_permissions
+    tests:
+    - test_integration/test_user_permissions.py
+    containers:
+      clients: 1
+
+  - container_job: dns_locations
+    tests:
+    - test_integration/test_dns_locations.py
+    containers:
+      replicas: 2
+
+- vm_jobs:
+  - container_job: pkinit_manage
+    tests:
+    - test_integration/test_pkinit_manage.py
+    containers:
+      replicas: 1
+
+  - container_job: automember
+    tests:
+    - test_integration/test_automember.py
+
+  - container_job: crlgen_manage
+    tests:
+    - test_integration/test_crlgen_manage.py
+    containers:
+      replicas: 1
+
+  - container_job: ca_custom_sdn
+    tests:
+    - test_integration/test_ca_custom_sdn.py
+
+- vm_jobs:
+  - container_job: krbtpolicy
+    tests:
+    - test_integration/test_krbtpolicy.py
+
+  - container_job: epn
+    tests:
+    - test_integration/test_epn.py
+    containers:
+      clients: 1
+
+- vm_jobs:
+  - container_job: ipahealthcheck_TestIpaHealthCheck
+    tests:
+    - test_integration/test_ipahealthcheck.py::TestIpaHealthCheck
+    containers:
+      replicas: 1
+
+  - container_job: ipahealthcheck_TestIpaHealthCheckWithoutDNS
+    tests:
+    - test_integration/test_ipahealthcheck.py::TestIpaHealthCheckWithoutDNS
+    containers:
+      replicas: 1
+
+  - container_job: ipahealthcheck_TestIpaHealthCheckWithExternalCA
+    tests:
+    - test_integration/test_ipahealthcheck.py::TestIpaHealthCheckWithExternalCA
+    containers:
+      replicas: 1
