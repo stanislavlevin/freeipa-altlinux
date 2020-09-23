@@ -1031,10 +1031,10 @@ class TestInstallMaster(IntegrationTest):
             [paths.IPA_CUSTODIA_CHECK, self.master.hostname]
         )
 
-    @pytest.mark.skipif(
-        paths.SEMODULE is None, reason="test requires semodule command"
-    )
     def test_ipa_selinux_policy(self):
+        if not tasks.is_selinux_enabled(self.master):
+            pytest.skip("test requires semodule command")
+
         # check that freeipa-selinux's policy module is loaded and
         # not disabled
         result = self.master.run_command(
