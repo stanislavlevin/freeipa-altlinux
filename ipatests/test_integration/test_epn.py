@@ -237,36 +237,30 @@ class TestEPN(IntegrationTest):
         #   doesn't know about.
         # - Adds a class variable, pkg, containing the package name of
         #   the downloaded *ipa-client-epn rpm.
-        tasks.uninstall_packages(cls.clients[0],EPN_PKG)
-        pkgdir = tasks.download_packages(cls.clients[0], EPN_PKG)
-        pkg = cls.clients[0].run_command(r'ls -1 {}'.format(pkgdir))
-        cls.pkg = pkg.stdout_text.strip()
-        cls.clients[0].run_command(['cp',
-                                    os.path.join(pkgdir, cls.pkg),
-                                    '/tmp'])
-        cls.clients[0].run_command(r'rm -rf {}'.format(pkgdir))
+        cls.pkg = None
+        tasks.install_master(cls.master, setup_dns=True)
+        tasks.install_client(cls.master, cls.clients[0])
 
-        tasks.install_packages(cls.master, EPN_PKG)
         tasks.install_packages(cls.master, ["postfix"])
-        tasks.install_packages(cls.clients[0], EPN_PKG)
         tasks.install_packages(cls.clients[0], ["postfix"])
         for host in (cls.master, cls.clients[0]):
+            platform = tasks.get_platform(host)
+            cyrus_sasl_package = "cyrus-sasl"
+
+            if platform in ("altlinux"):
+                cyrus_sasl_package = "cyrus-sasl2"
             try:
-                tasks.install_packages(host, ["cyrus-sasl"])
+                tasks.install_packages(host, [cyrus_sasl_package])
             except Exception:
                 # the package is likely already installed
                 pass
-        tasks.install_master(cls.master, setup_dns=True)
-        tasks.install_client(cls.master, cls.clients[0])
         configure_postfix(cls.master, cls.master.domain.realm)
         configure_postfix(cls.clients[0], cls.master.domain.realm)
 
     @classmethod
     def uninstall(cls, mh):
         super(TestEPN, cls).uninstall(mh)
-        tasks.uninstall_packages(cls.master,EPN_PKG)
         tasks.uninstall_packages(cls.master, ["postfix"])
-        tasks.uninstall_packages(cls.clients[0], EPN_PKG)
         tasks.uninstall_packages(cls.clients[0], ["postfix"])
         cls.master.run_command(r'rm -f /etc/postfix/smtp.keytab')
         cls.master.run_command(
@@ -294,6 +288,9 @@ class TestEPN(IntegrationTest):
 
     @pytest.mark.skip_if_platform(
         "debian", reason="Cannot check installed packages using RPM"
+    )
+    @pytest.mark.skip_if_platform(
+        "altlinux", reason="Fedora/RHEL specific"
     )
     def test_EPN_config_file(self):
         """Check that the EPN configuration file is installed.
@@ -693,6 +690,9 @@ class TestEPN(IntegrationTest):
 
     @pytest.mark.skip_if_platform(
         "debian", reason="Don't know how to download-only pkgs in Debian"
+    )
+    @pytest.mark.skip_if_platform(
+        "altlinux", reason="Fedora/RHEL specific"
     )
     def test_EPN_reinstall(self):
         """Test that EPN can be installed, uninstalled and reinstalled.
