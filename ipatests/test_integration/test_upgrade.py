@@ -168,6 +168,9 @@ class TestUpgrade(IntegrationTest):
     @pytest.mark.skip_if_platform(
         "debian", reason="Debian does not use crypto policy"
     )
+    @pytest.mark.skip_if_platform(
+        "altlinux", reason="ALTLinux does not use crypto policy"
+    )
     def test_named_conf_crypto_policy(self):
         named_conf = self.master.get_file_contents(
             paths.NAMED_CONF, encoding="utf-8"
