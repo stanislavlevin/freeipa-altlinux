@@ -295,19 +295,17 @@ class TestEPN(IntegrationTest):
         # - Adds a class variable, pkg, containing the package name of
         #   the downloaded *ipa-client-epn rpm.
         hosts = [cls.master, cls.clients[0]]
-        tasks.uninstall_packages(cls.clients[0],EPN_PKG)
-        pkgdir = tasks.download_packages(cls.clients[0], EPN_PKG)
-        pkg = cls.clients[0].run_command(r'ls -1 {}'.format(pkgdir))
-        cls.pkg = pkg.stdout_text.strip()
-        cls.clients[0].run_command(['cp',
-                                    os.path.join(pkgdir, cls.pkg),
-                                    '/tmp'])
-        cls.clients[0].run_command(r'rm -rf {}'.format(pkgdir))
+        cls.pkg = None
 
         for host in hosts:
-            tasks.install_packages(host, EPN_PKG + ["postfix"])
+            tasks.install_packages(host, ["postfix"])
+            platform = tasks.get_platform(host)
+            cyrus_sasl_package = "cyrus-sasl"
+
+            if platform in ("altlinux"):
+                cyrus_sasl_package = "cyrus-sasl2"
             try:
-                tasks.install_packages(host, ["cyrus-sasl"])
+                tasks.install_packages(host, [cyrus_sasl_package])
             except Exception:
                 # the package is likely already installed
                 pass
@@ -322,9 +320,7 @@ class TestEPN(IntegrationTest):
     @classmethod
     def uninstall(cls, mh):
         super(TestEPN, cls).uninstall(mh)
-        tasks.uninstall_packages(cls.master,EPN_PKG)
         tasks.uninstall_packages(cls.master, ["postfix"])
-        tasks.uninstall_packages(cls.clients[0], EPN_PKG)
         tasks.uninstall_packages(cls.clients[0], ["postfix"])
         cls.master.run_command(r'rm -f /etc/postfix/smtp.keytab')
 
@@ -820,6 +816,9 @@ class TestEPN(IntegrationTest):
 
     @pytest.mark.skip_if_platform(
         "debian", reason="Don't know how to download-only pkgs in Debian"
+    )
+    @pytest.mark.skip_if_platform(
+        "altlinux", reason="Fedora/RHEL specific"
     )
     def test_EPN_reinstall(self):
         """Test that EPN can be installed, uninstalled and reinstalled.
