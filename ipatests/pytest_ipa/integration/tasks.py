@@ -2232,9 +2232,19 @@ def download_packages(host, pkgs):
                        '--downloaddir', tmpdir,
                        '--downloadonly',
                        'install']
+    elif platform in ('altlinux'):
+        install_cmd = [
+            "/usr/bin/apt-get",
+            "install",
+            "-y",
+            "--download-only",
+            "-o", f"Dir::Cache::archives='{tmpdir}'",
+        ]
     else:
         raise ValueError('install_packages: unknown platform %s' % platform)
     host.run_command(['mkdir', tmpdir])
+    if platform in ('altlinux'):
+        host.run_command(["mkdir", os.path.join(tmpdir, "partial")])
     host.run_command(install_cmd + pkgs)
     return tmpdir
 
