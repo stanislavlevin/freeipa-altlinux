@@ -467,6 +467,13 @@ class Restore(admintool.AdminTool):
                     oddjobd.enable()
                 oddjobd.start()
                 http.remove_httpd_ccaches()
+
+                # ALT specific
+                http.configure_httpd_mods()
+
+                ipautil.run(['control', 'bind-chroot', 'disabled'])
+                ipautil.run(['control', 'system-auth', 'sss'])
+
                 # have the daemons pick up their restored configs
                 tasks.systemd_daemon_reload()
                 # Restart IPA a final time.
