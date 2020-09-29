@@ -177,18 +177,26 @@ def restart_service():
     service = dict()
 
     def _stop_service(host, service_name):
-        service_name = service_name.replace('_', '-')
-        if service_name == 'pki-tomcatd':
-            service_name = 'pki-tomcatd@pki-tomcat'
-        elif service_name == 'dirsrv':
+        # there is a mix of '-' and '_' in services names
+        if service_name not in ("pki_tomcatd",):
+            service_name = service_name.replace('_', '-')
+
+        if service_name == "dirsrv":
             serverid = (realm_to_serverid(host.domain.realm)).upper()
-            service_name = 'dirsrv@%s.service' % serverid
-        elif service_name == 'named':
-            # The service name may differ depending on the host OS
-            script = ("from ipaplatform.services import knownservices; "
-                      "print(knownservices.named.systemd_name)")
-            result = host.run_command(['python3', '-c', script])
-            service_name = result.stdout_text.strip()
+            knownservice = (
+                f"knownservices['{service_name}'].service_instance"
+                f"('{serverid}')"
+            )
+        else:
+            knownservice = f"knownservices['{service_name}'].systemd_name"
+
+        # The service name may differ depending on the host OS
+        script = (
+            "from ipaplatform.services import knownservices; "
+            f"print({knownservice})")
+        result = host.run_command(['python3', '-c', script])
+        service_name = result.stdout_text.strip()
+
         if 'host' not in service:
             service['host'] = host
             service['name'] = [service_name]
