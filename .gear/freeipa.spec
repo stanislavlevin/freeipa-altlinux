@@ -44,7 +44,7 @@
 
 Name: freeipa
 Version: 4.8.9
-Release: alt1
+Release: alt0.M90P.1
 
 Summary: The Identity, Policy and Audit system
 License: GPLv3+
@@ -1049,6 +1049,9 @@ fi
 %python3_sitelibdir/ipaplatform-*.egg-info/
 
 %changelog
+* Thu Oct 01 2020 Stanislav Levin <slev@altlinux.org> 4.8.9-alt0.M90P.1
+- Backported to P9.
+
 * Fri Aug 21 2020 Stanislav Levin <slev@altlinux.org> 4.8.9-alt1
 - 4.8.8 -> 4.8.9.
 - Made SELinux optional (closes: #38788).
