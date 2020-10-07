@@ -21,4 +21,5 @@ steps:
     echo "Installing FreeIPA development dependencies"
     sudo dnf builddep -y freeipa
     sudo dnf builddep -y --skip-broken -D "with_wheels 1" -D "with_lint 1" -D "with_doc 1" --spec freeipa.spec.in --best --allowerasing --setopt=install_weak_deps=False
+    sudo dnf upgrade -y --enablerepo=updates-testing --advisory=FEDORA-2020-ad31de1d5b
   displayName: Prepare build environment

@@ -18,6 +18,7 @@ RUN echo 'deltarpm = false' >> /etc/dnf/dnf.conf \
         sudo \
         wget \
         /root/rpms/*.rpm \
+    && dnf upgrade -y --enablerepo=updates-testing --advisory=FEDORA-2020-ad31de1d5b \
     && dnf clean all && rm -rf /root/rpms /root/srpms \
     && sed -i 's/.*PermitRootLogin .*/#&/g' /etc/ssh/sshd_config \
     && echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config \
