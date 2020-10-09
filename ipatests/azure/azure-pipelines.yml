@@ -33,7 +33,7 @@ jobs:
     - template: templates/${{ variables.BUILD_TEMPLATE }}
     - template: templates/publish-build.yml
       parameters:
-        artifactName: 'packages-$(Build.BuildId)-$(Agent.OS)-$(Agent.OSArchitecture)'
+        artifactName: 'packages-$(Build.BuildId)-$(System.JobAttempt)'
         targetPath: $(Build.Repository.LocalPath)/dist
         displayName: Publish packages
 
@@ -48,7 +48,7 @@ jobs:
       displayName: Create container image for test
     - template: templates/publish-build.yml
       parameters:
-        artifactName: 'image-$(Build.BuildId)-$(Agent.OS)-$(Agent.OSArchitecture)'
+        artifactName: 'image-$(Build.BuildId)-$(System.JobAttempt)'
         targetPath: $(Build.Repository.LocalPath)/freeipa-azure-builder-container.tar.gz
         displayName: Publish container image
     - template: templates/generate-matrix.yml
@@ -85,7 +85,7 @@ jobs:
     - template: templates/save-test-artifacts.yml
       parameters:
         logsPath: doc/_build/html
-        logsArtifact: docs-$(System.JobIdentifier)-$(Build.BuildId)-$(System.StageAttempt)-$(System.PhaseAttempt)-$(System.JobPositionInPhase)
+        logsArtifact: docs-$(Build.BuildId)-$(System.JobAttempt)
 
 - job: Tox
   pool:

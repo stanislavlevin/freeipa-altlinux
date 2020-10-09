@@ -124,4 +124,4 @@ steps:
 
 - template: save-test-artifacts.yml
   parameters:
-    logsArtifact: logs-$(System.JobIdentifier)-$(Build.BuildId)-$(System.StageAttempt)-$(System.PhaseAttempt)-$(System.JobPositionInPhase)-$(Agent.OS)-$(Agent.OSArchitecture)
+    logsArtifact: logs-$(System.JobIdentifier)-$(Build.BuildId)-$(System.JobAttempt)-$(System.JobPositionInPhase)
