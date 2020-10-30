@@ -1639,9 +1639,7 @@ exp.FacetGroupsWidget = declare([], {
         $('<a/>', {
             text: tab.tab_label,
             'class': 'tab-link',
-            href: "#" + navigation.create_hash(tab, {
-                pkeys: self.facet.get_pkeys()
-            }),
+            href: "#" + navigation.create_hash(tab, {}),
             name: tab.name
         }).appendTo(el);
 
