@@ -119,6 +119,7 @@ BuildRequires: python3(wheel)
 BuildRequires: git-core
 BuildRequires: softhsm
 BuildRequires: jsl
+BuildRequires: nss-utils
 
 BuildRequires: python3-module-augeas
 BuildRequires: python3-module-cryptography
