@@ -1174,7 +1174,7 @@ fi
 * Sat Oct 07 2017 Stanislav Levin <slev@altlinux.org> 4.6.1-alt1
 - 4.4.4 -> 4.6.1
 
-* Thu Oct 06 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt4
+* Fri Oct 06 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt4
 - Fix ipa client schema cache: Handle malformed server info data gracefully
 - Fix ipa client requirements
 - Import patches from 4.3.3-alt9
@@ -1183,10 +1183,10 @@ fi
 - selinux: Allow digits in SELinux user names (closes: #33838).
 - Require zip.
 
-* Thu Oct 4 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt3
+* Wed Oct 4 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt3
 - Fix ipa server upgrade
 
-* Thu Oct 2 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt2
+* Mon Oct 2 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt2
 - Import patches from 4.3.3-alt8
 
 * Wed Sep 27 2017 Mikhail Efremov <sem@altlinux.org> 4.3.3-alt8
@@ -1194,7 +1194,7 @@ fi
     + Don't try to use bundled urllib3 in the python-module-request.
     + Use ipa CA certificate for https checks.
 
-* Thu Sep 25 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt1
+* Mon Sep 25 2017 Stanislav Levin <slev@altlinux.org> 4.4.4-alt1
 - Update to upstream's 4.4.4 version
 
 * Thu Aug 24 2017 Mikhail Efremov <sem@altlinux.org> 4.3.3-alt7
