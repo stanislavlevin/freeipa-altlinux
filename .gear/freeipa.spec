@@ -32,7 +32,7 @@
 %define bind_version 9.11
 %define bind_dyndb_ldap_version 11.1-alt7
 %define certmonger_version 0.79.7
-%define ds_version 1.4.1.6
+%define ds_version 1.4.3.18
 %define gssproxy_version 0.8.0-alt2
 %define krb5_version 1.16.3
 %define pki_version 10.9.2
