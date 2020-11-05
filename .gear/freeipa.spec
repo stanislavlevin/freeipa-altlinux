@@ -140,6 +140,7 @@ BuildRequires: python3-module-netifaces
 BuildRequires: python3-module-paste
 BuildRequires: python3-module-pki-base >= %pki_version
 BuildRequires: python3-module-polib
+BuildRequires: python3-module-psutil
 BuildRequires: python3-module-pyasn1
 BuildRequires: python3-module-pyasn1-modules
 BuildRequires: python3-module-pycodestyle
@@ -227,6 +228,7 @@ Requires: python3-module-ldap >= %python_ldap_version
 Requires: python3-module-pki-base >= %pki_version
 Requires: python3-module-sssdconfig >= %sssd_version
 Requires: python3-module-samba
+Requires: python3-module-psutil
 Requires: librpm
 Obsoletes: python3-module-ipaserver-ntp < %EVR
 Provides: python3-module-ipaserver-ntp = %EVR
