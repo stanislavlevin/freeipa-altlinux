@@ -31,6 +31,7 @@ import json
 import logging
 import os
 import pytest
+import re
 import textwrap
 
 from subprocess import CalledProcessError
@@ -42,6 +43,11 @@ from ipatests.pytest_ipa.integration import tasks
 logger = logging.getLogger(__name__)
 
 EPN_PKG = ["*ipa-client-epn"]
+
+SASLAUTHD_SYSCONFIG_PATH = "/etc/sysconfig/saslauthd"
+SASLAUTHD_RUNDIR = "/var/spool/postfix/var/run/saslauthd"
+POSTFIX_SASL_CONF = "/etc/postfix/sasl/smtpd.conf"
+POSTFIX_MASTER_CONF = "/etc/postfix/master.cf"
 
 
 def datetime_to_generalized_time(dt):
@@ -65,18 +71,65 @@ def configure_postfix(host, realm):
           * SASL auth
           * to be the destination of the IPA domain.
     """
+    # first, shutdown services
+    services = ["saslauthd", "postfix"]
+    for service in services:
+        host.run_command(["systemctl", "stop", service])
+
     # Setup the keytab we need for SASL auth
-    host.run_command(r"ipa service-add smtp/%s --force" % host.hostname)
+    host.run_command(
+        ["ipa", "service-add", "smtp/%s" % host.hostname, "--force"]
+    )
     host.run_command(r"ipa-getkeytab -p smtp/%s -k /etc/postfix/smtp.keytab" %
                      host.hostname)
-    host.run_command(r"chown root:mail /etc/postfix/smtp.keytab")
-    host.run_command(r"chmod 640 /etc/postfix/smtp.keytab")
+    # alt-specific
+    host.run_command(r"chmod 600 /etc/postfix/smtp.keytab")
+
+    # Enable Postfix SMTP service without content filter
+    host.run_command(["control", "postfix", "server"])
 
     # Configure the SASL smtp service to use GSSAPI
-    host.run_command(
-        r"sed -i 's/plain login/GSSAPI plain login/' /etc/sasl2/smtpd.conf")
-    host.run_command(
-        r"sed -i 's/MECH=pam/MECH=kerberos5/' /etc/sysconfig/saslauthd")
+    host.run_command(["mkdir", "/etc/postfix/sasl"])
+    postfix_sasl = textwrap.dedent(
+        """\
+        pwcheck_method: saslauthd
+        mech_list: plain login
+        """
+    )
+    host.put_file_contents(POSTFIX_SASL_CONF, postfix_sasl)
+
+    # set kerberos5 mech and point to chrooted postfix
+    # alt's postfix lives in chroot, let's pass down saslauthd socket into it
+    saslauthd_sys_conf = host.get_file_contents(
+        SASLAUTHD_SYSCONFIG_PATH, encoding="utf-8"
+    )
+    saslauthd_sys_conf = re.sub(
+        r"^OPTIONS=.*",
+        f"OPTIONS='-a kerberos5 -n 0 -m {SASLAUTHD_RUNDIR}'",
+        saslauthd_sys_conf
+    )
+    host.put_file_contents(SASLAUTHD_SYSCONFIG_PATH, saslauthd_sys_conf)
+
+    host.run_command(["mkdir", "-p", "/etc/systemd/system/saslauthd.service.d"])
+    saslauthd_conf_path = "/etc/systemd/system/saslauthd.service.d/custom.conf"
+    saslauthd_conf = textwrap.dedent(
+        """\
+        [Service]
+        PIDFile={}/saslauthd.pid
+        """
+    ).format(SASLAUTHD_RUNDIR)
+    host.put_file_contents(saslauthd_conf_path, saslauthd_conf)
+    host.run_command(["systemctl", "daemon-reload"])
+
+    host.run_command(["mkdir", "-p", SASLAUTHD_RUNDIR])
+    host.run_command(["chown", "postfix:root", "/var/spool/postfix/var"])
+    host.run_command(["chmod", "0750", "/var/spool/postfix/var"])
+
+    # alt-only option
+    postconf(host, "mailbox_unpriv_delivery = no")
+
+    # end of alt-specific
+
     postconf(host,
              'import_environment = MAIL_CONFIG MAIL_DEBUG MAIL_LOGTAG TZ '
              'XAUTHORITY DISPLAY LANG=C KRB5_KTNAME=/etc/postfix/smtp.keytab')
@@ -93,6 +146,11 @@ def configure_postfix(host, realm):
     postconf(host, 'broken_sasl_auth_clients = yes')
     postconf(host, 'smtpd_sasl_authenticated_header = yes')
     postconf(host, 'smtpd_sasl_local_domain = %s' % realm)
+    # TLS will not be used
+    postconf(host, 'smtpd_tls_security_level = none')
+
+    # disable procmail if exists, make use of default local(8) delivery agent
+    postconf(host, "mailbox_command=")
 
     host.run_command(["systemctl", "restart", "saslauthd"])
 
@@ -150,6 +208,8 @@ def configure_starttls(host):
     )
     postconf(host, 'smtpd_tls_received_header = yes')
     postconf(host, 'smtpd_tls_session_cache_timeout = 3600s')
+    # announce STARTTLS support to remote SMTP clients, not require
+    postconf(host, 'smtpd_tls_security_level = may')
 
     host.run_command(["systemctl", "restart", "postfix"])
 
@@ -157,13 +217,13 @@ def configure_starttls(host):
 def configure_ssl(host):
     """Enable the ssl listener on port 465.
     """
-    conf = host.get_file_contents('/etc/postfix/master.cf',
-                                  encoding='utf-8')
-    conf += 'smtps inet n - n - - smtpd\n'
+    conf = host.get_file_contents(POSTFIX_MASTER_CONF, encoding='utf-8')
+    # put postfix into chroot(5th field)
+    conf += 'smtps inet n - - - - smtpd\n'
     conf += '  -o syslog_name=postfix/smtps\n'
     conf += '  -o smtpd_tls_wrappermode=yes\n'
     conf += '  -o smtpd_sasl_auth_enable=yes\n'
-    host.put_file_contents('/etc/postfix/master.cf', conf)
+    host.put_file_contents(POSTFIX_MASTER_CONF, conf)
 
     host.run_command(["systemctl", "restart", "postfix"])
 
@@ -245,12 +305,14 @@ class TestEPN(IntegrationTest):
         tasks.install_packages(cls.clients[0], ["postfix"])
         for host in (cls.master, cls.clients[0]):
             platform = tasks.get_platform(host)
-            cyrus_sasl_package = "cyrus-sasl"
+            cyrus_sasl_packages = ["cyrus-sasl"]
 
             if platform in ("altlinux"):
-                cyrus_sasl_package = "cyrus-sasl2"
+                cyrus_sasl_packages = [
+                    "cyrus-sasl2", "postfix-cyrus", "postfix-tls",
+                ]
             try:
-                tasks.install_packages(host, [cyrus_sasl_package])
+                tasks.install_packages(host, cyrus_sasl_packages)
             except Exception:
                 # the package is likely already installed
                 pass
@@ -259,10 +321,20 @@ class TestEPN(IntegrationTest):
 
     @classmethod
     def uninstall(cls, mh):
-        super(TestEPN, cls).uninstall(mh)
+        services = ["saslauthd", "postfix"]
+        for host in [cls.master, cls.clients[0]]:
+            for service in services:
+                host.run_command(["systemctl", "stop", service])
+
+            host.run_command(
+                ["ipa", "service-del", "smtp/%s" % host.hostname],
+                raiseonerr=False,
+            )
+
         tasks.uninstall_packages(cls.master, ["postfix"])
         tasks.uninstall_packages(cls.clients[0], ["postfix"])
         cls.master.run_command(r'rm -f /etc/postfix/smtp.keytab')
+        super(TestEPN, cls).uninstall(mh)
         cls.master.run_command(
             [
                 "getcert",
@@ -271,20 +343,17 @@ class TestEPN(IntegrationTest):
                 os.path.join(paths.OPENSSL_CERTS_DIR, "postfix.pem"),
             ]
         )
-        cls.master.run_command(
-            [
-                "rm",
-                "-f",
-                os.path.join(paths.OPENSSL_PRIVATE_DIR, "postfix.key"),
-            ]
-        )
-        cls.master.run_command(
-            [
-                "rm",
-                "-f",
-                os.path.join(paths.OPENSSL_CERTS_DIR, "postfix.pem"),
-            ]
-        )
+        to_remove = [
+            os.path.join(paths.OPENSSL_PRIVATE_DIR, "postfix.key"),
+            os.path.join(paths.OPENSSL_CERTS_DIR, "postfix.pem"),
+            "/etc/systemd/system/saslauthd.service.d/custom.conf",
+            "/etc/postfix/sasl",
+            SASLAUTHD_RUNDIR,
+        ]
+
+        cmd = ["rm", "-rf"]
+        cmd.extend(to_remove)
+        cls.master.run_command(cmd)
 
     @pytest.mark.skip_if_platform(
         "debian", reason="Cannot check installed packages using RPM"
@@ -360,8 +429,10 @@ class TestEPN(IntegrationTest):
     @pytest.fixture
     def cleanupmail(self):
         """Cleanup any existing mail that has been sent."""
+        cmd = ["rm", "-f"]
         for i in range(30):
-            self.master.run_command(["rm", "-f", "/var/mail/user%d" % i])
+            cmd.append("/var/mail/user%d" % i)
+        self.master.run_command(cmd)
 
     def test_EPN_smoketest_2(self, cleanupusers):
         """Add a user without password.
