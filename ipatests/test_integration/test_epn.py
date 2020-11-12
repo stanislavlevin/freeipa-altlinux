@@ -49,6 +49,25 @@ SASLAUTHD_RUNDIR = "/var/spool/postfix/var/run/saslauthd"
 POSTFIX_SASL_CONF = "/etc/postfix/sasl/smtpd.conf"
 POSTFIX_MASTER_CONF = "/etc/postfix/master.cf"
 
+STARTTLS_EPN_CONF = textwrap.dedent(
+    """\
+    [global]
+    smtp_user={user}
+    smtp_password={password}
+    smtp_security=starttls
+    """
+)
+
+SSL_EPN_CONF = textwrap.dedent(
+    """\
+    [global]
+    smtp_user={user}
+    smtp_password={password}
+    smtp_port=465
+    smtp_security=ssl
+    """
+)
+
 
 def datetime_to_generalized_time(dt):
     """Convert datetime to LDAP_GENERALIZED_TIME_FORMAT
@@ -391,6 +410,43 @@ class TestEPN(IntegrationTest):
             stderr_text
         assert rc > 0
 
+    def test_EPN_no_security_downgrade_starttls(self):
+        """Configure postfix without starttls and test no auth happens
+        """
+        epn_conf = STARTTLS_EPN_CONF.format(
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+        )
+        self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
+
+        (unused, stderr_text, rc) = self._check_epn_output(
+            self.master, mailtest=True,
+            raiseonerr=False, validatejson=False
+        )
+        expected_msg = "IPA-EPN: Unable to create an encrypted session to"
+        assert expected_msg in stderr_text
+        assert rc > 0
+
+    def test_EPN_no_security_downgrade_tls(self):
+        """Configure postfix without tls and test no auth happens
+        """
+        epn_conf = SSL_EPN_CONF.format(
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+        )
+        self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
+
+        (unused, stderr_text, rc) = self._check_epn_output(
+            self.master, mailtest=True,
+            raiseonerr=False, validatejson=False
+        )
+        expected_msg = (
+            "IPA-EPN: Could not connect to the configured SMTP "
+            "server"
+        )
+        assert expected_msg in stderr_text
+        assert rc > 0
+
     def test_EPN_smoketest_1(self):
         """No users except admin. Check --dry-run output.
            With the default configuration, the result should be an empty list.
@@ -685,13 +741,10 @@ class TestEPN(IntegrationTest):
     def test_EPN_starttls(self, cleanupmail):
         """Configure with starttls and test delivery
         """
-        epn_conf = textwrap.dedent('''
-            [global]
-            smtp_user={user}
-            smtp_password={password}
-            smtp_security=starttls
-        '''.format(user=self.master.config.admin_name,
-                   password=self.master.config.admin_password))
+        epn_conf = STARTTLS_EPN_CONF.format(
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+        )
         self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
         configure_starttls(self.master)
 
@@ -703,14 +756,10 @@ class TestEPN(IntegrationTest):
     def test_EPN_ssl(self, cleanupmail):
         """Configure with ssl and test delivery
         """
-        epn_conf = textwrap.dedent('''
-            [global]
-            smtp_user={user}
-            smtp_password={password}
-            smtp_port=465
-            smtp_security=ssl
-        '''.format(user=self.master.config.admin_name,
-                   password=self.master.config.admin_password))
+        epn_conf = SSL_EPN_CONF.format(
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+        )
         self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
         configure_ssl(self.master)
 
