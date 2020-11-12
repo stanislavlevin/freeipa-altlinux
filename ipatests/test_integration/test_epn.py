@@ -64,12 +64,14 @@ USER_EPN_CONF = DEFAULT_EPN_CONF + textwrap.dedent(
 
 STARTTLS_EPN_CONF = USER_EPN_CONF + textwrap.dedent(
     """\
+    smtp_server={server}
     smtp_security=starttls
     """
 )
 
 SSL_EPN_CONF = USER_EPN_CONF + textwrap.dedent(
     """\
+    smtp_server={server}
     smtp_port=465
     smtp_security=ssl
     """
@@ -421,6 +423,7 @@ class TestEPN(IntegrationTest):
         """Configure postfix without starttls and test no auth happens
         """
         epn_conf = STARTTLS_EPN_CONF.format(
+            server=self.master.hostname,
             user=self.master.config.admin_name,
             password=self.master.config.admin_password,
         )
@@ -438,6 +441,7 @@ class TestEPN(IntegrationTest):
         """Configure postfix without tls and test no auth happens
         """
         epn_conf = SSL_EPN_CONF.format(
+            server=self.master.hostname,
             user=self.master.config.admin_name,
             password=self.master.config.admin_password,
         )
@@ -748,6 +752,7 @@ class TestEPN(IntegrationTest):
         """Configure with starttls and test delivery
         """
         epn_conf = STARTTLS_EPN_CONF.format(
+            server=self.master.hostname,
             user=self.master.config.admin_name,
             password=self.master.config.admin_password,
         )
@@ -763,6 +768,7 @@ class TestEPN(IntegrationTest):
         """Configure with ssl and test delivery
         """
         epn_conf = SSL_EPN_CONF.format(
+            server=self.master.hostname,
             user=self.master.config.admin_name,
             password=self.master.config.admin_password,
         )
