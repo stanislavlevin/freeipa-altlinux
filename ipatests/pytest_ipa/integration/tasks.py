@@ -249,7 +249,7 @@ def restore_hostname(host):
         host.run_command(['rm', backupname])
 
 
-def enable_replication_debugging(host, log_level=0):
+def enable_replication_debugging(host, log_level=8192):
     logger.info('Set LDAP debug level')
     logging_ldif = textwrap.dedent("""
         dn: cn=config
