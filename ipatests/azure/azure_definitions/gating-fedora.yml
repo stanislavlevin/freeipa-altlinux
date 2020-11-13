@@ -110,3 +110,38 @@ vms:
       clients: 1
     tests:
     - test_integration/test_advise.py
+
+- vm_jobs:
+  - container_job: InstallDNSSECFirst_2
+    containers:
+      replicas: 1
+    tests:
+    - test_integration/test_dnssec.py::TestInstallDNSSECFirst
+
+- vm_jobs:
+  - container_job: InstallDNSSECFirst_3
+    containers:
+      replicas: 1
+    tests:
+    - test_integration/test_dnssec.py::TestInstallDNSSECFirst
+
+- vm_jobs:
+  - container_job: InstallDNSSECFirst_4
+    containers:
+      replicas: 1
+    tests:
+    - test_integration/test_dnssec.py::TestInstallDNSSECFirst
+
+- vm_jobs:
+  - container_job: InstallDNSSECFirst_5
+    containers:
+      replicas: 1
+    tests:
+    - test_integration/test_dnssec.py::TestInstallDNSSECFirst
+
+- vm_jobs:
+  - container_job: InstallDNSSECFirst_6
+    containers:
+      replicas: 1
+    tests:
+    - test_integration/test_dnssec.py::TestInstallDNSSECFirst
