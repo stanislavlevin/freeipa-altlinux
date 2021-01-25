@@ -83,6 +83,8 @@ CLASS_LOGFILES = [
     # IPA renewal lock
     paths.IPA_RENEWAL_LOCK,
     paths.LETS_ENCRYPT_LOG
+    # bind
+    paths.NAMED_RUN,
 ]
 
 
