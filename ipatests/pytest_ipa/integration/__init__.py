@@ -76,6 +76,8 @@ CLASS_LOGFILES = [
     # system
     paths.RESOLV_CONF,
     paths.HOSTS,
+    # bind
+    paths.NAMED_RUN,
 ]
 
 

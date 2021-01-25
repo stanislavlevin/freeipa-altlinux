@@ -41,7 +41,7 @@ options {
 
 logging {
         channel default_debug {
-                file "${NAMED_DATA_DIR}named.run";
+                file "${NAMED_RUN}";
                 severity dynamic;
                 print-time yes;
         };

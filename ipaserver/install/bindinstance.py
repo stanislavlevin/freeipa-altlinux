@@ -880,6 +880,7 @@ class BindInstance(service.Service):
             RFC1912_ZONES=paths.NAMED_RFC1912_ZONES,
             NAMED_PID=paths.NAMED_PID,
             NAMED_VAR_DIR=paths.NAMED_VAR_DIR,
+            NAMED_RUN=paths.NAMED_RUN,
             BIND_LDAP_SO=paths.BIND_LDAP_SO,
             INCLUDE_CRYPTO_POLICY=crypto_policy,
             NAMED_CONF=paths.NAMED_CONF,

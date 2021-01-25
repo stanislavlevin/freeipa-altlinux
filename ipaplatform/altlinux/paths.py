@@ -63,6 +63,7 @@ class ALTLinuxPathNamespace(BasePathNamespace):
     NAMED_RFC1912_ZONES = "/etc/bind/rfc1912.conf"
     NAMED_ROOT_KEY = "/etc/bind.keys"
     NAMED_MANAGED_KEYS_DIR = "/var/lib/bind/dynamic"
+    NAMED_RUN = "/var/lib/bind/data/named.run"
     NAMED_PID = "/var/run/named.pid"
     SYSCONFIG_NAMED = "/etc/sysconfig/bind"
     BIND_LDAP_DNS_IPA_WORKDIR = "/var/lib/bind/zone/dyndb-ldap/ipa/"
