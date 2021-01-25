@@ -1203,6 +1203,9 @@ class TestIpaHealthCheck(IntegrationTest):
             assert check["kw"]["msg"] == msg
 
 
+    @pytest.mark.skip_if_container(
+        "any", reason="time travelling can break the other containers"
+    )
     def test_ipa_healthcheck_expiring(self, restart_service):
         """
         There are two overlapping tests for expiring certs, check both.
