@@ -248,12 +248,14 @@ vms:
       clients: 1
 
 - vm_jobs:
+  # test_ipa_healthcheck_no_errors requires at least 20% of free space
   - container_job: ipahealthcheck_TestIpaHealthCheck
     tests:
     - test_integration/test_ipahealthcheck.py::TestIpaHealthCheck
     containers:
       replicas: 1
 
+- vm_jobs:
   - container_job: ipahealthcheck_TestIpaHealthCheckWithoutDNS
     tests:
     - test_integration/test_ipahealthcheck.py::TestIpaHealthCheckWithoutDNS
