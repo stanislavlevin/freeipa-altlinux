@@ -628,7 +628,25 @@ class TestIPACommand(IntegrationTest):
         )
         assert result.returncode == 0
 
-    def test_ssh_key_connection(self, tmpdir):
+    @pytest.fixture
+    def sshd_session_pam_unix(self):
+        # append pam_unix to session component of PAM for sshd
+        # only logs when a user logins or leave the system
+        pam_sshd_path = "/etc/pam.d/sshd"
+        master = self.master
+
+        with tasks.FileBackup(master, pam_sshd_path):
+            pam_sshd_text = master.get_file_contents(
+                pam_sshd_path, encoding="utf-8"
+            )
+            pam_sshd_text += "session\trequired\tpam_unix.so"
+            master.put_file_contents(pam_sshd_path, pam_sshd_text)
+            master.run_command(["cat", pam_sshd_path])
+            yield
+
+        master.run_command(["cat", pam_sshd_path])
+
+    def test_ssh_key_connection(self, tmpdir, sshd_session_pam_unix):
         """
         Integration test for https://pagure.io/SSSD/sssd/issue/3747
         """
