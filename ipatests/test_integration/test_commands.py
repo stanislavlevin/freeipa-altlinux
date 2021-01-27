@@ -692,7 +692,7 @@ class TestIPACommand(IntegrationTest):
         # closing session marker(depends on PAM stack of sshd)
         expected_msgs = [
             f"session closed for user {test_user}",
-            f"Disconnected from user {test_user}",
+            f"Session closed for {test_user}",
         ]
 
         def test_cb(stdout):
