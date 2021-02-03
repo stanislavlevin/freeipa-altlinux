@@ -5,7 +5,7 @@
 Tests to verify that the ipa-healthcheck scenarios
 """
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 from datetime import datetime, timedelta
 import json
@@ -131,6 +131,16 @@ TOMCAT_CONFIG_FILES = (
     paths.PKI_TOMCAT_SERVER_XML,
     paths.CA_CS_CFG_PATH,
 )
+
+
+def not_enough_disk_space(host, path):
+    cmd = ["stat", "-f", "--format=%a\n%b", path]
+    result = host.run_command(cmd)
+
+    free_blocks, total_blocks = result.stdout_text.rstrip().splitlines()
+    if int(int(free_blocks) * 100 / int(total_blocks)) < 20:
+        return True
+    return False
 
 
 def run_healthcheck(host, source=None, check=None, output_type="json",
@@ -511,6 +521,9 @@ class TestIpaHealthCheck(IntegrationTest):
         Ensure that on a default installation with KRA and DNS
         installed ipa-healthcheck runs with no errors.
         """
+        if not_enough_disk_space(self.master, "/"):
+            pytest.skip("requires at least 20% of free space for '/'")
+
         cmd = tasks.install_kra(self.master)
         assert cmd.returncode == 0
         returncode, _unused = run_healthcheck(
