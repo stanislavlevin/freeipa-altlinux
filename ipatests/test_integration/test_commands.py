@@ -684,7 +684,7 @@ class TestIPACommand(IntegrationTest):
             )
 
         # sshd don't flush its logs to syslog immediately
-        cmd = ["journalctl", "-u", "sshd", f"--since={since}"]
+        cmd = ["journalctl", "-t", "sshd", f"--since={since}"]
         tasks.run_repeatedly(self.master, command=cmd, test=test_cb)
 
         # cleanup
@@ -1261,7 +1261,7 @@ class TestIPACommand(IntegrationTest):
             return expected_msg in stdout
 
         # sshd don't flush its logs to syslog immediately
-        cmd = ["journalctl", "-u", "sshd", f"--since={since}"]
+        cmd = ["journalctl", "-t", "sshd", f"--since={since}"]
         tasks.run_repeatedly(self.master, command=cmd, test=test_cb)
 
     def get_dirsrv_id(self):
