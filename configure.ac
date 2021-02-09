@@ -565,6 +565,23 @@ AS_CASE([$JSLINT],
 AC_SUBST([JSLINT])
 AM_CONDITIONAL([WITH_JSLINT], [test "x${JSLINT}" != "xno"])
 
+
+AC_ARG_ENABLE(
+    [rpmlint],
+    [AC_HELP_STRING([--enable-rpmlint], [Enable rpmlint for the rpm spec])],
+    [case "${enableval}" in
+         yes) enable_rpmlint=yes ;;
+          no) enable_rpmlint=no ;;
+           *) AC_MSG_ERROR([bad value ${enableval} for --enable-rpmlint]) ;;
+     esac],
+    [enable_rpmlint=no])
+AS_IF([test "x$enable_rpmlint" = "xyes"],
+      [AC_PATH_PROG([RPMLINT], [rpmlint])
+       AS_IF([test "x$RPMLINT" = "x"],
+             [AC_MSG_ERROR([Could not find rpmlint])])],
+)
+AM_CONDITIONAL([ENABLE_RPMLINT], [test "x$enable_rpmlint" = "xyes"])
+
 AM_CONDITIONAL([HAVE_UNSHARE],
     [test "x${ac_cv_func_unshare}" = "xyes" -a "x${ac_cv_func_chroot}" = "xyes"])
 
@@ -677,6 +694,7 @@ echo "
         Python:                   ${PYTHON} (${PYTHON_VERSION})
         pylint:                   ${PYLINT}
         jslint:                   ${JSLINT}
+        rpmlint:                  $enable_rpmlint
         LDAP libs:                ${LDAP_LIBS}
         OpenSSL crypto libs:      ${CRYPTO_LIBS}
         KRB5 libs:                ${KRB5_LIBS}
