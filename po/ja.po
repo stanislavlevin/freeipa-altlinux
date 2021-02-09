@@ -5,9 +5,9 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: freeipa 4.8.0\n"
+"Project-Id-Version: freeipa 4.9.0.dev201908140712+gitc9938e3d8\n"
 "Report-Msgid-Bugs-To: https://pagure.io/freeipa/new_issue\n"
-"POT-Creation-Date: 2020-06-10 22:17+0300\n"
+"POT-Creation-Date: 2020-12-23 16:29+0200\n"
 "PO-Revision-Date: 2019-11-11 10:25+0000\n"
 "Last-Translator: Copied by Zanata <copied-by-zanata@zanata.org>\n"
 "Language-Team: Japanese\n"
@@ -234,15 +234,6 @@ msgstr "HBAC サービスグループを変更します。"
 msgid "Modify an HBAC service."
 msgstr "HBAC サービスを変更します。"
 
-msgid "One-Time-Password"
-msgstr "ワンタイムパスワード"
-
-msgid "One-Time-Password Not Present"
-msgstr "ワンタイムパスワードが存在しません"
-
-msgid "One-Time-Password Present"
-msgstr "ワンタイムパスワードが存在します"
-
 msgid "Options"
 msgstr "オプション"
 
@@ -276,9 +267,6 @@ msgstr "HBAC サービスグループからメンバーを削除します。"
 msgid "Reset OTP"
 msgstr "OTP のリセット"
 
-msgid "Reset One-Time-Password"
-msgstr "ワンタイムパスワードをリセットします"
-
 msgid "Rules"
 msgstr "ルール"
 
@@ -305,9 +293,6 @@ msgstr "役割を検索します。"
 
 msgid "Set"
 msgstr "設定"
-
-msgid "Set One-Time-Password"
-msgstr "ワンタイムパスワードを設定します"
 
 msgid "Sudo Command"
 msgstr "sudo コマンド"

@@ -20,8 +20,8 @@
 #  ->  "1.0.0"                                         #
 ########################################################
 define(IPA_VERSION_MAJOR, 4)
-define(IPA_VERSION_MINOR, 8)
-define(IPA_VERSION_RELEASE, 9)
+define(IPA_VERSION_MINOR, 9)
+define(IPA_VERSION_RELEASE, 1)
 
 ########################################################
 # For 'pre' releases the version will be               #
@@ -34,7 +34,7 @@ define(IPA_VERSION_RELEASE, 9)
 # e.g. define(IPA_VERSION_PRE_RELEASE, rc1)            #
 #  ->  "1.0.0rc1"                                      #
 ########################################################
-define(IPA_VERSION_PRE_RELEASE, )
+define(IPA_VERSION_PRE_RELEASE,)
 
 ########################################################
 # To mark GIT snapshots this should be set to 'yes'    #
@@ -86,8 +86,8 @@ define(IPA_DATA_VERSION, 20100614120000)
 #                                                      #
 ########################################################
 define(IPA_API_VERSION_MAJOR, 2)
-define(IPA_API_VERSION_MINOR, 239)
-# Last change: allow ID overrides for users to be members of groups and roles
+define(IPA_API_VERSION_MINOR, 240)
+# Last change: add pwquality options to pwpolicy
 
 
 ########################################################

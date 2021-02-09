@@ -25,6 +25,7 @@
 
 #include "ipa_kdb.h"
 #include "ipa_krb5.h"
+#include "ipa_hostname.h"
 
 #define IPADB_GLOBAL_CONFIG_CACHE_TIME 60
 
@@ -52,7 +53,7 @@ static void ipadb_context_free(krb5_context kcontext,
         free((*ctx)->base);
         free((*ctx)->realm_base);
         free((*ctx)->accounts_base);
-        free((*ctx)->kdc_hostname);
+        /* kdc_hostname is a pointer to a static char[] */
         /* ldap free lcontext */
         if ((*ctx)->lcontext) {
             ldap_unbind_ext_s((*ctx)->lcontext, NULL, NULL);
@@ -537,7 +538,6 @@ static krb5_error_code ipadb_init_module(krb5_context kcontext,
     krb5_error_code kerr;
     int ret;
     int i;
-    struct utsname uname_data;
 
     /* make sure the context is freed to avoid leaking it */
     ipactx = ipadb_get_context(kcontext);
@@ -603,15 +603,9 @@ static krb5_error_code ipadb_init_module(krb5_context kcontext,
         goto fail;
     }
 
-    ret = uname(&uname_data);
-    if (ret) {
-        ret = EINVAL;
-        goto fail;
-    }
-
-    ipactx->kdc_hostname = strdup(uname_data.nodename);
+    ipactx->kdc_hostname = ipa_gethostfqdn();
     if (!ipactx->kdc_hostname) {
-        ret = ENOMEM;
+        ret = errno;
         goto fail;
     }
 

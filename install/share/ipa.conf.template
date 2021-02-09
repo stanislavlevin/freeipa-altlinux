@@ -75,7 +75,8 @@ WSGIScriptReloading Off
 
   GssapiImpersonate On
   GssapiDelegCcacheDir $IPA_CCACHES
-  GssapiDelegCcachePerms mode:0660 gid:ipaapi
+  GssapiDelegCcachePerms mode:0660
+  GssapiDelegCcacheUnique On
   GssapiUseS4U2Proxy on
   GssapiAllowedMech krb5
   Require valid-user
@@ -116,7 +117,8 @@ Alias /ipa/session/cookie "/usr/share/ipa/gssapi.login"
 <Location "/ipa/session/login_x509">
   AuthType none
   GssapiDelegCcacheDir $IPA_CCACHES
-  GssapiDelegCcachePerms mode:0660 gid:ipaapi
+  GssapiDelegCcachePerms mode:0660
+  GssapiDelegCcacheUnique On
   SSLVerifyClient require
   SSLUserName SSL_CLIENT_CERT
   LookupUserByCertificate On
@@ -183,18 +185,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
 
 #  List explicitly only the fonts we want to serve
 Alias /ipa/ui/fonts/open-sans "${FONTS_OPENSANS_DIR}"
-<Directory "${FONTS_OPENSANS_DIR}">
-  SetHandler None
-  AllowOverride None
-  Satisfy Any
-  Allow from all
-  ExpiresActive On
-  ExpiresDefault "access plus 1 year"
-</Directory>
-
-
 Alias /ipa/ui/fonts/fontawesome "${FONTS_FONTAWESOME_DIR}"
-<Directory "${FONTS_FONTAWESOME_DIR}">
+<Directory "${FONTS_DIR}">
   SetHandler None
   AllowOverride None
   Satisfy Any

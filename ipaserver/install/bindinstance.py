@@ -23,16 +23,15 @@ from __future__ import print_function
 import logging
 import tempfile
 import os
-import pwd
 import netaddr
 import re
 import shutil
 import sys
 import time
 
-import dns.resolver
 import ldap
 import six
+from dns.exception import DNSException
 
 from ipaserver.dns_data_management import (
     IPASystemRecords,
@@ -51,6 +50,7 @@ from ipapython.admintool import ScriptError
 import ipalib
 from ipalib import api, errors
 from ipalib.constants import IPA_CA_RECORD
+from ipalib.install import dnsforwarders
 from ipaplatform import services
 from ipaplatform.tasks import tasks
 from ipaplatform.constants import constants
@@ -320,10 +320,15 @@ def read_reverse_zone(default, ip_address, allow_zone_overlap=False):
 def get_auto_reverse_zones(ip_addresses, allow_zone_overlap=False):
     auto_zones = []
     for ip in ip_addresses:
-        if ipautil.reverse_record_exists(ip):
+        try:
+            dnsutil.resolve_address(str(ip))
+        except DNSException:
+            pass
+        else:
             # PTR exist there is no reason to create reverse zone
             logger.info("Reverse record for IP address %s already exists", ip)
             continue
+
         default_reverse = get_reverse_zone_default(ip)
         if not allow_zone_overlap:
             try:
@@ -637,7 +642,7 @@ class DnsBackup:
 
 
 class BindInstance(service.Service):
-    def __init__(self, fstore=None, api=api, ntp_role=False):
+    def __init__(self, fstore=None, api=api):
         super(BindInstance, self).__init__(
             "named",
             service_desc="DNS",
@@ -657,8 +662,7 @@ class BindInstance(service.Service):
         self.no_dnssec_validation = False
         self.sub_dict = None
         self.reverse_zones = ()
-        self.named_regular = services.service('named-regular', api)
-        self.ntp_role = ntp_role
+        self.named_conflict = services.service('named-conflict', api)
 
     suffix = ipautil.dn_attribute_property('_suffix')
 
@@ -756,8 +760,6 @@ class BindInstance(service.Service):
             self.step("setting up records for other masters", self.__add_others)
         # all zones must be created before this step
         self.step("adding NS record to the zones", self.__add_self_ns)
-        if self.ntp_role:
-            self.step("adding dns ntp record", self.__add_ntp_record)
 
         self.step("setting up kerberos principal", self.__setup_principal)
         self.step("setting up named.conf", self.setup_named_conf)
@@ -767,10 +769,11 @@ class BindInstance(service.Service):
         # named has to be started after softhsm initialization
         # self.step("restarting named", self.__start)
 
-        self.step("configuring named to start on boot", self.__enable)
-        self.step("changing resolv.conf to point to ourselves",
-                  self.__setup_resolv_conf)
-        self.step("disable chroot for bind", self.__disable_chroot)
+        self.step("configuring named to start on boot", self.switch_service)
+        self.step(
+            "changing resolv.conf to point to ourselves",
+            self.setup_resolv_conf
+        )
         self.start_creation()
 
     def start_named(self):
@@ -779,19 +782,16 @@ class BindInstance(service.Service):
 
     def __start(self):
         try:
-            if self.get_state("running") is None:
-                # first time store status
-                self.backup_state("running", self.is_running())
             self.restart()
         except Exception as e:
             logger.error("Named service failed to start (%s)", e)
             print("named service failed to start")
 
+    def switch_service(self):
+        self.mask_conflict()
+        self.__enable()
+
     def __enable(self):
-        if self.get_state("enabled") is None:
-            self.backup_state("enabled", self.is_running())
-            self.backup_state("named-regular-enabled",
-                              self.named_regular.is_running())
         # We do not let the system start IPA components on its own,
         # Instead we reply on the IPA init script to start only enabled
         # components as found in our LDAP configuration tree
@@ -802,20 +802,19 @@ class BindInstance(service.Service):
             # don't crash, just report error
             logger.error("DNS service already exists")
 
-        # disable named, we need to run named-pkcs11 only
-        if self.get_state("named-regular-running") is None:
-            # first time store status
-            self.backup_state("named-regular-running",
-                              self.named_regular.is_running())
+    def mask_conflict(self):
+        # disable named-conflict (either named or named-pkcs11)
         try:
-            self.named_regular.stop()
+            self.named_conflict.stop()
         except Exception as e:
-            logger.debug("Unable to stop named (%s)", e)
+            logger.debug("Unable to stop %s (%s)",
+                         self.named_conflict.systemd_name, e)
 
         try:
-            self.named_regular.mask()
+            self.named_conflict.mask()
         except Exception as e:
-            logger.debug("Unable to mask named (%s)", e)
+            logger.debug("Unable to mask %s (%s)",
+                         self.named_conflict.systemd_name, e)
 
     def _get_dnssec_validation(self):
         """get dnssec-validation value
@@ -940,10 +939,6 @@ class BindInstance(service.Service):
             add_ns_rr(zone, ns_hostname, self.dns_backup, force=True,
                       api=self.api)
 
-    def __add_ntp_record(self):
-        add_rr(self.domain, '_ntp._udp', 'SRV',
-               "0 100 123 {}.".format(self.fqdn))
-
     def __setup_reverse_zone(self):
         # Always use force=True as named is not set up yet
         for reverse_zone in self.reverse_zones:
@@ -1001,8 +996,7 @@ class BindInstance(service.Service):
             dns_principal = p
 
         # Make sure access is strictly reserved to the named user
-        pent = pwd.getpwnam(self.service_user)
-        os.chown(self.keytab, pent.pw_uid, pent.pw_gid)
+        self.service_user.chown(self.keytab)
         os.chmod(self.keytab, 0o400)
 
         # modify the principal so that it is marked as an ipa service so that
@@ -1048,7 +1042,7 @@ class BindInstance(service.Service):
         """
         # files are owned by root:named and are readable by user and group
         uid = 0
-        gid = pwd.getpwnam(constants.NAMED_USER).pw_gid
+        gid = constants.NAMED_GROUP.gid
         mode = 0o640
 
         changed = False
@@ -1125,31 +1119,28 @@ class BindInstance(service.Service):
 
         sysupgrade.set_upgrade_state('dns', 'server_config_to_ldap', True)
 
-    def __setup_resolv_conf(self):
+    def setup_resolv_conf(self):
         searchdomains = [self.domain]
-        nameservers = []
+        nameservers = set()
+        resolve1_enabled = dnsforwarders.detect_resolve1_resolv_conf()
 
         for ip_address in self.ip_addresses:
             if ip_address.version == 4:
-                nameservers.append("127.0.0.1")
+                nameservers.add("127.0.0.1")
             elif ip_address.version == 6:
-                nameservers.append("::1")
+                nameservers.add("::1")
 
         try:
             tasks.configure_dns_resolver(
-                nameservers, searchdomains, fstore=self.fstore
+                sorted(nameservers), searchdomains,
+                resolve1_enabled=resolve1_enabled, fstore=self.fstore
             )
         except IOError as e:
             logger.error('Could not update DNS config: %s', e)
         else:
             # python DNS might have global resolver cached in this variable
             # we have to re-initialize it because resolv.conf has changed
-            dns.resolver.reset_default_resolver()
-
-    def __disable_chroot(self):
-        result = ipautil.run(['control', 'bind-chroot'], capture_output=True)
-        self.sstore.backup_state('control', 'bind-chroot', result.output)
-        ipautil.run(['control', 'bind-chroot', 'disabled'])
+            dnsutil.reset_default_resolver()
 
     def __generate_rndc_key(self):
         installutils.check_entropy()
@@ -1321,11 +1312,6 @@ class BindInstance(service.Service):
         if self.is_configured():
             self.print_msg("Unconfiguring %s" % self.service_name)
 
-        running = self.restore_state("running")
-        enabled = self.restore_state("enabled")
-        named_regular_running = self.restore_state("named-regular-running")
-        named_regular_enabled = self.restore_state("named-regular-enabled")
-
         self.dns_backup.clear_records(self.api.Backend.ldap2.isconnected())
 
         try:
@@ -1340,27 +1326,10 @@ class BindInstance(service.Service):
 
         ipautil.rmtree(paths.BIND_LDAP_DNS_IPA_WORKDIR)
 
-        # disabled by default, by ldap_configure()
-        if enabled:
-            self.enable()
-        else:
-            self.disable()
+        self.disable()
+        self.stop()
 
-        value = self.sstore.restore_state('control', 'bind-chroot')
-        if value is not None:
-            ipautil.run(['control', 'bind-chroot', value])
-
-        if running:
-            self.restart()
-        else:
-            self.stop()
-
-        self.named_regular.unmask()
-        if named_regular_enabled:
-            self.named_regular.enable()
-
-        if named_regular_running:
-            self.named_regular.start()
+        self.named_conflict.unmask()
 
         ipautil.remove_file(paths.NAMED_CONF_BAK)
         ipautil.remove_file(paths.NAMED_CUSTOM_CONF)

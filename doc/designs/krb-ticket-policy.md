@@ -27,10 +27,10 @@ these two are assigned the same indicator to represent a brute-force hardened fo
 
 By requiring certain authentication indicators to a user, we can force a user to be authenticated with one of 
 the mechanisms associated with those auth indicators to obtain a ticket.
-By defining a white list of authentication indicators to a service, we can allow a user to use the service 
+By defining an allow list of authentication indicators to a service, we can allow a user to use the service
 only if the user obtained a ticket with at least one of those indicators included.
 
-#### Note
+### Note
 
 For unattended services (services that is a part of the IPA core system), the authentication indicator should not be set, 
 or it may break the whole system. Examples for such services are `HTTP/*` (for webUI and IPA API end-points), 
@@ -91,8 +91,10 @@ where administrators can specify max renew and life for each supported auth indi
 
 ### Ticket lifetime jitter
 
-Ticket lifetimes can be jittered so that renewals / re-issues do not overwhelm the KDC at a certain moment.
-The feature is enabled automatically so that we can avoid triggering an LDAP query on every `AS_REQ` and `TGS_REQ`.
+All TGT lifetimes are varied slightly to avoid overwhelming the KDC with
+simultaneous renewal requests.  Jitter will reduce lifetimes by up to one hour
+from the configured maximum lifetime (per policy).  Significantly shorter
+requested lifetimes will be unaffected.
 
 ## Implementation
 

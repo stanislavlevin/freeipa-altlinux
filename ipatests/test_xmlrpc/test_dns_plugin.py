@@ -686,6 +686,20 @@ class test_dns(Declarative):
 
 
         dict(
+            desc='Try to create a zone w/ a name and name-from-ipa %r' % zone1,
+            command=(
+                'dnszone_add', [zone1], {
+                    'idnssoarname': zone1_rname,
+                    'name_from_ip': revzone1_ip,
+                }
+            ),
+            expected=errors.ValidationError(
+                message=u'invalid \'name-from-ip\': cannot be used when a '
+                        'zone is specified'),
+        ),
+
+
+        dict(
             desc='Retrieve zone %r' % zone1,
             command=('dnszone_show', [zone1], {}),
             expected={
@@ -3317,6 +3331,24 @@ class test_dns(Declarative):
             },
         ),
 
+        dict(
+            desc='Add PTR record in a non-.arpa zone [DNS-SD]',
+            command=(
+                'dnsrecord_add',
+                [zone1, '_http._tcp'],
+                {'ptrrecord': 'home._http._tcp'},
+            ),
+            expected={
+                'value': DNSName('_http._tcp'),
+                'summary': None,
+                'result': {
+                    'dn': DN(('idnsname', '_http._tcp'), zone1_dn),
+                    'idnsname': [DNSName('_http._tcp')],
+                    'ptrrecord': ['home._http._tcp'],
+                    'objectclass': objectclasses.dnsrecord,
+                },
+            },
+        ),
 
         dict(
             desc='Delete zone %r' % zone1,

@@ -36,15 +36,12 @@ import re
 import datetime
 import netaddr
 import time
-import pwd
-import grp
+import textwrap
+import io
 from contextlib import contextmanager
 import locale
 import collections
 import urllib
-
-from dns import resolver, reversename
-from dns.exception import DNSException
 
 import six
 from six.moves import input
@@ -56,6 +53,8 @@ except ImportError:
 
 from ipapython.dn import DN
 from ipaplatform.paths import paths
+from ipaplatform.constants import User, Group
+
 
 logger = logging.getLogger(__name__)
 
@@ -390,7 +389,7 @@ class CalledProcessError(subprocess.CalledProcessError):
 
 def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
         capture_output=False, skip_output=False, cwd=None,
-        runas=None, suplementary_groups=[],
+        runas=None, suplementary_groups=(),
         capture_error=False, encoding=None, redirect_output=False,
         umask=None, nolog_output=False, nolog_error=False):
     """
@@ -418,11 +417,12 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
     :param capture_output: Capture stdout
     :param skip_output: Redirect the output to /dev/null and do not log it
     :param cwd: Current working directory
-    :param runas: Name of a user that the command should be run as. The spawned
-        process will have both real and effective UID and GID set.
-    :param suplementary_groups: List of group names that will be used as
-        suplementary groups for subporcess.
-        The option runas must be specified together with this option.
+    :param runas: Name or User object of a user that the command should be
+        run as. The spawned process will have both real and effective UID and
+        GID set.
+    :param suplementary_groups: List of group names or Group object that will
+        be used as suplementary groups for subporcess. The option runas must
+        be specified together with this option.
     :param capture_error: Capture stderr
     :param nolog_output: do not log stdout even if it is being captured
     :param nolog_error: do not log stderr even if it is being captured
@@ -453,7 +453,7 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
     For backwards compatibility, the return value can also be used as a
     (output, error_output, returncode) triple.
     """
-    assert isinstance(suplementary_groups, list)
+    assert isinstance(suplementary_groups, (tuple, list))
     p_in = None
     p_out = None
     p_err = None
@@ -503,25 +503,26 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
     logger.debug('args=%s', arg_string)
 
     if runas is not None:
-        pent = pwd.getpwnam(runas)
+        runas = User(runas)
+        suplementary_groups = [Group(group) for group in suplementary_groups]
+        suplementary_gids = [group.gid for group in suplementary_groups]
 
-        suplementary_gids = [
-            grp.getgrnam(sgroup).gr_gid for sgroup in suplementary_groups
-        ]
-
-        logger.debug('runas=%s (UID %d, GID %s)', runas,
-                     pent.pw_uid, pent.pw_gid)
+        logger.debug(
+            'runas=%s (UID %d, GID %s)', runas, runas.uid, runas.pgid
+        )
         if suplementary_groups:
-            for group, gid in zip(suplementary_groups, suplementary_gids):
-                logger.debug('suplementary_group=%s (GID %d)', group, gid)
+            for group in suplementary_groups:
+                logger.debug(
+                    'supplementary_group=%s (GID %d)', group, group.gid
+                )
 
     if runas is not None or umask is not None:
         # preexec function is not supported in WSGI environment
         def preexec_fn():
             if runas is not None:
                 os.setgroups(suplementary_gids)
-                os.setregid(pent.pw_gid, pent.pw_gid)
-                os.setreuid(pent.pw_uid, pent.pw_uid)
+                os.setregid(runas.pgid, runas.pgid)
+                os.setreuid(runas.uid, runas.uid)
 
             if umask is not None:
                 os.umask(umask)
@@ -1112,22 +1113,6 @@ def check_port_bindable(port, socket_type=socket.SOCK_STREAM):
         s.close()
 
 
-def reverse_record_exists(ip_address):
-    """
-    Checks if IP address have some reverse record somewhere.
-    Does not care where it points.
-
-    Returns True/False
-    """
-    reverse = reversename.from_address(str(ip_address))
-    try:
-        resolver.query(reverse, "PTR")
-    except DNSException:
-        # really don't care what exception, PTR is simply unresolvable
-        return False
-    return True
-
-
 def config_replace_variables(filepath, replacevars=dict(), appendvars=dict(),
                              removevars=None):
     """
@@ -1464,6 +1449,54 @@ def private_ccache(path=None):
                 pass
 
 
+@contextmanager
+def private_krb5_config(realm, server, dir="/run/ipa"):
+    """Generate override krb5 config file for a trusted domain DC access
+    Provide a context where environment variable KRB5_CONFIG is set
+    with the overlay on top of paths.KRB5_CONF. Overlay's file path
+    is passed to the context in case it is needed for something else
+
+    :param realm: realm of the trusted AD domain
+    :param server: server to override KDC to
+    :param dir: path where to create a temporary krb5.conf overlay
+    """
+    cfg = paths.KRB5_CONF
+    tcfg = None
+    if server:
+        content = textwrap.dedent(u"""
+            [realms]
+               %s = {
+                   kdc = %s
+               }
+            """) % (
+            realm.upper(),
+            server,
+        )
+
+        (fd, tcfg) = tempfile.mkstemp(dir=dir, prefix="krb5conf", text=True)
+
+        with io.open(fd, mode='w', encoding='utf-8') as o:
+            o.write(content)
+        cfg = ":".join([tcfg, cfg])
+
+    original_value = os.environ.get('KRB5_CONFIG', None)
+
+    os.environ['KRB5_CONFIG'] = cfg
+
+    try:
+        yield tcfg
+    except GeneratorExit:
+        pass
+    finally:
+        if original_value is not None:
+            os.environ['KRB5_CONFIG'] = original_value
+        else:
+            os.environ.pop('KRB5_CONFIG', None)
+
+        if tcfg is not None and os.path.exists(tcfg):
+            os.remove(tcfg)
+
+
 if six.PY2:
     def fsdecode(value):
         """
@@ -1647,3 +1680,80 @@ def rmtree(path):
             shutil.rmtree(path)
     except Exception as e:
         logger.error('Error removing %s: %s', path, str(e))
+
+
+def datetime_from_utctimestamp(t, units=1):
+    """
+    Convert a timestamp or a time.struct_time to a datetime.datetime
+    object down to seconds, with UTC timezone
+
+    The conversion is safe for year 2038 problem
+
+    :param t: int or float timestamp in (milli)seconds since UNIX epoch
+              or time.struct_time
+    :param units: normalizing factor for the timestamp
+                  (1 for seconds, 1000 for milliseconds)
+                  defaults to 1
+    :return: datetime.datetime object in UTC timezone
+    """
+    if isinstance(t, time.struct_time):
+        v = int(time.mktime(t))
+    elif isinstance(t, (float, int)):
+        v = int(t)
+    else:
+        raise TypeError(t)
+    epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+    return epoch + datetime.timedelta(seconds=v // units)
+
+
+class Sleeper:
+    """Helper for time.sleep() loop with timeout
+
+    A sleeper object sleeps *sleep* seconds when it is called. Close to its
+    deadline it sleeps shorter to not oversleep the *timeout* deadline. A
+    sleeper object is *True* and returns *True* before it reaches *timeout*
+    deadline. After its deadline a sleeper raises the exception object/class
+    in *raises*. If *raises* is not given, it returns False instead.
+
+    sleep = Sleeper(sleep=1, timeout=60, raises=TimeoutError)
+    while True:
+        do_something()
+        sleep()
+
+    sleep = Sleeper(sleep=0.5, timeout=60)
+    while True:
+        do_something
+        if not sleep():
+            log.info("timeout")
+            break
+
+    longsleep = Sleeper(sleep=1, timeout=sys.maxsize)
+    """
+    multiplier = 2
+
+    def __init__(self, *, sleep, timeout, raises=None):
+        if timeout <= 0:
+            raise ValueError(f"invalid timeout {timeout}")
+        if sleep < 0.01:
+            raise ValueError(f"sleep duration {sleep} is too short.")
+
+        self.timeout = timeout
+        self.sleep = sleep
+        self.raises = raises
+
+        self.deadline = time.monotonic() + self.timeout
+
+    def __bool__(self):
+        return time.monotonic() < self.deadline
+
+    def __call__(self):
+        now = time.monotonic()
+        if now >= self.deadline:
+            if self.raises is not None:
+                raise self.raises
+            else:
+                return False
+        # don't sleep over deadline
+        dur = min(self.deadline - now, self.sleep)
+        time.sleep(dur)
+        return True

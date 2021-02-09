@@ -44,10 +44,11 @@ dist_app_DATA =				\
 	dnssec.ldif			\
 	domainlevel.ldif			\
 	kerberos.ldif			\
-	indices.ldif			\
 	bind.ipa-ext.conf.template		\
 	bind.ipa-options-ext.conf.template	\
 	bind.named.conf.template	\
+	bind.openssl.cnf.template	\
+	bind.openssl.cryptopolicy.cnf.template	\
 	certmap.conf.template		\
 	kdc.conf.template		\
 	kdc_extensions.template		\
@@ -79,7 +80,6 @@ dist_app_DATA =				\
 	uuid.ldif		\
 	modrdn-krbprinc.ldif		\
 	entryusn.ldif			\
-	root-autobind.ldif		\
 	pw-logging-conf.ldif	\
 	sudobind.ldif			\
 	automember.ldif			\
@@ -102,6 +102,12 @@ dist_app_DATA =				\
 	ipaca_default.ini		\
 	ipaca_customize.ini		\
 	ipaca_softhsm2.ini		\
+	pki-acme-configsources.conf.template	\
+	pki-acme-database.conf.template	\
+	pki-acme-engine.conf.template	\
+	pki-acme-issuer.conf.template	\
+	pki-acme-realm.conf.template	\
+	ldbm-tuning.ldif		\
 	$(NULL)
 
 kdcproxyconfdir = $(IPA_SYSCONF_DIR)/kdcproxy

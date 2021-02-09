@@ -9,8 +9,6 @@ import logging
 
 import dns.exception as dnsexception
 import dns.name as dnsname
-import dns.resolver as dnsresolver
-import dns.reversename as dnsreversename
 import os
 import shutil
 import socket
@@ -23,11 +21,12 @@ from pkg_resources import parse_version
 import six
 
 from ipaclient.install.client import check_ldap_conf, sssd_enable_ifp
+import ipaclient.install.timeconf
 from ipalib.install import certstore, sysrestore
 from ipalib.install.kinit import kinit_keytab
-from ipapython import ipaldap, ipautil, ntpmethods
-from ipapython.ntpmethods import TIME_SERVER
+from ipapython import ipaldap, ipautil
 from ipapython.dn import DN
+from ipapython.dnsutil import DNSResolver
 from ipapython.admintool import ScriptError
 from ipapython.ipachangeconf import IPAChangeConf
 from ipaplatform import services
@@ -289,7 +288,7 @@ def check_dns_resolution(host_name, dns_servers):
         logger.error(
             'Could not resolve any DNS server hostname: %s', dns_servers)
         return False
-    resolver = dnsresolver.Resolver()
+    resolver = DNSResolver()
     resolver.nameservers = server_ips
 
     logger.debug('Search DNS server %s (%s) for %s',
@@ -299,7 +298,7 @@ def check_dns_resolution(host_name, dns_servers):
     addresses = set()
     for rtype in 'A', 'AAAA':
         try:
-            result = resolver.query(host_name, rtype)
+            result = resolver.resolve(host_name, rtype)
         except dnsexception.DNSException:
             rrset = []
         else:
@@ -327,8 +326,7 @@ def check_dns_resolution(host_name, dns_servers):
         checked.add(address)
         try:
             logger.debug('Check reverse address %s (%s)', address, host_name)
-            revname = dnsreversename.from_address(address)
-            rrset = resolver.query(revname, 'PTR').rrset
+            rrset = resolver.resolve_address(address).rrset
         except Exception as e:
             logger.debug('Check failed: %s %s', type(e).__name__, e)
             logger.error(
@@ -571,7 +569,9 @@ def check_remote_version(client, local_version):
             "the local version ({})".format(remote_version, local_version))
 
 
-def common_check(no_ntp):
+def common_check(no_ntp, skip_mem_check, setup_ca):
+    if not skip_mem_check:
+        installutils.check_available_memory(ca=setup_ca)
     tasks.check_ipv6_stack_enabled()
     tasks.check_selinux_status()
     check_ldap_conf()
@@ -591,12 +591,12 @@ def common_check(no_ntp):
 
     if not no_ntp:
         try:
-            ntpmethods.check_timedate_services()
-        except ntpmethods.NTPConflictingService as e:
+            ipaclient.install.timeconf.check_timedate_services()
+        except ipaclient.install.timeconf.NTPConflictingService as e:
             print("WARNING: conflicting time&date synchronization service "
-                  "'{svc}' will\nbe disabled in favor of {ts}\n"
-                  .format(svc=e.conflicting_service, ts=TIME_SERVER))
-        except ntpmethods.NTPConfigurationError:
+                  "'{svc}' will\nbe disabled in favor of chronyd\n"
+                  .format(svc=e.conflicting_service))
+        except ipaclient.install.timeconf.NTPConfigurationError:
             pass
 
 
@@ -778,7 +778,7 @@ def promote_check(installer):
     installer._top_dir = tempfile.mkdtemp("ipa")
 
     # check selinux status, http and DS ports, NTP conflicting services
-    common_check(options.no_ntp)
+    common_check(options.no_ntp, options.skip_mem_check, options.setup_ca)
 
     if options.setup_ca and any([options.dirsrv_cert_files,
                                  options.http_cert_files,

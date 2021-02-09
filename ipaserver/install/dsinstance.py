@@ -22,7 +22,6 @@ from __future__ import print_function, absolute_import
 
 import logging
 import shutil
-import pwd
 import os
 import time
 import tempfile
@@ -225,10 +224,13 @@ class DsInstance(service.Service):
     def __common_setup(self):
 
         self.step("creating directory server instance", self.__create_instance)
-        self.step("configure autobind for root", self.__root_autobind)
-        self.step("stopping directory server", self.__stop_instance)
-        self.step("updating configuration in dse.ldif", self.__update_dse_ldif)
-        self.step("starting directory server", self.__start_instance)
+        self.step("tune ldbm plugin", self.__tune_ldbm)
+        if self.config_ldif is not None:
+            self.step("stopping directory server", self.__stop_instance)
+            self.step(
+                "updating configuration in dse.ldif", self.__update_dse_ldif
+            )
+            self.step("starting directory server", self.__start_instance)
         self.step("adding default schema", self.__add_default_schemas)
         self.step("enabling memberof plugin", self.__add_memberof_module)
         self.step("enabling winsync plugin", self.__add_winsync_module)
@@ -544,6 +546,7 @@ class DsInstance(service.Service):
         slapd_options = Slapd2Base(logger)
         slapd_options.set('instance_name', self.serverid)
         slapd_options.set('root_password', self.dm_password)
+        slapd_options.set('self_sign_cert', False)
         slapd_options.verify()
         slapd = slapd_options.collect()
 
@@ -559,25 +562,13 @@ class DsInstance(service.Service):
         sds.create_from_args(general, slapd, backends, None)
 
         # Now create the new domain root object in the format that IPA expects.
-        # Get the instance ....
-
+        # Get the instance and setup LDAPI with root autobind.
         inst = DirSrv(verbose=True, external_log=logger)
         inst.local_simple_allocate(
             serverid=self.serverid,
             ldapuri=ipaldap.get_ldap_uri(realm=self.realm, protocol='ldapi'),
-            password=self.dm_password
         )
-
-        # local_simple_allocate() configures LDAPI but doesn't set up the
-        # DirSrv object to use LDAPI. Modify the DirSrv() object to use
-        # LDAPI with password bind. autobind is not available, yet.
-        inst.ldapi_enabled = 'on'
-        inst.ldapi_socket = paths.SLAPD_INSTANCE_SOCKET_TEMPLATE % (
-            self.serverid
-        )
-        inst.ldapi_autobind = 'off'
-
-        # This actually opens the conn and binds.
+        inst.setup_ldapi()
         inst.open()
 
         try:
@@ -591,6 +582,9 @@ class DsInstance(service.Service):
 
         # Done!
         logger.debug("completed creating DS instance")
+
+    def __tune_ldbm(self):
+        self._ldap_mod("ldbm-tuning.ldif")
 
     def __update_dse_ldif(self):
         """
@@ -610,11 +604,6 @@ class DsInstance(service.Service):
             temp_filename = new_dse_ldif.name
             with open(dse_filename, "r") as input_file:
                 parser = installutils.ModifyLDIF(input_file, new_dse_ldif)
-                parser.replace_value(
-                        'cn=config,cn=ldbm database,cn=plugins,cn=config',
-                        'nsslapd-db-locks',
-                        [b'50000']
-                        )
                 if self.config_ldif:
                     # parse modifications from ldif file supplied by the admin
                     with open(self.config_ldif, "r") as config_ldif:
@@ -629,14 +618,13 @@ class DsInstance(service.Service):
             logger.debug("Failed to clean temporary file: %s", e)
 
     def __add_default_schemas(self):
-        pent = pwd.getpwnam(DS_USER)
         for schema_fname in IPA_SCHEMA_FILES:
             target_fname = schema_dirname(self.serverid) + schema_fname
             shutil.copyfile(
                 os.path.join(paths.USR_SHARE_IPA_DIR, schema_fname),
                 target_fname)
             os.chmod(target_fname, 0o440)    # read access for dirsrv user/group
-            os.chown(target_fname, pent.pw_uid, pent.pw_gid)
+            DS_USER.chown(target_fname)
 
         try:
             shutil.move(schema_dirname(self.serverid) + "05rfc2247.ldif",
@@ -647,7 +635,7 @@ class DsInstance(service.Service):
                 os.path.join(paths.USR_SHARE_IPA_DIR, "05rfc2247.ldif"),
                 target_fname)
             os.chmod(target_fname, 0o440)
-            os.chown(target_fname, pent.pw_uid, pent.pw_gid)
+            DS_USER.chown(target_fname)
         except IOError:
             # Does not apply with newer DS releases
             pass
@@ -667,7 +655,8 @@ class DsInstance(service.Service):
         )
 
     def restart(self, instance_name="", capture_output=True, wait=True):
-        api.Backend.ldap2.disconnect()
+        if api.Backend.ldap2.isconnected():
+            api.Backend.ldap2.disconnect()
         try:
             super(DsInstance, self).restart(
                 instance_name, capture_output=capture_output, wait=wait
@@ -771,13 +760,12 @@ class DsInstance(service.Service):
         self._ldap_mod("repoint-managed-entries.ldif", self.sub_dict)
 
     def configure_systemd_ipa_env(self):
-        pent = pwd.getpwnam(platformconstants.DS_USER)
         template = os.path.join(
             paths.USR_SHARE_IPA_DIR, "ds-ipa-env.conf.template"
         )
         sub_dict = dict(
             KRB5_KTNAME=paths.DS_KEYTAB,
-            KRB5CCNAME=paths.TMP_KRB5CC % pent.pw_uid
+            KRB5CCNAME=paths.TMP_KRB5CC % platformconstants.DS_USER.uid
         )
         conf = ipautil.template_file(template, sub_dict)
 
@@ -1026,7 +1014,7 @@ class DsInstance(service.Service):
         __add_principal('ipa-ldap-delegation-targets', 'ldap', self)
 
     def __create_indices(self):
-        self._ldap_mod("indices.ldif")
+        self._ldap_update(["20-indices.update"])
 
     def __certmap_conf(self):
         write_certmap_conf(self.realm, self.ca_subject)
@@ -1249,14 +1237,6 @@ class DsInstance(service.Service):
         self.start()
 
         return status
-
-    def __root_autobind(self):
-        self._ldap_mod(
-            "root-autobind.ldif",
-            ldap_uri=ipaldap.get_ldap_uri(realm=self.realm, protocol='ldapi'),
-            # must simple bind until auto bind is configured
-            dm_password=self.dm_password
-        )
 
     def __add_sudo_binduser(self):
         self._ldap_mod("sudobind.ldif", self.sub_dict)

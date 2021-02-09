@@ -43,6 +43,9 @@ class DebianPathNamespace(BasePathNamespace):
     NAMED_MANAGED_KEYS_DIR = "/var/cache/bind/dynamic"
     CHRONY_CONF = "/etc/chrony/chrony.conf"
     OPENLDAP_LDAP_CONF = "/etc/ldap/ldap.conf"
+    OPENSSL_DIR = "/usr/lib/ssl"
+    OPENSSL_CERTS_DIR = "/usr/lib/ssl/certs"
+    OPENSSL_PRIVATE_DIR = "/usr/lib/ssl/private"
     ETC_DEBIAN_VERSION = "/etc/debian_version"
     # Old versions of freeipa wrote all trusted certificates to a single
     # file, which is not supported by ca-certificates.
@@ -59,7 +62,7 @@ class DebianPathNamespace(BasePathNamespace):
     SYSCONFIG_IPA_DNSKEYSYNCD = "/etc/default/ipa-dnskeysyncd"
     SYSCONFIG_IPA_ODS_EXPORTER = "/etc/default/ipa-ods-exporter"
     SYSCONFIG_KRB5KDC_DIR = "/etc/default/krb5-kdc"
-    SYSCONFIG_NAMED = "/etc/default/bind9"
+    SYSCONFIG_NAMED = "/etc/default/named"
     SYSCONFIG_NFS = "/etc/default/nfs-common"
     SYSCONFIG_NTPD = "/etc/default/ntp"
     SYSCONFIG_ODS = "/etc/default/opendnssec"
@@ -97,6 +100,7 @@ class DebianPathNamespace(BasePathNamespace):
     IPA_HTTPD_PASSWD_READER = "/usr/lib/ipa/ipa-httpd-pwdreader"
     IPA_PKI_WAIT_RUNNING = "/usr/lib/ipa/ipa-pki-wait-running"
     HTTPD = "/usr/sbin/apache2ctl"
+    FONTS_DIR = "/usr/share/fonts/truetype"
     FONTS_OPENSANS_DIR = "/usr/share/fonts/truetype/open-sans"
     FONTS_FONTAWESOME_DIR = "/usr/share/fonts/truetype/font-awesome"
     VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/krb5kdc/"
@@ -116,6 +120,7 @@ class DebianPathNamespace(BasePathNamespace):
     IPA_CUSTODIA_SOCKET = "/run/apache2/ipa-custodia.sock"
     IPA_CUSTODIA_AUDIT_LOG = '/var/log/ipa-custodia.audit.log'
     IPA_CUSTODIA_HANDLER = "/usr/lib/ipa/custodia"
+    IPA_CUSTODIA_CHECK = "/usr/lib/ipa/ipa-custodia-check"
     WSGI_PREFIX_DIR = "/run/apache2/wsgi"
 
 paths = DebianPathNamespace()

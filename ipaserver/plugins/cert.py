@@ -52,6 +52,7 @@ from ipalib.request import context
 from ipalib import output
 from ipapython import dnsutil, kerberos
 from ipapython.dn import DN
+from ipapython.ipautil import datetime_from_utctimestamp
 from ipaserver.plugins.service import normalize_principal, validate_realm
 from ipaserver.masters import (
     ENABLED_SERVICE, CONFIGURED_SERVICE, is_service_enabled
@@ -254,8 +255,9 @@ def normalize_pkidate(value):
 
 
 def convert_pkidatetime(value):
-    value = datetime.datetime.fromtimestamp(int(value) // 1000)
-    return x509.format_datetime(value)
+    if isinstance(value, str):
+        value = int(value)
+    return x509.format_datetime(datetime_from_utctimestamp(value, units=1000))
 
 
 def normalize_serial_number(num):
@@ -1191,7 +1193,7 @@ def _san_ip_update_reachable(reachable, dnsname, cname_depth):
     """
     fqdn = dnsutil.DNSName(dnsname).make_absolute()
     try:
-        zone = dnsutil.DNSName(resolver.zone_for_name(fqdn))
+        zone = dnsutil.DNSName(dnsutil.zone_for_name(fqdn))
     except resolver.NoNameservers:
         return  # if there's no zone, there are no records
     name = fqdn.relativize(zone)
@@ -1225,7 +1227,7 @@ def _ip_ptr_records(ip):
     """
     rname = dnsutil.DNSName(reversename.from_address(ip))
     try:
-        zone = dnsutil.DNSName(resolver.zone_for_name(rname))
+        zone = dnsutil.DNSName(dnsutil.zone_for_name(rname))
         name = rname.relativize(zone)
         result = api.Command['dnsrecord_show'](zone, name)['result']
     except resolver.NoNameservers:

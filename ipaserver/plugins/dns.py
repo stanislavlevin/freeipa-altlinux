@@ -79,9 +79,15 @@ from ipalib.util import (normalize_zonemgr,
 from ipaplatform import services
 from ipapython.dn import DN
 from ipapython.ipautil import CheckedIPAddress
-from ipapython.dnsutil import check_zone_overlap, DNSZoneAlreadyExists
-from ipapython.dnsutil import DNSName
-from ipapython.dnsutil import related_to_auto_empty_zone
+from ipapython.dnsutil import (
+    check_zone_overlap,
+    DNSName,
+    DNSResolver,
+    DNSZoneAlreadyExists,
+    related_to_auto_empty_zone,
+    resolve,
+    zone_for_name,
+)
 from ipaserver.dns_data_management import (
     IPASystemRecords,
     IPADomainIsNotManagedByIPAError,
@@ -542,7 +548,7 @@ def get_reverse_zone(ipaddr):
     ip = netaddr.IPAddress(str(ipaddr))
     revdns = DNSName(unicode(ip.reverse_dns))
     try:
-        revzone = DNSName(dns.resolver.zone_for_name(revdns))
+        revzone = DNSName(zone_for_name(revdns))
     except dns.resolver.NoNameservers:
         raise errors.NotFound(
             reason=_(
@@ -2136,6 +2142,14 @@ class DNSZoneBase_add(LDAPCreate):
     def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys, **options):
         assert isinstance(dn, DN)
 
+        if options.get('name_from_ip'):
+            zone = _reverse_zone_name(options.get('name_from_ip'))
+            if keys[-1] != DNSName(zone):
+                raise errors.ValidationError(
+                    name='name-from-ip',
+                    error=_("cannot be used when a zone is specified")
+                )
+
         try:
             entry = ldap.get_entry(dn)
         except errors.NotFound:
@@ -3097,10 +3111,11 @@ class dnsrecord(LDAPObject):
                 zone_len = REVERSE_DNS_ZONES[valid_zone]
 
         if not zone_len:
-            allowed_zones = ', '.join([unicode(revzone) for revzone in
-                                       REVERSE_DNS_ZONES])
-            raise errors.ValidationError(name='ptrrecord',
-                    error=unicode(_('Reverse zone for PTR record should be a sub-zone of one the following fully qualified domains: %s') % allowed_zones))
+            # PTR records in zones other than in-addr.arpa and ip6.arpa are
+            # legal, e.g. DNS-SD [RFC6763] uses such records.  If we have
+            # such a record there's nothing more to do.  Otherwise continue
+            # with the ip4/ip6 reverse zone checks below.
+            return
 
         addr_len = len(addr.labels)
 
@@ -3363,7 +3378,7 @@ class dnsrecord(LDAPObject):
         :raises errors.DNSDataMismatch: if data in DNS and LDAP doesn't match
         :raises dns.exception.DNSException: if DNS resolution failed
         '''
-        resolver = dns.resolver.Resolver()
+        resolver = DNSResolver()
         resolver.set_flags(0)  # disable recursion (for NS RR checks)
         max_attempts = int(self.api.env['wait_for_dns'])
         warn_attempts = max_attempts // 2
@@ -3379,9 +3394,9 @@ class dnsrecord(LDAPObject):
                 log_fn = logger.warning
             attempt += 1
             try:
-                dns_answer = resolver.query(dns_name, rdtype,
-                                            dns.rdataclass.IN,
-                                            raise_on_no_answer=False)
+                dns_answer = resolver.resolve(dns_name, rdtype,
+                                              dns.rdataclass.IN,
+                                              raise_on_no_answer=False)
                 dns_rrset = None
                 if rdtype == _NS:
                     # NS records can be in Authority section (sometimes)
@@ -4303,11 +4318,11 @@ class dnsforwardzone(DNSZoneBase):
         ipa_dns_ip = None
         for rdtype in (dns.rdatatype.A, dns.rdatatype.AAAA):
             try:
-                ans = dns.resolver.query(ipa_dns_masters[0], rdtype)
+                ans = resolve(ipa_dns_masters[0], rdtype)
             except dns.exception.DNSException:
                 continue
             else:
-                ipa_dns_ip = str(ans.rrset.items[0])
+                ipa_dns_ip = str(next(iter(ans.rrset.items)))
                 break
 
         if not ipa_dns_ip:

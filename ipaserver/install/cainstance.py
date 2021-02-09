@@ -23,20 +23,21 @@ from __future__ import print_function, absolute_import
 
 import base64
 import binascii
+import enum
 import logging
 
 import dbus
 import ldap
 import os
-import pwd
-import grp
 import re
 import shutil
+import ssl
 import sys
 import syslog
 import time
 import tempfile
 from configparser import RawConfigParser
+from pkg_resources import parse_version
 
 from ipalib import api
 from ipalib import x509
@@ -51,18 +52,16 @@ from ipapython import directivesetter
 from ipapython import dogtag
 from ipapython import ipautil
 from ipapython.certdb import get_ca_nickname
-from ipapython.dn import DN
+from ipapython.dn import DN, RDN
 from ipapython.ipa_log_manager import standard_logging_setup
 from ipaserver.secrets.kem import IPAKEMKeys
 
 from ipaserver.install import certs
 from ipaserver.install import dsinstance
 from ipaserver.install import installutils
-from ipaserver.install import ldapupdate
 from ipaserver.install import replication
 from ipaserver.install import sysupgrade
 from ipaserver.install.dogtaginstance import DogtagInstance, INTERNAL_TOKEN
-from ipaserver.plugins import ldap2
 from ipaserver.masters import ENABLED_SERVICE
 
 logger = logging.getLogger(__name__)
@@ -73,6 +72,10 @@ ADMIN_GROUPS = [
     'Enterprise KRA Administrators',
     'Security Domain Administrators'
 ]
+
+ACME_AGENT_GROUP = 'Enterprise ACME Administrators'
+
+PROFILES_DN = DN(('ou', 'certificateProfiles'), ('ou', 'ca'), ('o', 'ipaca'))
 
 
 def check_ports():
@@ -400,21 +403,34 @@ class CAInstance(DogtagInstance):
                 self.step("creating installation admin user", self.setup_admin)
             self.step("configuring certificate server instance",
                       self.__spawn_instance)
+            # Config file and ACL modifications require either restart or
+            # offline update of Dogtag.
+            self.step("stopping certificate server instance to update CS.cfg",
+                      self.stop_instance)
+            self.step("backing up CS.cfg", self.safe_backup_config)
             self.step("Add ipa-pki-wait-running", self.add_ipa_wait)
             self.step("secure AJP connector", self.secure_ajp_connector)
             self.step("reindex attributes", self.reindex_task)
             self.step("exporting Dogtag certificate store pin",
                       self.create_certstore_passwdfile)
-            self.step("stopping certificate server instance to update CS.cfg",
-                      self.stop_instance)
-            self.step("backing up CS.cfg", self.safe_backup_config)
             self.step("disabling nonces", self.__disable_nonce)
             self.step("set up CRL publishing", self.__enable_crl_publish)
             self.step("enable PKIX certificate path discovery and validation",
                       self.enable_pkix)
+            self.step("authorizing RA to modify profiles",
+                      configure_profiles_acl)
+            self.step("authorizing RA to manage lightweight CAs",
+                      configure_lightweight_ca_acls)
+            self.step("Ensure lightweight CAs container exists",
+                      ensure_lightweight_cas_container)
+            if self.clone and not promote:
+                self.step(
+                    "Ensuring backward compatibility",
+                    self.__dogtag10_migration)
             if promote:
                 self.step("destroying installation admin user",
                           self.teardown_admin)
+            # Materialize config changes and new ACLs
             self.step("starting certificate server instance",
                       self.start_instance)
             if promote:
@@ -433,28 +449,14 @@ class CAInstance(DogtagInstance):
                 else:
                     self.step("importing RA certificate from PKCS #12 file",
                               self.__import_ra_cert)
-
             if not ra_only:
-                self.step("setting audit signing renewal to 2 years", self.set_audit_renewal)
-                self.step("restarting certificate server", self.restart_instance)
                 if not self.clone:
                     self.step("publishing the CA certificate",
                               self.__export_ca_chain)
                     self.step("adding RA agent as a trusted user", self.__create_ca_agent)
-                self.step("authorizing RA to modify profiles", configure_profiles_acl)
-                self.step("authorizing RA to manage lightweight CAs",
-                          configure_lightweight_ca_acls)
-                self.step("Ensure lightweight CAs container exists",
-                          ensure_lightweight_cas_container)
-                if self.clone and not promote:
-                    self.step(
-                        "Ensuring backward compatibility",
-                        self.__dogtag10_migration)
                 self.step("configure certificate renewals", self.configure_renewal)
                 self.step("Configure HTTP to proxy connections",
                           self.http_proxy)
-                # This restart is needed for ACL reload in CA, do not remove it
-                self.step("restarting certificate server", self.restart_instance)
                 self.step("updating IPA configuration", update_ipa_conf)
                 self.step("enabling CA instance", self.__enable_instance)
                 if not promote:
@@ -472,6 +474,8 @@ class CAInstance(DogtagInstance):
 
                 self.step("configuring certmonger renewal for lightweight CAs",
                           self.add_lightweight_ca_tracking_requests)
+                if minimum_acme_support():
+                    self.step("deploying ACME service", self.setup_acme)
 
         if ra_only:
             runtime = None
@@ -531,8 +535,7 @@ class CAInstance(DogtagInstance):
             # so remove the file first
             ipautil.remove_file(paths.TMP_CA_P12)
             shutil.copy(cafile, paths.TMP_CA_P12)
-            pent = pwd.getpwnam(self.service_user)
-            os.chown(paths.TMP_CA_P12, pent.pw_uid, pent.pw_gid)
+            self.service_user.chown(paths.TMP_CA_P12)
 
             self._configure_clone(
                 cfg,
@@ -592,11 +595,10 @@ class CAInstance(DogtagInstance):
 
         config = self._create_spawn_config(cfg)
         self.set_hsm_state(config)
-        pent = pwd.getpwnam(self.service_user)
         with tempfile.NamedTemporaryFile('w') as f:
             config.write(f)
             f.flush()
-            os.fchown(f.fileno(), pent.pw_uid, pent.pw_gid)
+            self.service_user.chown(f.fileno())
 
             self.backup_state('installed', True)
 
@@ -629,6 +631,7 @@ class CAInstance(DogtagInstance):
         with open(conf, 'w') as f:
             os.fchmod(f.fileno(), 0o644)
             f.write('[Service]\n')
+            f.write('Environment=LC_ALL=C.UTF-8\n')
             f.write('ExecStartPost={}\n'.format(paths.IPA_PKI_WAIT_RUNNING))
         tasks.systemd_daemon_reload()
 
@@ -667,11 +670,10 @@ class CAInstance(DogtagInstance):
         db.create_passwd_file(passwd)
 
     def __update_topology(self):
-        ld = ldapupdate.LDAPUpdate(ldapi=True, sub_dict={
-            'SUFFIX': api.env.basedn,
-            'FQDN': self.fqdn,
-        })
-        ld.update([paths.CA_TOPOLOGY_ULDIF])
+        self._ldap_update(
+            [paths.CA_TOPOLOGY_ULDIF],
+            basedir=None,
+        )
 
     def __disable_nonce(self):
         # Turn off Nonces
@@ -680,8 +682,7 @@ class CAInstance(DogtagInstance):
             'ca.enableNonces=false')
         if update_result != 0:
             raise RuntimeError("Disabling nonces failed")
-        pent = pwd.getpwnam(self.service_user)
-        os.chown(self.config, pent.pw_uid, pent.pw_gid)
+        self.service_user.chown(self.config)
 
     def enable_pkix(self):
         directivesetter.set_directive(paths.SYSCONFIG_PKI_TOMCAT,
@@ -718,23 +719,21 @@ class CAInstance(DogtagInstance):
                          "-clcerts", "-nokeys",
                          "-out", paths.RA_AGENT_PEM,
                          "-passin", pwdarg])
-        self.__set_ra_cert_perms()
+        self._set_ra_cert_perms()
 
         self.configure_agent_renewal()
 
     def __import_ra_key(self):
-        self._custodia.import_ra_key()
-        self.__set_ra_cert_perms()
+        import_ra_key(self._custodia)
 
-        self.configure_agent_renewal()
-
-    def __set_ra_cert_perms(self):
+    @staticmethod
+    def _set_ra_cert_perms():
         """
         Sets the correct permissions for the RA_AGENT_PEM, RA_AGENT_KEY files
         """
-        ipaapi_gid = grp.getgrnam(ipalib.constants.IPAAPI_GROUP).gr_gid
+        group = ipalib.constants.IPAAPI_GROUP
         for fname in (paths.RA_AGENT_PEM, paths.RA_AGENT_KEY):
-            os.chown(fname, -1, ipaapi_gid)
+            group.chgrp(fname)
             os.chmod(fname, 0o440)
             tasks.restore_context(fname)
 
@@ -743,10 +742,7 @@ class CAInstance(DogtagInstance):
         Create CA agent, assign a certificate, and add the user to
         the appropriate groups for accessing CA services.
         """
-
-        # connect to CA database
-        conn = ldap2.ldap2(api)
-        conn.connect(autobind=True)
+        conn = api.Backend.ldap2
 
         # create ipara user with RA certificate
         user_dn = DN(('uid', "ipara"), ('ou', 'People'), self.basedn)
@@ -775,8 +771,6 @@ class CAInstance(DogtagInstance):
         group_dn = DN(('cn', 'Registration Manager Agents'), ('ou', 'groups'),
             self.basedn)
         conn.add_entry_to_group(user_dn, group_dn, 'uniqueMember')
-
-        conn.disconnect()
 
     def __get_ca_chain(self):
         try:
@@ -885,7 +879,7 @@ class CAInstance(DogtagInstance):
                 storage="FILE",
                 resubmit_timeout=api.env.certmonger_wait_timeout
             )
-            self.__set_ra_cert_perms()
+            self._set_ra_cert_perms()
 
             self.requestId = str(reqId)
             self.ra_cert = x509.load_certificate_from_file(
@@ -913,8 +907,7 @@ class CAInstance(DogtagInstance):
             os.mkdir(publishdir)
 
         os.chmod(publishdir, 0o775)
-        pent = pwd.getpwnam(self.service_user)
-        os.chown(publishdir, 0, pent.pw_gid)
+        os.chown(publishdir, 0, self.service_user.pgid)
 
         tasks.restore_context(publishdir)
 
@@ -1059,7 +1052,8 @@ class CAInstance(DogtagInstance):
                 ca_iface.Set('org.fedorahosted.certmonger.ca',
                              'external-helper', helper)
 
-    def configure_agent_renewal(self):
+    @staticmethod
+    def configure_agent_renewal():
         try:
             certmonger.start_tracking(
                 certpath=(paths.RA_AGENT_PEM, paths.RA_AGENT_KEY),
@@ -1094,41 +1088,6 @@ class CAInstance(DogtagInstance):
 
         if stop_certmonger:
             services.knownservices.certmonger.stop()
-
-
-    def set_audit_renewal(self):
-        """
-        The default renewal time for the audit signing certificate is
-        six months rather than two years. Fix it. This is BZ 843979.
-        """
-        # Check the default validity period of the audit signing cert
-        # and set it to 2 years if it is 6 months.
-        cert_range = directivesetter.get_directive(
-            paths.CASIGNEDLOGCERT_CFG,
-            'policyset.caLogSigningSet.2.default.params.range',
-            separator='='
-        )
-        logger.debug(
-            'caSignedLogCert.cfg profile validity range is %s', cert_range)
-        if cert_range == "180":
-            directivesetter.set_directive(
-                paths.CASIGNEDLOGCERT_CFG,
-                'policyset.caLogSigningSet.2.default.params.range',
-                '720',
-                quotes=False,
-                separator='='
-            )
-            directivesetter.set_directive(
-                paths.CASIGNEDLOGCERT_CFG,
-                'policyset.caLogSigningSet.2.constraint.params.range',
-                '720',
-                quotes=False,
-                separator='='
-            )
-            logger.debug(
-                'updated caSignedLogCert.cfg profile validity range to 720')
-            return True
-        return False
 
     def is_renewal_master(self, fqdn=None):
         if fqdn is None:
@@ -1207,17 +1166,6 @@ class CAInstance(DogtagInstance):
         backend = 'ipaca'
         suffix = DN(('o', 'ipaca'))
 
-        # replication
-        dn = DN(('cn', str(suffix)), ('cn', 'mapping tree'), ('cn', 'config'))
-        entry = api.Backend.ldap2.make_entry(
-            dn,
-            objectclass=["top", "extensibleObject", "nsMappingTree"],
-            cn=[suffix],
-        )
-        entry['nsslapd-state'] = ['Backend']
-        entry['nsslapd-backend'] = [backend]
-        api.Backend.ldap2.add_entry(entry)
-
         # database
         dn = DN(('cn', 'ipaca'), ('cn', 'ldbm database'), ('cn', 'plugins'),
                 ('cn', 'config'))
@@ -1227,6 +1175,17 @@ class CAInstance(DogtagInstance):
             cn=[backend],
         )
         entry['nsslapd-suffix'] = [suffix]
+        api.Backend.ldap2.add_entry(entry)
+
+        # replication
+        dn = DN(('cn', str(suffix)), ('cn', 'mapping tree'), ('cn', 'config'))
+        entry = api.Backend.ldap2.make_entry(
+            dn,
+            objectclass=["top", "extensibleObject", "nsMappingTree"],
+            cn=[suffix],
+        )
+        entry['nsslapd-state'] = ['Backend']
+        entry['nsslapd-backend'] = [backend]
         api.Backend.ldap2.add_entry(entry)
 
     def __setup_replication(self):
@@ -1293,8 +1252,6 @@ class CAInstance(DogtagInstance):
         sysupgrade.set_upgrade_state('dogtag', LWCA_KEY_RETRIEVAL, True)
 
     def __setup_lightweight_ca_key_retrieval_kerberos(self):
-        pent = pwd.getpwnam(self.service_user)
-
         logger.debug('Creating principal')
         installutils.kadmin_addprinc(self.principal)
         self.suffix = ipautil.realm_to_suffix(self.realm)
@@ -1303,11 +1260,9 @@ class CAInstance(DogtagInstance):
         logger.debug('Retrieving keytab')
         installutils.create_keytab(self.keytab, self.principal)
         os.chmod(self.keytab, 0o600)
-        os.chown(self.keytab, pent.pw_uid, pent.pw_gid)
+        self.service_user.chown(self.keytab)
 
     def __setup_lightweight_ca_key_retrieval_custodia(self):
-        pent = pwd.getpwnam(self.service_user)
-
         logger.debug('Creating Custodia keys')
         custodia_basedn = DN(
             ('cn', 'custodia'), ('cn', 'ipa'), ('cn', 'etc'), api.env.basedn)
@@ -1325,7 +1280,7 @@ class CAInstance(DogtagInstance):
         keystore = IPAKEMKeys({'server_keys': keyfile})
         keystore.generate_keys(self.service_prefix)
         os.chmod(keyfile, 0o600)
-        os.chown(keyfile, pent.pw_uid, pent.pw_gid)
+        self.service_user.chown(keyfile)
 
     def __remove_lightweight_ca_key_retrieval_custodia(self):
         keyfile = os.path.join(paths.PKI_TOMCAT,
@@ -1356,13 +1311,7 @@ class CAInstance(DogtagInstance):
                 "Did not find any lightweight CAs; nothing to track")
 
     def __dogtag10_migration(self):
-        ld = ldapupdate.LDAPUpdate(ldapi=True, sub_dict={
-            'SUFFIX': api.env.basedn,
-            'FQDN': self.fqdn,
-        })
-        ld.update([os.path.join(paths.UPDATES_DIR,
-                                '50-dogtag10-migration.update')]
-                  )
+        self._ldap_update(['50-dogtag10-migration.update'])
 
     def is_crlgen_enabled(self):
         """Check if the local CA instance is generating CRL
@@ -1513,6 +1462,95 @@ class CAInstance(DogtagInstance):
                 logger.debug("Successfully updated CRL")
             api.Backend.ra.override_port = None
 
+    @staticmethod
+    def acme_uid(fqdn: str) -> str:
+        """Compute ACME RA account uid."""
+        return f'acme-{fqdn}'
+
+    def setup_acme(self) -> bool:
+        """
+        Set up ACME service, if needed.
+
+        Return False if ACME service was already set up, otherwise True.
+
+        """
+
+        # ACME LDAP database schema will be added by ipa-server-upgrade.
+        # It is fine if this subroutine runs *before* the schema update,
+        # because we only create the container objects.
+
+        if os.path.isdir(os.path.join(paths.PKI_TOMCAT, 'acme')):
+            logger.debug('ACME service is already deployed')
+            return False
+
+        if not minimum_acme_support():
+            return False
+
+        self._ldap_mod('/usr/share/pki/acme/database/ds/schema.ldif')
+
+        configure_acme_acls()
+
+        # create ACME agent group (if not exist already) and user
+        self.ensure_group(ACME_AGENT_GROUP, "ACME RA accounts")
+        acme_user = self.acme_uid(self.fqdn)
+        result = self.create_user(
+            uid=acme_user,
+            cn=acme_user,
+            sn=acme_user,
+            user_type='agentType',
+            groups=[ACME_AGENT_GROUP],
+            force=True,
+        )
+        if result is None:
+            raise RuntimeError("Failed to add ACME RA user")
+        else:
+            password = result
+
+        # Add the IPA RA user as a member of the ACME admins for
+        # ipa-acme-manage.
+        user_dn = DN(('uid', "ipara"), ('ou', 'People'), self.basedn)
+        conn = api.Backend.ldap2
+        group_dn = DN(('cn', ACME_AGENT_GROUP), ('ou', 'groups'),
+                      self.basedn)
+        try:
+            conn.add_entry_to_group(user_dn, group_dn, 'uniqueMember')
+        except errors.AlreadyGroupMember:
+            pass
+
+        # create container object heirarchy in LDAP
+        ensure_acme_containers()
+
+        # create ACME service instance
+        ipautil.run(['pki-server', 'acme-create'])
+
+        # write configuration files
+        files = [
+            ('pki-acme-configsources.conf.template',
+                paths.PKI_ACME_CONFIGSOURCES_CONF),
+            ('pki-acme-database.conf.template', paths.PKI_ACME_DATABASE_CONF),
+            ('pki-acme-engine.conf.template', paths.PKI_ACME_ENGINE_CONF),
+            ('pki-acme-issuer.conf.template', paths.PKI_ACME_ISSUER_CONF),
+            ('pki-acme-realm.conf.template', paths.PKI_ACME_REALM_CONF),
+        ]
+        sub_dict = dict(
+            FQDN=self.fqdn,
+            USER=acme_user,
+            PASSWORD=password,
+        )
+        for template_name, target in files:
+            template_filename = \
+                os.path.join(paths.USR_SHARE_IPA_DIR, template_name)
+            filled = ipautil.template_file(template_filename, sub_dict)
+            with open(target, 'w') as f:
+                f.write(filled)
+                os.fchmod(f.fileno(), 0o600)
+                self.service_user.chown(f.fileno())
+
+        # deploy ACME Tomcat application
+        ipautil.run(['pki-server', 'acme-deploy'])
+
+        return True
+
 
 def __update_entry_from_cert(make_filter, make_entry, cert):
     """
@@ -1538,18 +1576,14 @@ def __update_entry_from_cert(make_filter, make_entry, cert):
     vacuously successful) otherwise ``False``.
 
     """
-
     base_dn = DN(('o', 'ipaca'))
+    conn = api.Backend.ldap2
 
     attempts = 0
     updated = False
 
     while attempts < 10:
-        conn = None
         try:
-            conn = ldap2.ldap2(api)
-            conn.connect(autobind=True)
-
             db_filter = make_filter(cert)
             try:
                 entries = conn.get_entries(base_dn, conn.SCOPE_SUBTREE, db_filter)
@@ -1583,9 +1617,6 @@ def __update_entry_from_cert(make_filter, make_entry, cert):
         except Exception as e:
             syslog.syslog(syslog.LOG_ERR, 'Caught unhandled exception: %s' % e)
             break
-        finally:
-            if conn is not None and conn.isconnected():
-                conn.disconnect()
 
     if not updated:
         syslog.syslog(syslog.LOG_ERR, 'Update failed.')
@@ -1599,16 +1630,17 @@ def update_people_entry(cert):
     is needed when a certificate is renewed.
     """
     def make_filter(cert):
+        ldap = api.Backend.ldap2
         subject = DN(cert.subject)
         issuer = DN(cert.issuer)
-        return ldap2.ldap2.combine_filters(
+        return ldap.combine_filters(
             [
-                ldap2.ldap2.make_filter({'objectClass': 'inetOrgPerson'}),
-                ldap2.ldap2.make_filter(
+                ldap.make_filter({'objectClass': 'inetOrgPerson'}),
+                ldap.make_filter(
                     {'description': ';%s;%s' % (issuer, subject)},
                     exact=False, trailing_wildcard=False),
             ],
-            ldap2.ldap2.MATCH_ALL)
+            ldap.MATCH_ALL)
 
     def make_entry(cert, entry):
         serial_number = cert.serial_number
@@ -1627,10 +1659,11 @@ def update_authority_entry(cert):
     serial number to match the given cert.
     """
     def make_filter(cert):
+        ldap = api.Backend.ldap2
         subject = str(DN(cert.subject))
-        return ldap2.ldap2.make_filter(
+        return ldap.make_filter(
             dict(objectclass='authority', authoritydn=subject),
-            rules=ldap2.ldap2.MATCH_ALL,
+            rules=ldap.MATCH_ALL,
         )
 
     def make_entry(cert, entry):
@@ -1693,7 +1726,7 @@ def update_ca_renewal_entry(conn, nickname, cert):
 
 def ensure_ldap_profiles_container():
     ensure_entry(
-        DN(('ou', 'certificateProfiles'), ('ou', 'ca'), ('o', 'ipaca')),
+        PROFILES_DN,
         objectclass=['top', 'organizationalUnit'],
         ou=['certificateProfiles'],
     )
@@ -1706,6 +1739,69 @@ def ensure_lightweight_cas_container():
     )
 
 
+def minimum_acme_support(data=None):
+    """
+    ACME with global enable/disable is required.
+
+    This first shipped in dogtag version 10.10.0.
+
+    Parse the version string to determine if the minimum version
+    is met. If parsing fails return False.
+
+    :param: data: The string value to parse for version. Defaults to
+                  reading from the filesystem.
+    """
+    if not data:
+        with open('/usr/share/pki/VERSION', 'r') as fd:
+            data = fd.read()
+
+    groups = re.match(r'.*\nSpecification-Version: ([\d+\.]*)\n.*', data)
+    if groups:
+        version_string = groups.groups(0)[0]
+        minimum_version = parse_version('10.10.0')
+
+        return parse_version(version_string) >= minimum_version
+    else:
+        logger.debug('Unable to parse version from %s', data)
+        return False
+
+
+def ensure_acme_containers():
+    """
+    Create the ACME container objects under ou=acme,o=ipaca if
+    they do not exist.
+
+    """
+    ou_acme = RDN(('ou', 'acme'))
+    rdns = [
+        DN(ou_acme),
+        DN(('ou', 'nonces'), ou_acme),
+        DN(('ou', 'accounts'), ou_acme),
+        DN(('ou', 'orders'), ou_acme),
+        DN(('ou', 'authorizations'), ou_acme),
+        DN(('ou', 'challenges'), ou_acme),
+        DN(('ou', 'certificates'), ou_acme),
+    ]
+
+    extensible_rdns = [
+        DN(('ou', 'config'), ou_acme),
+    ]
+
+    for rdn in rdns:
+        ensure_entry(
+            DN(rdn, ('o', 'ipaca')),
+            objectclass=['top', 'organizationalUnit'],
+            ou=[rdn[0][0].value],
+        )
+
+    for rdn in extensible_rdns:
+        ensure_entry(
+            DN(rdn, ('o', 'ipaca')),
+            objectclass=['top', 'organizationalUnit', 'extensibleObject'],
+            ou=[rdn[0][0].value],
+        )
+
+
 def ensure_entry(dn, **attrs):
     """Ensure an entry exists.
 
@@ -1713,10 +1809,7 @@ def ensure_entry(dn, **attrs):
     otherwise add the entry and return ``True``.
 
     """
-    conn = ldap2.ldap2(api)
-    if not conn.isconnected():
-        conn.connect(autobind=True)
-
+    conn = api.Backend.ldap2
     try:
         conn.get_entry(dn)
         return False
@@ -1725,8 +1818,6 @@ def ensure_entry(dn, **attrs):
         entry = conn.make_entry(dn, **attrs)
         conn.add_entry(entry)
         return True
-    finally:
-        conn.disconnect()
 
 
 def configure_profiles_acl():
@@ -1766,6 +1857,21 @@ def configure_lightweight_ca_acls():
     return __add_acls(new_rules)
 
 
+def configure_acme_acls():
+    """Allow the ACME Agents to modify profiles."""
+
+    # The "execute" operation sounds scary, but it actually only allows
+    # revocation and unrevocation.  See CertResource.java and
+    # base/ca/shared/conf/acl.properties in the Dogtag source.
+
+    new_rules = [
+        'certServer.ca.certs:execute'
+        f':allow (execute) group="{ACME_AGENT_GROUP}"'
+        ':ACME Agents may execute cert operations',
+    ]
+    return __add_acls(new_rules)
+
+
 def __add_acls(new_rules):
     """Add the given Dogtag ACLs.
 
@@ -1797,6 +1903,7 @@ def __get_profile_config(profile_id):
         IPA_CA_RECORD=ipalib.constants.IPA_CA_RECORD,
         CRL_ISSUER='CN=Certificate Authority,o=ipaca',
         SUBJECT_DN_O=dsinstance.DsInstance().find_subject_base(),
+        ACME_AGENT_GROUP=ACME_AGENT_GROUP,
     )
 
     # To work around lack of proper profile upgrade system, we ship
@@ -1816,9 +1923,7 @@ def __get_profile_config(profile_id):
     return ipautil.template_file(profile_filename, sub_dict)
 
 def import_included_profiles():
-    conn = ldap2.ldap2(api)
-    if not conn.isconnected():
-        conn.connect(autobind=True)
+    conn = api.Backend.ldap2
 
     ensure_entry(
         DN(('cn', 'ca'), api.env.basedn),
@@ -1838,7 +1943,6 @@ def import_included_profiles():
             api.env.container_certprofile, api.env.basedn)
         try:
             conn.get_entry(dn)
-            continue  # the profile is present
         except errors.NotFound:
             # profile not found; add it
             entry = conn.make_entry(
@@ -1854,9 +1958,12 @@ def import_included_profiles():
             profile_data = __get_profile_config(profile_id)
             _create_dogtag_profile(profile_id, profile_data, overwrite=True)
             logger.debug("Imported profile '%s'", profile_id)
+        else:
+            logger.info(
+                "Profile '%s' is already in LDAP; skipping", profile_id
+            )
 
     api.Backend.ra_certprofile.override_port = None
-    conn.disconnect()
 
 
 def repair_profile_caIPAserviceCert():
@@ -1910,8 +2017,9 @@ def migrate_profiles_to_ldap():
     and restarting the CA.
 
     The profile might already exist, e.g. if a replica was already
-    upgraded, so this case is ignored.
-
+    upgraded, so this case is ignored. New/missing profiles are imported
+    into LDAP. Existing profiles are not modified. This means that they are
+    neither enabled nor updated when the file on disk has been changed.
     """
     ensure_ldap_profiles_container()
     api.Backend.ra_certprofile.override_port = 8443
@@ -1920,8 +2028,19 @@ def migrate_profiles_to_ldap():
         cs_cfg = f.read()
     match = re.search(r'^profile\.list=(\S*)', cs_cfg, re.MULTILINE)
     profile_ids = match.group(1).split(',')
+    profile_states = _get_ldap_profile_states()
 
     for profile_id in profile_ids:
+        state = profile_states.get(profile_id.lower(), ProfileState.MISSING)
+        if state != ProfileState.MISSING:
+            # We don't reconsile enabled/disabled state.
+            logger.info(
+                "Profile '%s' is already in LDAP and %s; skipping",
+                profile_id, state.value
+            )
+            continue
+
+        logger.info("Migrating profile '%s'", profile_id)
         match = re.search(
             r'^profile\.{}\.config=(\S*)'.format(profile_id),
             cs_cfg, re.MULTILINE
@@ -1954,6 +2073,54 @@ def migrate_profiles_to_ldap():
             _create_dogtag_profile(profile_id, profile_data, overwrite=False)
 
     api.Backend.ra_certprofile.override_port = None
+
+
+class ProfileState(enum.Enum):
+    MISSING = "missing"
+    ENABLED = "enabled"
+    DISABLED = "disabled"
+
+
+def _get_ldap_profile_states():
+    """Get LDAP profile states
+
+    The function directly access LDAP for performance reasons. It's much
+    faster than Dogtag's REST API and it's easier to check profiles for all
+    subsystems.
+
+    :return: mapping of lowercase profile id to state enum member
+    """
+    conn = api.Backend.ldap2
+    entries = conn.get_entries(
+        base_dn=PROFILES_DN,
+        scope=conn.SCOPE_SUBTREE,
+        filter="(objectClass=certProfile)",
+        attrs_list=["cn", "certProfileConfig"]
+    )
+    results = {}
+    for entry in entries:
+        single = entry.single_value
+        cn = single["cn"]
+        try:
+            cfg = single["certProfileConfig"]
+        except (ValueError, KeyError):
+            # certProfileConfig is neither mandatory nor single value
+            # skip entries with incomplete configuration
+            state = ProfileState.MISSING
+        else:
+            if isinstance(cfg, bytes):
+                # some profile configurations are marked as binary
+                cfg = cfg.decode("utf-8")
+            for line in cfg.split("\n"):
+                if line.lower() == "enable=true":
+                    state = ProfileState.ENABLED
+                    break
+            else:
+                state = ProfileState.DISABLED
+
+        results[cn.lower()] = state
+
+    return results
 
 
 def _create_dogtag_profile(profile_id, profile_data, overwrite):
@@ -2088,19 +2255,52 @@ def add_lightweight_ca_tracking_requests(lwcas):
                 'already tracking certificate "%s"', nickname)
 
 
-def update_ipa_conf():
+def update_ipa_conf(ca_host=None):
     """
     Update IPA configuration file to ensure that RA plugins are enabled and
-    that CA host points to localhost
+    that CA host points to specified server (or localhost if ca_host=None).
     """
     parser = RawConfigParser()
     parser.read(paths.IPA_DEFAULT_CONF)
     parser.set('global', 'enable_ra', 'True')
     parser.set('global', 'ra_plugin', 'dogtag')
     parser.set('global', 'dogtag_version', '10')
-    parser.remove_option('global', 'ca_host')
+    if ca_host is None:
+        parser.remove_option('global', 'ca_host')
+    else:
+        parser.set('global', 'ca_host', ca_host)
     with open(paths.IPA_DEFAULT_CONF, 'w') as f:
         parser.write(f)
+
+
+def import_ra_key(custodia):
+    custodia.import_ra_key()
+    CAInstance._set_ra_cert_perms()
+    CAInstance.configure_agent_renewal()
+
+
+def check_ipa_ca_san(cert):
+    """
+    Test whether the certificate has an ipa-ca SAN
+
+    :param cert: x509.IPACertificate
+
+    This SAN is necessary for ACME.
+
+    The caller is responsible for initializing the api.
+
+    On success returns None, on failure raises ValidationError
+    """
+    expect = f'{ipalib.constants.IPA_CA_RECORD}.' \
+             f'{ipautil.format_netloc(api.env.domain)}'
+
+    try:
+        cert.match_hostname(expect)
+    except ssl.CertificateError:
+        raise errors.ValidationError(
+            name='certificate',
+            error='Does not have a \'{}\' SAN'.format(expect)
+        )
 
 
 if __name__ == "__main__":

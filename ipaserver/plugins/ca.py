@@ -35,20 +35,22 @@ certificate to be revoked and its private key deleted.
 """) + _("""
 EXAMPLES:
 """) + _("""
-  Create new CA, subordinate to the IPA CA.
+  Create new CA, subordinate to the IPA CA (requires permission
+  "System: Add CA"):
 
     ipa ca-add puppet --desc "Puppet" \\
         --subject "CN=Puppet CA,O=EXAMPLE.COM"
 """) + _("""
-  Disable a CA.
+  Disable a CA (requires permission "System: Modify CA"):
 
     ipa ca-disable puppet
 """) + _("""
-  Re-enable a CA.
+  Re-enable a CA (requires permission "System: Modify CA"):
 
     ipa ca-enable puppet
 """) + _("""
-  Delete a CA.
+  Delete a CA (requires permission "System: Delete CA"; also requires
+  CA to be disabled first):
 
     ipa ca-del puppet
 """)
@@ -321,7 +323,7 @@ class ca_add(LDAPCreate):
 
 @register()
 class ca_del(LDAPDelete):
-    __doc__ = _('Delete a CA.')
+    __doc__ = _('Delete a CA (must be disabled first).')
 
     msg_summary = _('Deleted CA "%(value)s"')
 
@@ -342,7 +344,12 @@ class ca_del(LDAPDelete):
 
         ca_id = self.api.Command.ca_show(keys[0])['result']['ipacaid'][0]
         with self.api.Backend.ra_lightweight_ca as ca_api:
-            ca_api.disable_ca(ca_id)
+            data = ca_api.read_ca(ca_id)
+            if data['enabled']:
+                raise errors.ProtectedEntryError(
+                    label=_("CA"),
+                    key=keys[0],
+                    reason=_("Must be disabled first"))
             ca_api.delete_ca(ca_id)
 
         return dn

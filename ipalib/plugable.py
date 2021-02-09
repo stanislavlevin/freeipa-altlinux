@@ -518,14 +518,17 @@ class API(ReadOnly):
         level = logging.INFO
         if self.env.debug:  # pylint: disable=using-constant-test
             level = logging.DEBUG
-        try:
-            handler = logging.FileHandler(self.env.log)
-        except IOError as e:
-            logger.error('Cannot open log file %r: %s', self.env.log, e)
-            return
-        handler.setLevel(level)
-        handler.setFormatter(ipa_log_manager.Formatter(LOGGING_FORMAT_FILE))
-        root_logger.addHandler(handler)
+        if self.env.log is not None:
+            try:
+                handler = logging.FileHandler(self.env.log)
+            except IOError as e:
+                logger.error('Cannot open log file %r: %s', self.env.log, e)
+            else:
+                handler.setLevel(level)
+                handler.setFormatter(
+                    ipa_log_manager.Formatter(LOGGING_FORMAT_FILE)
+                )
+                root_logger.addHandler(handler)
 
     def build_global_parser(self, parser=None, context=None):
         """
@@ -597,13 +600,18 @@ class API(ReadOnly):
             assert type(options.env) is list
             for item in options.env:
                 try:
-                    (key, value) = item.split('=', 1)
+                    values = item.split('=', 1)
                 except ValueError:
                     # FIXME: this should raise an IPA exception with an
                     # error code.
                     # --Jason, 2008-10-31
                     pass
-                overrides[str(key.strip())] = value.strip()
+                if len(values) == 2:
+                    (key, value) = values
+                    overrides[str(key.strip())] = value.strip()
+                else:
+                    raise errors.OptionError(_('Unable to parse option {item}'
+                                               .format(item=item)))
         for key in ('conf', 'debug', 'verbose', 'prompt_all', 'interactive',
             'fallback', 'delegate'):
             value = getattr(options, key, None)

@@ -35,13 +35,57 @@ import textwrap
 
 from subprocess import CalledProcessError
 
+from ipaplatform.paths import paths
 from ipatests.test_integration.base import IntegrationTest
+from ipatests.pytest_ipa.integration.firewall import Firewall
 from ipatests.pytest_ipa.integration import tasks
 
 logger = logging.getLogger(__name__)
 
 EPN_PKG = ["*ipa-client-epn"]
 
+SMTP_CLIENT_CERT = os.path.join(paths.OPENSSL_CERTS_DIR, "smtp_client.pem")
+SMTP_CLIENT_KEY = os.path.join(paths.OPENSSL_PRIVATE_DIR, "smtp_client.key")
+SMTP_CLIENT_KEY_PASS = "Secret123"
+
+SMTPD_KEY = os.path.join(paths.OPENSSL_PRIVATE_DIR, "postfix.key")
+SMTPD_CERT = os.path.join(paths.OPENSSL_CERTS_DIR, "postfix.pem")
+
+DEFAULT_EPN_CONF = textwrap.dedent(
+    """\
+    [global]
+    """
+)
+
+USER_EPN_CONF = DEFAULT_EPN_CONF + textwrap.dedent(
+    """\
+    smtp_user={user}
+    smtp_password={password}
+    """
+)
+
+STARTTLS_EPN_CONF = USER_EPN_CONF + textwrap.dedent(
+    """\
+    smtp_server={server}
+    smtp_security=starttls
+    """
+)
+
+SSL_EPN_CONF = USER_EPN_CONF + textwrap.dedent(
+    """\
+    smtp_server={server}
+    smtp_port=465
+    smtp_security=ssl
+    """
+)
+
+CLIENT_CERT_EPN_CONF = textwrap.dedent(
+    """\
+    smtp_client_cert={client_cert}
+    smtp_client_key={client_key}
+    smtp_client_key_pass={client_key_pass}
+    """
+)
 
 def datetime_to_generalized_time(dt):
     """Convert datetime to LDAP_GENERALIZED_TIME_FORMAT
@@ -92,6 +136,14 @@ def configure_postfix(host, realm):
     postconf(host, 'broken_sasl_auth_clients = yes')
     postconf(host, 'smtpd_sasl_authenticated_header = yes')
     postconf(host, 'smtpd_sasl_local_domain = %s' % realm)
+    # TLS will not be used
+    postconf(host, 'smtpd_tls_security_level = none')
+
+    # disable procmail if exists, make use of default local(8) delivery agent
+    postconf(host, "mailbox_command=")
+
+    # listen on all active interfaces
+    postconf(host, "inet_interfaces = all")
 
     host.run_command(["systemctl", "restart", "saslauthd"])
 
@@ -108,11 +160,10 @@ def configure_starttls(host):
        Depends on configure_postfix() being executed first.
     """
 
-    host.run_command(r'rm -f /etc/pki/tls/private/postfix.key')
-    host.run_command(r'rm -f /etc/pki/tls/certs/postfix.pem')
+    host.run_command(["rm", "-f", SMTPD_KEY, SMTPD_CERT])
     host.run_command(["ipa-getcert", "request",
-                      "-f", "/etc/pki/tls/certs/postfix.pem",
-                      "-k", "/etc/pki/tls/private/postfix.key",
+                      "-f", SMTPD_CERT,
+                      "-k", SMTPD_KEY,
                       "-K", "smtp/%s" % host.hostname,
                       "-D", host.hostname,
                       "-O", "postfix",
@@ -123,10 +174,39 @@ def configure_starttls(host):
                       ])
     postconf(host, 'smtpd_tls_loglevel = 1')
     postconf(host, 'smtpd_tls_auth_only = yes')
-    postconf(host, 'smtpd_tls_key_file = /etc/pki/tls/private/postfix.key')
-    postconf(host, 'smtpd_tls_cert_file = /etc/pki/tls/certs/postfix.pem')
+    postconf(host, "smtpd_tls_key_file = {}".format(SMTPD_KEY))
+    postconf(host, "smtpd_tls_cert_file = {}".format(SMTPD_CERT))
     postconf(host, 'smtpd_tls_received_header = yes')
     postconf(host, 'smtpd_tls_session_cache_timeout = 3600s')
+    # announce STARTTLS support to remote SMTP clients, not require
+    postconf(host, 'smtpd_tls_security_level = may')
+
+    host.run_command(["systemctl", "restart", "postfix"])
+
+
+def configure_ssl_client_cert(host):
+    """Obtain a TLS cert for the SMTP client and configure postfix for client
+       certificate verification.
+
+       Depends on configure_starttls().
+    """
+    host.run_command(["rm", "-f", SMTP_CLIENT_KEY, SMTP_CLIENT_CERT])
+
+    host.run_command(["ipa-getcert", "request",
+                      "-f", SMTP_CLIENT_CERT,
+                      "-k", SMTP_CLIENT_KEY,
+                      "-K", "smtp_client/%s" % host.hostname,
+                      "-D", host.hostname,
+                      "-P", "Secret123",
+                      "-w",
+                      ])
+
+    # mandatory TLS encryption
+    postconf(host, "smtpd_tls_security_level = encrypt")
+    # require a trusted remote SMTP client certificate
+    postconf(host, "smtpd_tls_req_ccert = yes")
+    # CA certificates of root CAs trusted to sign remote SMTP client cert
+    postconf(host, f"smtpd_tls_CAfile = {paths.IPA_CA_CRT}")
 
     host.run_command(["systemctl", "restart", "postfix"])
 
@@ -214,6 +294,7 @@ class TestEPN(IntegrationTest):
         #   doesn't know about.
         # - Adds a class variable, pkg, containing the package name of
         #   the downloaded *ipa-client-epn rpm.
+        hosts = [cls.master, cls.clients[0]]
         tasks.uninstall_packages(cls.clients[0],EPN_PKG)
         pkgdir = tasks.download_packages(cls.clients[0], EPN_PKG)
         pkg = cls.clients[0].run_command(r'ls -1 {}'.format(pkgdir))
@@ -223,20 +304,20 @@ class TestEPN(IntegrationTest):
                                     '/tmp'])
         cls.clients[0].run_command(r'rm -rf {}'.format(pkgdir))
 
-        tasks.install_packages(cls.master, EPN_PKG)
-        tasks.install_packages(cls.master, ["postfix"])
-        tasks.install_packages(cls.clients[0], EPN_PKG)
-        tasks.install_packages(cls.clients[0], ["postfix"])
-        for host in (cls.master, cls.clients[0]):
+        for host in hosts:
+            tasks.install_packages(host, EPN_PKG + ["postfix"])
             try:
                 tasks.install_packages(host, ["cyrus-sasl"])
             except Exception:
                 # the package is likely already installed
                 pass
+
         tasks.install_master(cls.master, setup_dns=True)
         tasks.install_client(cls.master, cls.clients[0])
-        configure_postfix(cls.master, cls.master.domain.realm)
-        configure_postfix(cls.clients[0], cls.master.domain.realm)
+        for host in hosts:
+            configure_postfix(host, cls.master.domain.realm)
+            Firewall(host).enable_services(["smtp", "smtps"])
+
 
     @classmethod
     def uninstall(cls, mh):
@@ -246,10 +327,20 @@ class TestEPN(IntegrationTest):
         tasks.uninstall_packages(cls.clients[0], EPN_PKG)
         tasks.uninstall_packages(cls.clients[0], ["postfix"])
         cls.master.run_command(r'rm -f /etc/postfix/smtp.keytab')
-        cls.master.run_command(r'getcert stop-tracking -f '
-                               '/etc/pki/tls/certs/postfix.pem')
-        cls.master.run_command(r'rm -f /etc/pki/tls/private/postfix.key')
-        cls.master.run_command(r'rm -f /etc/pki/tls/certs/postfix.pem')
+
+        for cert in [SMTPD_CERT, SMTP_CLIENT_CERT]:
+            cls.master.run_command(["getcert", "stop-tracking", "-f", cert])
+
+        cls.master.run_command(
+            [
+                "rm",
+                "-f",
+                SMTPD_CERT,
+                SMTPD_KEY,
+                SMTP_CLIENT_CERT,
+                SMTP_CLIENT_KEY,
+            ]
+        )
 
     @pytest.mark.skip_if_platform(
         "debian", reason="Cannot check installed packages using RPM"
@@ -267,7 +358,7 @@ class TestEPN(IntegrationTest):
         assert epn_conf in cmd1.stdout_text
         assert epn_template in cmd1.stdout_text
         cmd2 = self.master.run_command(["sha256sum", epn_conf])
-        ck = "192481b52fb591112afd7b55b12a44c6618fdbc7e05a3b1866fd67ec579c51df"
+        ck = "9977d846539d4945900bd04bae25bf746ac75fb561d3769014002db04e1790b8"
         assert cmd2.stdout_text.find(ck) == 0
 
     def test_EPN_connection_refused(self):
@@ -284,15 +375,51 @@ class TestEPN(IntegrationTest):
             stderr_text
         assert rc > 0
 
+    def test_EPN_no_security_downgrade_starttls(self):
+        """Configure postfix without starttls and test no auth happens
+        """
+        epn_conf = STARTTLS_EPN_CONF.format(
+            server=self.master.hostname,
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+        )
+        self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
+
+        (unused, stderr_text, rc) = self._check_epn_output(
+            self.master, mailtest=True,
+            raiseonerr=False, validatejson=False
+        )
+        expected_msg = "IPA-EPN: Unable to create an encrypted session to"
+        assert expected_msg in stderr_text
+        assert rc > 0
+
+    def test_EPN_no_security_downgrade_tls(self):
+        """Configure postfix without tls and test no auth happens
+        """
+        epn_conf = SSL_EPN_CONF.format(
+            server=self.master.hostname,
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+        )
+        self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
+
+        (unused, stderr_text, rc) = self._check_epn_output(
+            self.master, mailtest=True,
+            raiseonerr=False, validatejson=False
+        )
+        expected_msg = (
+            "IPA-EPN: Could not connect to the configured SMTP "
+            "server"
+        )
+        assert expected_msg in stderr_text
+        assert rc > 0
+
     def test_EPN_smoketest_1(self):
         """No users except admin. Check --dry-run output.
            With the default configuration, the result should be an empty list.
            Also check behavior on master and client alike.
         """
-        epn_conf = textwrap.dedent('''
-            [global]
-        ''')
-        self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
+        self.master.put_file_contents('/etc/ipa/epn.conf', DEFAULT_EPN_CONF)
         # check EPN on client (LDAP+GSSAPI)
         (stdout_text, unused, _unused) = self._check_epn_output(
             self.clients[0], dry_run=True
@@ -322,8 +449,10 @@ class TestEPN(IntegrationTest):
     @pytest.fixture
     def cleanupmail(self):
         """Cleanup any existing mail that has been sent."""
+        cmd = ["rm", "-f"]
         for i in range(30):
-            self.master.run_command(["rm", "-f", "/var/mail/user%d" % i])
+            cmd.append("/var/mail/user%d" % i)
+        self.master.run_command(cmd)
 
     def test_EPN_smoketest_2(self, cleanupusers):
         """Add a user without password.
@@ -511,12 +640,10 @@ class TestEPN(IntegrationTest):
     def test_EPN_authenticated(self, cleanupmail):
         """Enable authentication and test that mail is delivered
         """
-        epn_conf = textwrap.dedent('''
-            [global]
-            smtp_user={user}
-            smtp_password={password}
-        '''.format(user=self.master.config.admin_name,
-                   password=self.master.config.admin_password))
+        epn_conf = USER_EPN_CONF.format(
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+        )
         self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
 
         tasks.ipa_epn(self.master)
@@ -550,14 +677,18 @@ class TestEPN(IntegrationTest):
 
            Using a non-expired user here, user2, to receive the result.
         """
-        epn_conf = textwrap.dedent('''
-            [global]
-            smtp_user={user}
-            smtp_password={password}
-            smtp_admin=user2@{domain}
-        '''.format(user=self.master.config.admin_name,
-                   password=self.master.config.admin_password,
-                   domain=self.master.domain.name))
+        epn_conf = (
+            USER_EPN_CONF
+            + textwrap.dedent(
+                """\
+                smtp_admin=user2@{domain}
+                """
+            )
+        ).format(
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+            domain=self.master.domain.name,
+        )
         self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
 
         tasks.ipa_epn(self.master, mailtest=True)
@@ -576,13 +707,11 @@ class TestEPN(IntegrationTest):
     def test_EPN_starttls(self, cleanupmail):
         """Configure with starttls and test delivery
         """
-        epn_conf = textwrap.dedent('''
-            [global]
-            smtp_user={user}
-            smtp_password={password}
-            smtp_security=starttls
-        '''.format(user=self.master.config.admin_name,
-                   password=self.master.config.admin_password))
+        epn_conf = STARTTLS_EPN_CONF.format(
+            server=self.master.hostname,
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+        )
         self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
         configure_starttls(self.master)
 
@@ -594,14 +723,11 @@ class TestEPN(IntegrationTest):
     def test_EPN_ssl(self, cleanupmail):
         """Configure with ssl and test delivery
         """
-        epn_conf = textwrap.dedent('''
-            [global]
-            smtp_user={user}
-            smtp_password={password}
-            smtp_port=465
-            smtp_security=ssl
-        '''.format(user=self.master.config.admin_name,
-                   password=self.master.config.admin_password))
+        epn_conf = SSL_EPN_CONF.format(
+            server=self.master.hostname,
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+        )
         self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
         configure_ssl(self.master)
 
@@ -610,22 +736,67 @@ class TestEPN(IntegrationTest):
             validate_mail(self.master, i,
                           "Hi test user,\nYour login entry user%d is going" % i)
 
+    def test_EPN_ssl_client_cert(self, cleanupmail):
+        """Configure with ssl + client certificate and test delivery
+        """
+        epn_conf = (SSL_EPN_CONF + CLIENT_CERT_EPN_CONF).format(
+            server=self.master.hostname,
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+            client_cert=SMTP_CLIENT_CERT,
+            client_key=SMTP_CLIENT_KEY,
+            client_key_pass=SMTP_CLIENT_KEY_PASS,
+        )
+        self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
+        configure_ssl_client_cert(self.master)
+
+        tasks.ipa_epn(self.master)
+        for i in self.notify_ttls:
+            validate_mail(
+                self.master,
+                i,
+                "Hi test user,\nYour login entry user%d is going" % i
+            )
+
+    def test_EPN_starttls_client_cert(self, cleanupmail):
+        """Configure with starttls + client certificate and test delivery
+        """
+        epn_conf = (STARTTLS_EPN_CONF + CLIENT_CERT_EPN_CONF).format(
+            server=self.master.hostname,
+            user=self.master.config.admin_name,
+            password=self.master.config.admin_password,
+            client_cert=SMTP_CLIENT_CERT,
+            client_key=SMTP_CLIENT_KEY,
+            client_key_pass=SMTP_CLIENT_KEY_PASS,
+        )
+        self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
+
+        tasks.ipa_epn(self.master)
+        for i in self.notify_ttls:
+            validate_mail(
+                self.master,
+                i,
+                "Hi test user,\nYour login entry user%d is going" % i
+            )
+
     def test_EPN_delay_config(self, cleanupmail):
         """Test the smtp_delay configuration option
         """
-        epn_conf = textwrap.dedent('''
-            [global]
+        epn_conf = DEFAULT_EPN_CONF + textwrap.dedent(
+            """\
             smtp_delay=A
-        ''')
+            """
+        )
         self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
 
         result = tasks.ipa_epn(self.master, raiseonerr=False)
         assert "could not convert string to float: 'A'" in result.stderr_text
 
-        epn_conf = textwrap.dedent('''
-            [global]
+        epn_conf = DEFAULT_EPN_CONF + textwrap.dedent(
+            """\
             smtp_delay=-1
-        ''')
+            """
+        )
         self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
         result = tasks.ipa_epn(self.master, raiseonerr=False)
         assert "smtp_delay cannot be less than zero" in result.stderr_text
@@ -635,10 +806,7 @@ class TestEPN(IntegrationTest):
            It also doesn't by default have an e-mail address
            Check --dry-run output.
         """
-        epn_conf = textwrap.dedent('''
-            [global]
-        ''')
-        self.master.put_file_contents('/etc/ipa/epn.conf', epn_conf)
+        self.master.put_file_contents('/etc/ipa/epn.conf', DEFAULT_EPN_CONF)
         self.master.run_command(
             ['ipa', 'user-mod', 'admin', '--password-expiration',
              datetime_to_generalized_time(

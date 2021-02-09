@@ -4,20 +4,22 @@
 # David Kreitschmann <david@kreitschmann.de>, 2016. #zanata
 # Martin Bašti <mbasti@redhat.com>, 2016. #zanata
 # Paul Ritter <paul-ritter@gmx.net>, 2018. #zanata
+# Alexander Bokovoy <abokovoy@redhat.com>, 2021.
 msgid ""
 msgstr ""
 "Project-Id-Version: freeipa 4.9.0.dev201908140712+gitc9938e3d8\n"
 "Report-Msgid-Bugs-To: https://pagure.io/freeipa/new_issue\n"
-"POT-Creation-Date: 2020-06-10 22:17+0300\n"
-"PO-Revision-Date: 2019-11-11 10:25+0000\n"
-"Last-Translator: Copied by Zanata <copied-by-zanata@zanata.org>\n"
-"Language-Team: German\n"
+"POT-Creation-Date: 2021-01-27 10:37+0200\n"
+"PO-Revision-Date: 2021-01-27 07:52+0000\n"
+"Last-Translator: Alexander Bokovoy <abokovoy@redhat.com>\n"
+"Language-Team: German <https://translate.fedoraproject.org/projects/freeipa/"
+"master/de/>\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1)\n"
-"X-Generator: Zanata 4.6.2\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: Weblate 4.4.2\n"
 
 msgid ""
 "\n"
@@ -432,13 +434,6 @@ msgstr "(siehe RFC %s für Details)"
 
 msgid "7 is not a valid revocation reason"
 msgstr "7 ist kein gültiger Grund für einen Widerruf."
-
-msgid ""
-"<i class=\"fa fa-info-circle\"></i> <strong>One-Time-Password(OTP):</strong> "
-"Generate new OTP code for each OTP field."
-msgstr ""
-"<i class=\"fa fa-info-circle\"></i> <strong>Einmalpasswort(OTP):</strong> "
-"Generieren Sie einen OTP-Code für jedes OTP-Feld."
 
 msgid "A comma-separated list of fields to search in when searching for groups"
 msgstr ""
@@ -1890,7 +1885,7 @@ msgid "Generate a random user password"
 msgstr "Ein zufälliges Benutzerpasswort erzeugen"
 
 msgid "Get"
-msgstr "Hollen"
+msgstr "Abrufen"
 
 msgid "Granting privilege to roles"
 msgstr "Gebe Berechtigung den Rollen"
@@ -2782,15 +2777,6 @@ msgstr "Eines von »group«, »permission« oder »self« wird benötigt"
 msgid "One time password commands"
 msgstr "Einmalpasswort Befehle"
 
-msgid "One-Time-Password"
-msgstr "Einmalpasswort"
-
-msgid "One-Time-Password Not Present"
-msgstr "Einmalpasswort nicht vorhanden"
-
-msgid "One-Time-Password Present"
-msgstr "Einmalpasswort festgelegt"
-
 msgid "Only one value is allowed"
 msgstr "Nur ein Wert ist erlaubt"
 
@@ -2886,9 +2872,6 @@ msgstr "Passwortablauf"
 
 msgid "Password history size"
 msgstr "Größe der Passworthistorie"
-
-msgid "Password or Password+One-Time-Password"
-msgstr "Passwort oder Passwort+Einmalpasswort"
 
 msgid "Password plugin features"
 msgstr "Passwort-Plugin-Funktionen"
@@ -3190,9 +3173,6 @@ msgstr "Zurücksetzen"
 msgid "Reset OTP"
 msgstr "OTP zurücksetzen"
 
-msgid "Reset One-Time-Password"
-msgstr "Einmalpasswort zurücksetzen"
-
 msgid "Reset Password"
 msgstr "Passwort zurücksetzen"
 
@@ -3493,9 +3473,6 @@ msgstr "Setzen"
 
 msgid "Set OTP"
 msgstr "OTP setzen"
-
-msgid "Set One-Time-Password"
-msgstr "Einmalpasswort setzen"
 
 msgid "Set SSH key"
 msgstr "SSH Schlüssel speichern"

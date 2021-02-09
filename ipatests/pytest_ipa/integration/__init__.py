@@ -45,11 +45,13 @@ CLASS_LOGFILES = [
     paths.VAR_LOG_DIRSRV,
     # IPA install logs
     paths.IPASERVER_INSTALL_LOG,
+    paths.IPASERVER_ADTRUST_INSTALL_LOG,
+    paths.IPASERVER_DNS_INSTALL_LOG,
+    paths.IPASERVER_KRA_INSTALL_LOG,
     paths.IPACLIENT_INSTALL_LOG,
     paths.IPAREPLICA_INSTALL_LOG,
     paths.IPAREPLICA_CONNCHECK_LOG,
     paths.IPAREPLICA_CA_INSTALL_LOG,
-    paths.IPASERVER_KRA_INSTALL_LOG,
     paths.IPA_CUSTODIA_AUDIT_LOG,
     paths.IPACLIENTSAMBA_INSTALL_LOG,
     paths.IPACLIENTSAMBA_UNINSTALL_LOG,
@@ -62,6 +64,8 @@ CLASS_LOGFILES = [
     # IPA backup and restore logs
     paths.IPARESTORE_LOG,
     paths.IPABACKUP_LOG,
+    # EPN log
+    paths.IPAEPN_LOG,
     # kerberos related logs
     paths.KADMIND_LOG,
     paths.KRB5KDC_LOG,
@@ -76,6 +80,9 @@ CLASS_LOGFILES = [
     # system
     paths.RESOLV_CONF,
     paths.HOSTS,
+    # IPA renewal lock
+    paths.IPA_RENEWAL_LOCK,
+    paths.LETS_ENCRYPT_LOG
 ]
 
 

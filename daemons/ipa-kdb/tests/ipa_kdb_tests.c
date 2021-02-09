@@ -70,7 +70,11 @@ struct test_ctx {
 #define FLAT_NAME "MYDOM"
 #define DOM_SID "S-1-5-21-1-2-3"
 #define DOM_SID_TRUST "S-1-5-21-4-5-6"
-#define BLACKLIST_SID "S-1-5-1"
+#define BLOCKLIST_SID "S-1-5-1"
+#define NUM_SUFFIXES 10
+#define SUFFIX_TEMPLATE "d%zu" DOMAIN_NAME
+#define TEST_REALM_TEMPLATE "some." SUFFIX_TEMPLATE
+#define EXTERNAL_REALM "WRONG.DOMAIN"
 
 static int setup(void **state)
 {
@@ -91,6 +95,9 @@ static int setup(void **state)
 
     ipa_ctx = calloc(1, sizeof(struct ipadb_context));
     assert_non_null(ipa_ctx);
+
+    kerr = krb5_get_default_realm(krb5_ctx, &ipa_ctx->realm);
+    assert_int_equal(kerr, 0);
 
     ipa_ctx->mspac = calloc(1, sizeof(struct ipadb_mspac));
     assert_non_null(ipa_ctx->mspac);
@@ -117,14 +124,24 @@ static int setup(void **state)
     ret = string_to_sid(DOM_SID_TRUST, &ipa_ctx->mspac->trusts[0].domsid);
     assert_int_equal(ret, 0);
 
-    ipa_ctx->mspac->trusts[0].len_sid_blacklist_incoming = 1;
-    ipa_ctx->mspac->trusts[0].sid_blacklist_incoming = calloc(
-                           ipa_ctx->mspac->trusts[0].len_sid_blacklist_incoming,
+    ipa_ctx->mspac->trusts[0].len_sid_blocklist_incoming = 1;
+    ipa_ctx->mspac->trusts[0].sid_blocklist_incoming = calloc(
+                           ipa_ctx->mspac->trusts[0].len_sid_blocklist_incoming,
                            sizeof(struct dom_sid));
-    assert_non_null(ipa_ctx->mspac->trusts[0].sid_blacklist_incoming);
-    ret = string_to_sid(BLACKLIST_SID,
-                        &ipa_ctx->mspac->trusts[0].sid_blacklist_incoming[0]);
+    assert_non_null(ipa_ctx->mspac->trusts[0].sid_blocklist_incoming);
+    ret = string_to_sid(BLOCKLIST_SID,
+                        &ipa_ctx->mspac->trusts[0].sid_blocklist_incoming[0]);
     assert_int_equal(ret, 0);
+
+    ipa_ctx->mspac->trusts[0].upn_suffixes = calloc(NUM_SUFFIXES + 1, sizeof(char *));
+    ipa_ctx->mspac->trusts[0].upn_suffixes_len = calloc(NUM_SUFFIXES, sizeof(size_t));
+    for (size_t i = 0; i < NUM_SUFFIXES; i++) {
+	assert_int_not_equal(asprintf(&(ipa_ctx->mspac->trusts[0].upn_suffixes[i]),
+                                      SUFFIX_TEMPLATE, i), -1);
+        ipa_ctx->mspac->trusts[0].upn_suffixes_len[i] =
+            strlen(ipa_ctx->mspac->trusts[0].upn_suffixes[i]);
+
+    }
 
     ipa_ctx->kcontext = krb5_ctx;
     kerr = krb5_db_set_context(krb5_ctx, ipa_ctx);
@@ -240,22 +257,22 @@ void test_filter_logon_info(void **state)
         {3, {DOM_SID_TRUST"-1000", DOM_SID_TRUST"-1001", DOM_SID_TRUST"-1002"},
          3, {DOM_SID_TRUST"-1000", DOM_SID_TRUST"-1001", DOM_SID_TRUST"-1002"}},
         /* last SID filtered */
-        {3, {DOM_SID_TRUST"-1000", DOM_SID_TRUST"-1001", BLACKLIST_SID"-1002"},
+        {3, {DOM_SID_TRUST"-1000", DOM_SID_TRUST"-1001", BLOCKLIST_SID"-1002"},
          2, {DOM_SID_TRUST"-1000", DOM_SID_TRUST"-1001"}},
         /* center SID filtered */
-        {3, {DOM_SID_TRUST"-1000", BLACKLIST_SID"-1001", DOM_SID_TRUST"-1002"},
+        {3, {DOM_SID_TRUST"-1000", BLOCKLIST_SID"-1001", DOM_SID_TRUST"-1002"},
          2, {DOM_SID_TRUST"-1000", DOM_SID_TRUST"-1002"}},
         /* first SID filtered */
-        {3, {BLACKLIST_SID"-1000", DOM_SID_TRUST"-1001", DOM_SID_TRUST"-1002"},
+        {3, {BLOCKLIST_SID"-1000", DOM_SID_TRUST"-1001", DOM_SID_TRUST"-1002"},
          2, {DOM_SID_TRUST"-1001", DOM_SID_TRUST"-1002"}},
         /* first and last SID filtered */
-        {3, {BLACKLIST_SID"-1000", DOM_SID_TRUST"-1001", BLACKLIST_SID"-1002"},
+        {3, {BLOCKLIST_SID"-1000", DOM_SID_TRUST"-1001", BLOCKLIST_SID"-1002"},
          1, {DOM_SID_TRUST"-1001"}},
         /* two SIDs in a rwo filtered */
-        {3, {BLACKLIST_SID"-1000", BLACKLIST_SID"-1001", DOM_SID_TRUST"-1002"},
+        {3, {BLOCKLIST_SID"-1000", BLOCKLIST_SID"-1001", DOM_SID_TRUST"-1002"},
          1, {DOM_SID_TRUST"-1002"}},
         /* all SIDs filtered*/
-        {3, {BLACKLIST_SID"-1000", BLACKLIST_SID"-1001", BLACKLIST_SID"-1002"},
+        {3, {BLOCKLIST_SID"-1000", BLOCKLIST_SID"-1001", BLOCKLIST_SID"-1002"},
          0, {}},
         {0, {}, 0 , {}}
     };
@@ -478,6 +495,38 @@ void test_dom_sid_string(void **state)
 }
 
 
+void test_check_trusted_realms(void **state)
+{
+    struct test_ctx *test_ctx;
+    krb5_error_code kerr = 0;
+    char *trusted_realm = NULL;
+
+    test_ctx = (struct test_ctx *) *state;
+
+    for(size_t i = 0; i < NUM_SUFFIXES; i++) {
+        char *test_realm = NULL;
+        assert_int_not_equal(asprintf(&test_realm, TEST_REALM_TEMPLATE, i), -1);
+
+        if (test_realm) {
+            kerr = ipadb_is_princ_from_trusted_realm(
+                       test_ctx->krb5_ctx,
+                       test_realm,
+                       strlen(test_realm),
+                       &trusted_realm);
+            assert_int_equal(kerr, 0);
+            free(test_realm);
+            free(trusted_realm);
+        }
+    }
+
+    kerr = ipadb_is_princ_from_trusted_realm(
+               test_ctx->krb5_ctx,
+               EXTERNAL_REALM,
+               strlen(EXTERNAL_REALM),
+               &trusted_realm);
+    assert_int_equal(kerr, KRB5_KDB_NOENTRY);
+}
+
 int main(int argc, const char *argv[])
 {
     const struct CMUnitTest tests[] = {
@@ -487,6 +536,8 @@ int main(int argc, const char *argv[])
                                         setup, teardown),
         cmocka_unit_test(test_string_to_sid),
         cmocka_unit_test_setup_teardown(test_dom_sid_string,
+                                        setup, teardown),
+        cmocka_unit_test_setup_teardown(test_check_trusted_realms,
                                         setup, teardown),
     };
 

@@ -29,6 +29,7 @@ import os
 import pwd
 import logging
 import smtplib
+import ssl
 import time
 
 from collections import deque
@@ -55,6 +56,9 @@ EPN_CONFIG = {
     "smtp_port": 25,
     "smtp_user": None,
     "smtp_password": None,
+    "smtp_client_cert": None,
+    "smtp_client_key": None,
+    "smtp_client_key_pass": None,
     "smtp_timeout": 60,
     "smtp_security": "none",
     "smtp_admin": "root@localhost",
@@ -205,6 +209,7 @@ class EPN(admintool.AdminTool):
     def __init__(self, options, args):
         super(EPN, self).__init__(options, args)
         self._conn = None
+        self._ssl_context = None
         self._expiring_password_user_list = EPNUserList()
         self._ldap_data = []
         self._date_ranges = []
@@ -291,12 +296,15 @@ class EPN(admintool.AdminTool):
             logger.error("IPA client is not configured on this system.")
             raise admintool.ScriptError()
 
+        # tasks required privileges
         self._get_krb5_ticket()
         self._read_configuration()
         self._validate_configuration()
         self._parse_configuration()
         self._get_connection()
         self._read_ipa_configuration()
+        self._create_ssl_context()
+
         drop_privileges()
         if self.options.mailtest:
             self._gentestdata()
@@ -316,6 +324,7 @@ class EPN(admintool.AdminTool):
                 smtp_timeout=api.env.smtp_timeout,
                 smtp_username=api.env.smtp_user,
                 smtp_password=api.env.smtp_password,
+                ssl_context=self._ssl_context,
                 x_mailer=self.command_name,
                 msg_subtype=api.env.msg_subtype,
                 msg_charset=api.env.msg_charset,
@@ -456,6 +465,20 @@ class EPN(admintool.AdminTool):
                 )
 
         return self._conn
+
+    def _create_ssl_context(self):
+        """Create SSL context.
+           This must be done before the dropping priviliges to allow
+           read in the smtp client's certificate and private key if specified.
+        """
+        if api.env.smtp_security.lower() in ("starttls", "ssl"):
+            self._ssl_context = ssl.create_default_context()
+            if api.env.smtp_client_cert:
+                self._ssl_context.load_cert_chain(
+                    certfile=api.env.smtp_client_cert,
+                    keyfile=api.env.smtp_client_key,
+                    password=str(api.env.smtp_client_key_pass),
+                )
 
     def _fetch_data_from_ldap(self, date_range):
         """Run a LDAP query to fetch a list of user entries whose passwords
@@ -603,15 +626,15 @@ class MTAClient:
         smtp_timeout=60,
         smtp_username=None,
         smtp_password=None,
+        ssl_context=None,
     ):
-        # We only support "none" (cleartext) for now.
-        # Future values: "ssl", "starttls"
         self._security_protocol = security_protocol
         self._smtp_hostname = smtp_hostname
         self._smtp_port = smtp_port
         self._smtp_timeout = smtp_timeout
         self._username = smtp_username
         self._password = smtp_password
+        self._ssl_context = ssl_context
 
         # This should not be touched
         self._conn = None
@@ -664,6 +687,7 @@ class MTAClient:
                     host=self._smtp_hostname,
                     port=self._smtp_port,
                     timeout=self._smtp_timeout,
+                    context=self._ssl_context,
                 )
         except (socketerror, smtplib.SMTPException) as e:
             msg = \
@@ -685,20 +709,14 @@ class MTAClient:
                 e,
             )
 
-        if (
-            self._conn.has_extn("STARTTLS")
-            and self._security_protocol.lower() == "starttls"
-        ):
+        if self._security_protocol.lower() == "starttls":
             try:
-                self._conn.starttls()
+                self._conn.starttls(context=self._ssl_context)
                 self._conn.ehlo()
             except smtplib.SMTPException as e:
-                logger.error(
+                raise RuntimeError(
                     "IPA-EPN: Unable to create an encrypted session to "
-                    "%s:%s: %s",
-                    self._smtp_hostname,
-                    self._smtp_port,
-                    e,
+                    "%s:%s: %s" % (self._smtp_hostname, self._smtp_port, e)
                 )
 
         if self._username and self._password:
@@ -749,6 +767,7 @@ class MailUserAgent:
         smtp_timeout=60,
         smtp_username=None,
         smtp_password=None,
+        ssl_context=None,
         x_mailer=None,
         msg_subtype="plain",
         msg_charset="utf8",
@@ -772,6 +791,7 @@ class MailUserAgent:
             smtp_timeout=smtp_timeout,
             smtp_username=smtp_username,
             smtp_password=smtp_password,
+            ssl_context=ssl_context,
         )
 
     def cleanup(self):

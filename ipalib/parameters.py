@@ -1646,6 +1646,11 @@ class Password(Str):
     A parameter for passwords (stored in the ``unicode`` type).
     """
 
+    kwargs = Data.kwargs + (
+        ('pattern', (str,), None),
+        ('noextrawhitespace', bool, False),
+    )
+
     password = True
 
     def _convert_scalar(self, value, index=None):
@@ -2017,6 +2022,10 @@ class DNParam(Param):
         """
         if type(value) in self.allowed_types:
             return value
+
+        if type(value) in (tuple, list):
+            raise ConversionError(name=self.name,
+                                  error=ugettext(self.scalar_error))
 
         try:
             dn = DN(value)

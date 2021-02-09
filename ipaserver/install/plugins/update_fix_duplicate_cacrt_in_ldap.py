@@ -35,16 +35,16 @@ class update_fix_duplicate_cacrt_in_ldap(Updater):
     """
     When multiple entries exist for IPA CA cert in ldap, remove the duplicate
 
-    After this plugin, ds needs to be restarted. This ensures that
-    the attribute uniqueness plugin is working and prevents
-    other plugins from adding duplicates.
+    After this plugin has removed duplicate entries, DS needs to be
+    restarted. This ensures that the attribute uniqueness plugin is working
+    and prevents other plugins from adding duplicates.
     """
 
     def execute(self, **options):
         # If CA is disabled, no need to check for duplicates of IPA CA
         ca_enabled = self.api.Command.ca_is_enabled()['result']
         if not ca_enabled:
-            return True, []
+            return False, []
 
         # Look for the IPA CA cert subject
         ldap = self.api.Backend.ldap2
@@ -52,13 +52,22 @@ class update_fix_duplicate_cacrt_in_ldap(Updater):
             ldap,
             self.api.env.container_ca,
             self.api.env.basedn)
+        cacert_nick = get_ca_nickname(self.api.env.realm)
 
         # Find if there are other certificates with the same subject
         # They are duplicates resulting of BZ 1480102
         base_dn = DN(('cn', 'certificates'), ('cn', 'ipa'), ('cn', 'etc'),
                      self.api.env.basedn)
+        filter = ldap.combine_filters(
+            [
+                # all certificates with CA cert subject
+                ldap.make_filter({'ipaCertSubject': cacert_subject}),
+                # except the default certificate
+                ldap.make_filter({'cn': cacert_nick}, rules=ldap.MATCH_NONE),
+            ],
+            rules=ldap.MATCH_ALL
+        )
         try:
-            filter = ldap.make_filter({'ipaCertSubject': cacert_subject})
             result, _truncated = ldap.find_entries(
                 base_dn=base_dn,
                 filter=filter,
@@ -66,13 +75,10 @@ class update_fix_duplicate_cacrt_in_ldap(Updater):
         except errors.NotFound:
             # No duplicate, we're good
             logger.debug("No duplicates for IPA CA in LDAP")
-            return True, []
+            return False, []
 
         logger.debug("Found %d entrie(s) for IPA CA in LDAP", len(result))
-        cacert_dn = DN(('cn', get_ca_nickname(self.api.env.realm)), base_dn)
         for entry in result:
-            if entry.dn == cacert_dn:
-                continue
             # Remove the duplicate
             try:
                 ldap.delete_entry(entry)

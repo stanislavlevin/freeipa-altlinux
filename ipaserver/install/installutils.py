@@ -18,6 +18,7 @@
 #
 
 from __future__ import absolute_import
+from __future__ import division
 from __future__ import print_function
 
 import logging
@@ -38,7 +39,7 @@ from contextlib import contextmanager
 from configparser import ConfigParser as SafeConfigParser
 from configparser import NoOptionError
 
-from dns import resolver, rdatatype
+from dns import rrset, rdatatype, rdataclass
 from dns.exception import DNSException
 import ldap
 import six
@@ -49,10 +50,12 @@ import ipaplatform
 from ipapython import ipautil, admintool, version, ipaldap
 from ipapython.admintool import ScriptError, SERVER_NOT_CONFIGURED  # noqa: E402
 from ipapython.certdb import EXTERNAL_CA_TRUST_FLAGS
-from ipalib.constants import MAXHOSTNAMELEN
+from ipalib.constants import FQDN, MAXHOSTNAMELEN
 from ipalib.util import validate_hostname
 from ipalib import api, errors, x509
+from ipalib.install import dnsforwarders
 from ipapython.dn import DN
+from ipapython.dnsutil import DNSName, resolve
 from ipaserver.install import certs, service, sysupgrade
 from ipaplatform import services
 from ipaplatform.paths import paths
@@ -115,16 +118,16 @@ class ReplicaConfig:
 
     subject_base = ipautil.dn_attribute_property('_subject_base')
 
+
 def get_fqdn():
-    fqdn = ""
-    try:
-        fqdn = socket.getfqdn()
-    except Exception:
-        try:
-            fqdn = socket.gethostname()
-        except Exception:
-            fqdn = ""
-    return fqdn
+    """Get fully qualified domain name of current host
+
+    :note: used by ansible_freeipa
+    :deprecated: use ipalib.constants.FQDN
+    :return: str
+    """
+    return FQDN
+
 
 def verify_fqdn(host_name, no_host_dns=False, local_hostname=True):
     """
@@ -187,7 +190,7 @@ def verify_fqdn(host_name, no_host_dns=False, local_hostname=True):
     # Verify this is NOT a CNAME
     try:
         logger.debug('Check if %s is not a CNAME', host_name)
-        resolver.query(host_name, rdatatype.CNAME)
+        resolve(host_name, rdatatype.CNAME)
         raise HostReverseLookupError("The IPA Server Hostname cannot be a CNAME, only A and AAAA names are allowed.")
     except DNSException:
         pass
@@ -284,13 +287,28 @@ def read_ip_addresses():
 def read_dns_forwarders():
     addrs = []
     if ipautil.user_input("Do you want to configure DNS forwarders?", True):
-        print("Following DNS servers are configured in /etc/resolv.conf: %s" %
-                ", ".join(resolver.get_default_resolver().nameservers))
+        if dnsforwarders.detect_resolve1_resolv_conf():
+            servers = [
+                str(s) for s in dnsforwarders.get_resolve1_nameservers()
+            ]
+            print(
+                "The following DNS servers are configured in "
+                "systemd-resolved: %s" % ", ".join(servers)
+            )
+        else:
+            servers = [
+                str(s) for s in dnsforwarders.get_dnspython_nameservers()
+            ]
+            print(
+                "Following DNS servers are configured in /etc/resolv.conf: "
+                "%s" % ", ".join(servers)
+            )
+
         if ipautil.user_input("Do you want to configure these servers as DNS "
                 "forwarders?", True):
-            addrs = resolver.default_resolver.nameservers[:]
-            print("All DNS servers from /etc/resolv.conf were added. You can "
-                  "enter additional addresses now:")
+            addrs = servers[:]
+            print("All detected DNS servers were added. You can enter "
+                  "additional addresses now:")
         while True:
             ip = ipautil.user_input("Enter an IP address for a DNS forwarder, "
                                     "or press Enter to skip", allow_empty=True)
@@ -303,11 +321,18 @@ def read_dns_forwarders():
                 print("DNS forwarder %s not added." % ip)
                 continue
 
+            if ip_parsed.is_loopback():
+                print("Error: %s is a loopback address" % ip)
+                print("DNS forwarder %s not added." % ip)
+                continue
+
             print("DNS forwarder %s added. You may add another." % ip)
             addrs.append(str(ip_parsed))
 
     if not addrs:
         print("No DNS forwarders configured")
+    else:
+        print("DNS forwarders: %s" % ", ".join(addrs))
 
     return addrs
 
@@ -454,18 +479,40 @@ def resolve_ip_addresses_nss(fqdn):
     logger.debug('Name %s resolved to %s', fqdn, ip_addresses)
     return ip_addresses
 
-def get_host_name(no_host_dns):
-    """
-    Get the current FQDN from the socket and verify that it is valid.
 
-    no_host_dns is a boolean that determines whether we enforce that the
-    hostname is resolvable.
+def resolve_rrsets_nss(fqdn):
+    """Get list of dnspython RRsets from NSS"""
+    if not isinstance(fqdn, DNSName):
+        fqdn = DNSName.from_text(fqdn)
 
-    Will raise a RuntimeError on error, returns hostname on success
-    """
-    hostname = get_fqdn()
-    verify_fqdn(hostname, no_host_dns)
-    return hostname
+    ip_addresses = resolve_ip_addresses_nss(fqdn.to_text())
+
+    # split IP addresses into IPv4 and IPv6
+    ipv4 = []
+    ipv6 = []
+    for ip_address in ip_addresses:
+        if ip_address.version == 4:
+            ipv4.append(str(ip_address))
+        elif ip_address.version == 6:
+            ipv6.append(str(ip_address))
+
+    # construct an RRset for each address type. TTL is irrelevant
+    ttl = 3600
+    rrs = []
+    if ipv4:
+        rrs.append(
+            rrset.from_text_list(
+                fqdn, ttl, rdataclass.IN, rdatatype.A, ipv4
+            )
+        )
+    if ipv6:
+        rrs.append(
+            rrset.from_text_list(
+                fqdn, ttl, rdataclass.IN, rdatatype.AAAA, ipv6
+            )
+        )
+    return rrs
+
 
 def get_server_ip_address(host_name, unattended, setup_dns, ip_addresses):
     hostaddr = resolve_ip_addresses_nss(host_name)
@@ -971,6 +1018,109 @@ def check_entropy():
     except ValueError as e:
         logger.debug("Invalid value in %s %s", paths.ENTROPY_AVAIL, e)
 
+
+def is_hidepid():
+    """Determine if /proc is mounted with hidepid=1/2 option"""
+    try:
+        os.lstat('/proc/1/stat')
+    except (FileNotFoundError, PermissionError):
+        return True
+    return False
+
+
+def in_container():
+    """Determine if we're running in a container.
+
+       virt-what will return the underlying machine information so
+       isn't usable here.
+
+       systemd-detect-virt requires the whole systemd subsystem which
+       isn't a reasonable require in a container.
+    """
+    if not is_hidepid():
+        with open('/proc/1/sched', 'r') as sched:
+            data_sched = sched.readline()
+    else:
+        data_sched = []
+
+    with open('/proc/self/cgroup', 'r') as cgroup:
+        data_cgroup = cgroup.readline()
+
+    checks = [
+        data_sched.split()[0] not in ('systemd', 'init',),
+        data_cgroup.split()[0] in ('libpod'),
+        os.path.exists('/.dockerenv'),
+        os.path.exists('/.dockerinit'),
+        os.getenv('container', None) is not None
+    ]
+
+    return any(checks)
+
+
+def check_available_memory(ca=False):
+    """
+    Raise an exception if there isn't enough memory for IPA to install.
+
+    In a container then psutil will most likely return the host memory
+    and not the container. If in a container use the cgroup values which
+    also may not be constrained but it's the best approximation.
+
+    2GB is the rule-of-thumb minimum but the server is installable with
+    much less.
+
+    The CA uses ~150MB in a fresh install.
+
+    Use Kb instead of KiB to leave a bit of slush for the OS
+    """
+    available = None
+    minimum_suggested = 1000 * 1000 * 1000 * 1.2
+    if not ca:
+        minimum_suggested -= 150 * 1000 * 1000
+    if in_container():
+        # cgroup v1
+        if os.path.exists(
+            '/sys/fs/cgroup/memory/memory.limit_in_bytes'
+        ) and os.path.exists('/sys/fs/cgroup/memory/memory.usage_in_bytes'):
+            limit_file = '/sys/fs/cgroup/memory/memory.limit_in_bytes'
+            usage_file = '/sys/fs/cgroup/memory/memory.usage_in_bytes'
+        # cgroup v2
+        elif os.path.exists(
+            '/sys/fs/cgroup/memory.current'
+        ) and os.path.exists('/sys/fs/cgroup/memory.max'):
+            limit_file = '/sys/fs/cgroup/memory.max'
+            usage_file = '/sys/fs/cgroup/memory.current'
+        else:
+            raise ScriptError(
+                "Unable to determine the amount of available RAM"
+            )
+
+        with open(limit_file) as fd:
+            limit = fd.readline()
+        with open(usage_file) as fd:
+            used = int(fd.readline())
+
+        # In cgroup v2 if there is no limit on the container then
+        # the maximum host memory is available. Fall back to the psutil
+        # method for determining availability.
+        if limit != 'max':
+            available = int(limit) - used
+
+    if available is None:
+        # delay import of psutil. On import it opens files in /proc and
+        # can trigger a SELinux violation.
+        import psutil
+        available = psutil.virtual_memory().available
+
+    if available is None:
+        raise ScriptError(
+            "Unable to determine the amount of available RAM"
+        )
+    logger.debug("Available memory is %sB", available)
+    if available < minimum_suggested:
+        raise ScriptError(
+            "Less than the minimum 1.2GB of RAM is available, "
+            "%.2fGB available" % (available / (1024 * 1024 * 1024))
+        )
 
 def load_external_cert(files, ca_subject):
     """

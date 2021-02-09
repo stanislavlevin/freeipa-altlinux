@@ -28,8 +28,8 @@ import pytest
 
 from ipalib import api
 from ipalib import errors
+from ipalib.constants import FQDN
 from ipaserver.install.ldapupdate import LDAPUpdate, BadSyntax
-from ipaserver.install import installutils
 from ipapython import ipaldap
 from ipaplatform.constants import constants as platformconstants
 from ipapython.dn import DN
@@ -56,15 +56,14 @@ class TestUpdate:
 
     @pytest.fixture(autouse=True)
     def update_setup(self, request):
-        fqdn = installutils.get_fqdn()
         pwfile = api.env.dot_ipa + os.sep + ".dmpw"
         if os.path.isfile(pwfile):
             with open(pwfile, "r") as fp:
                 self.dm_password = fp.read().rstrip()
         else:
             pytest.skip("No directory manager password")
-        self.updater = LDAPUpdate(dm_password=self.dm_password, sub_dict={})
-        self.ld = ipaldap.LDAPClient.from_hostname_secure(fqdn)
+        self.updater = LDAPUpdate()
+        self.ld = ipaldap.LDAPClient.from_hostname_secure(FQDN)
         self.ld.simple_bind(bind_dn=ipaldap.DIRMAN_DN,
                             bind_password=self.dm_password)
         self.testdir = os.path.abspath(os.path.dirname(__file__))

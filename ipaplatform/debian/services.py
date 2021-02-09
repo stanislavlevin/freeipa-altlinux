@@ -20,12 +20,13 @@ debian_system_units = redhat_services.redhat_system_units.copy()
 # For beginning just remap names to add .service
 # As more services will migrate to systemd, unit names will deviate and
 # mapping will be kept in this dictionary
+debian_system_units['chronyd'] = 'chrony.service'
 debian_system_units['httpd'] = 'apache2.service'
 debian_system_units['kadmin'] = 'krb5-admin-server.service'
 debian_system_units['krb5kdc'] = 'krb5-kdc.service'
-debian_system_units['named-regular'] = 'bind9.service'
+debian_system_units['named-regular'] = 'named.service'
 debian_system_units['named-pkcs11'] = 'bind9-pkcs11.service'
-debian_system_units['named'] = debian_system_units['named-pkcs11']
+debian_system_units['named'] = debian_system_units['named-regular']
 debian_system_units['pki-tomcatd'] = 'pki-tomcatd.service'
 debian_system_units['pki_tomcatd'] = debian_system_units['pki-tomcatd']
 debian_system_units['ods-enforcerd'] = 'opendnssec-enforcer.service'

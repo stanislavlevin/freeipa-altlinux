@@ -1,9 +1,9 @@
 # Martin Bašti <mbasti@redhat.com>, 2016. #zanata
 msgid ""
 msgstr ""
-"Project-Id-Version: freeipa 4.8.0\n"
+"Project-Id-Version: freeipa 4.9.0.dev201908140712+gitc9938e3d8\n"
 "Report-Msgid-Bugs-To: https://pagure.io/freeipa/new_issue\n"
-"POT-Creation-Date: 2020-06-10 22:17+0300\n"
+"POT-Creation-Date: 2020-12-23 16:29+0200\n"
 "PO-Revision-Date: 2019-11-11 10:26+0000\n"
 "Last-Translator: Copied by Zanata <copied-by-zanata@zanata.org>\n"
 "Language-Team: Slovak\n"
@@ -1638,9 +1638,6 @@ msgstr "OTP tokeny"
 msgid "One Time Password"
 msgstr "Jednorázové heslo (OTP)"
 
-msgid "One-Time-Password"
-msgstr "Jednorázové heslo (OTP)"
-
 msgid "Only one value is allowed"
 msgstr "Len jedna hodnota je povolená"
 
@@ -1703,9 +1700,6 @@ msgstr "Zmena hesla dokončená"
 
 msgid "Password expiration"
 msgstr "Vypršanie hesla"
-
-msgid "Password or Password+One-Time-Password"
-msgstr "Heslo alebo heslo + jednorázové heslo (OTP)"
 
 msgid "Password reset was not successful."
 msgstr "Nastavenie hesla nebolo úspešné"
@@ -2072,9 +2066,6 @@ msgstr "Nastaviť"
 
 msgid "Set OTP"
 msgstr "Nastaviť OTP"
-
-msgid "Set One-Time-Password"
-msgstr "Nastaviť  jednorázové heslo (OTP)"
 
 msgid "Set SSH key"
 msgstr "Nastaviť SSH kľúč"

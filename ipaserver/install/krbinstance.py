@@ -22,8 +22,6 @@ from __future__ import print_function
 
 import logging
 import os
-import pwd
-import grp
 import socket
 import dbus
 
@@ -43,8 +41,6 @@ from ipapython.dn import DN
 from ipapython.dogtag import KDC_PROFILE
 
 from ipaserver.install import replication
-from ipaserver.install import ldapupdate
-
 from ipaserver.install import certs
 from ipaserver.masters import find_providing_servers
 from ipaplatform.constants import constants
@@ -163,9 +159,7 @@ class KrbInstance(service.Service):
         api.Backend.ldap2.add_entry(host_entry)
 
         # Add the host to the ipaserver host group
-        ld = ldapupdate.LDAPUpdate(ldapi=True)
-        ld.update([os.path.join(paths.UPDATES_DIR,
-                                '20-ipaservers_hostgroup.update')])
+        self._ldap_update(['20-ipaservers_hostgroup.update'])
 
     def __common_setup(self, realm_name, host_name, domain_name, admin_password):
         self.fqdn = host_name
@@ -389,8 +383,7 @@ class KrbInstance(service.Service):
 
         self.fstore.backup_file(paths.DS_KEYTAB)
         installutils.create_keytab(paths.DS_KEYTAB, ldap_principal)
-        pent = pwd.getpwnam(constants.DS_USER)
-        os.chown(paths.DS_KEYTAB, pent.pw_uid, pent.pw_gid)
+        constants.DS_USER.chown(paths.DS_KEYTAB)
 
     def __create_host_keytab(self):
         host_principal = "host/" + self.fqdn + "@" + self.realm
@@ -400,8 +393,8 @@ class KrbInstance(service.Service):
         installutils.create_keytab(paths.KRB5_KEYTAB, host_principal)
 
         # Make sure access is strictly reserved to root only for now
-        os.chown(paths.KRB5_KEYTAB, 0, grp.getgrnam('_keytab').gr_gid)
-        os.chmod(paths.KRB5_KEYTAB, 0o640)
+        os.chown(paths.KRB5_KEYTAB, 0, 0)
+        os.chmod(paths.KRB5_KEYTAB, 0o600)
 
         self.move_service_to_host(host_principal)
 

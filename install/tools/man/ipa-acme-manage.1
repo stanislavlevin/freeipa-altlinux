@@ -1,0 +1,38 @@
+.\"
+.\" Copyright (C) 2020  FreeIPA Contributors see COPYING for license
+.\"
+.TH "ipa-acme-manage" "1" "Jun 2 2020" "FreeIPA" "FreeIPA Manual Pages"
+.SH "NAME"
+ipa\-acme\-manage \- Manage the FreeIPA ACME service
+.SH "SYNOPSIS"
+ipa\-acme\-manage enable|disable|status
+.SH "DESCRIPTION"
+
+Use the \fIipa-acme-manage\fR command to enable, disable or retrieve
+the status of the ACME service on a FreeIPA CA server.
+
+In a FreeIPA topology all CA servers capable of ACME will
+have the ACME service deployed.  The service is not enabled
+by default.  It is expected that the ACME service will either be
+enabled on all CA servers, or disabled on all CA servers.  However
+it must be enabled or disabled on each individual server.
+
+.SH "COMMANDS"
+.TP
+\fBenable\fR
+Enable the ACME service on this host.
+.TP
+\fBdisable\fR
+Disable the ACME service on this host.
+.TP
+\fBstatus\fR
+Display the status of the ACME service.
+
+.SH "EXIT STATUS"
+0 if the command was successful
+
+1 if an error occurred
+
+2 if the host is not a FreeIPA server
+
+3 if the host is not a CA server

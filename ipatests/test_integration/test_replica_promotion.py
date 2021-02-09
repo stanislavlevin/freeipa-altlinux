@@ -4,6 +4,7 @@
 
 from __future__ import absolute_import
 
+import os
 import time
 import re
 import textwrap
@@ -11,13 +12,18 @@ import textwrap
 import pytest
 
 from ipatests.test_integration.base import IntegrationTest
+from ipatests.test_integration.test_ipahealthcheck import (
+    run_healthcheck, HEALTHCHECK_PKG
+)
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.tasks import (
-    assert_error, replicas_cleanup)
+    assert_error, replicas_cleanup
+)
 from ipatests.pytest_ipa.integration.firewall import Firewall
 from ipatests.pytest_ipa.integration.env_config import get_global_config
 from ipalib.constants import (
-    DOMAIN_LEVEL_1, IPA_CA_NICKNAME, CA_SUFFIX_NAME)
+    DOMAIN_LEVEL_1, IPA_CA_NICKNAME, CA_SUFFIX_NAME
+)
 from ipaplatform.paths import paths
 from ipapython import certdb
 from ipatests.test_integration.test_dns_locations import (
@@ -474,17 +480,35 @@ class TestSubCAkeyReplication(IntegrationTest):
         SERVER_CERT_NICK: 'u,u,u',
     }
 
-    def add_subca(self, host, name, subject):
+    def add_subca(self, host, name, subject, raiseonerr=True):
         result = host.run_command([
             'ipa', 'ca-add', name,
             '--subject', subject,
-            '--desc', self.SUBCA_DESC,
+            '--desc', self.SUBCA_DESC],
+            raiseonerr=raiseonerr
+        )
+        if raiseonerr:
+            assert "ipa: ERROR:" not in result.stderr_text
+            auth_id = "".join(re.findall(AUTH_ID_RE, result.stdout_text))
+            return '{} {}'.format(IPA_CA_NICKNAME, auth_id)
+        else:
+            assert "ipa: ERROR:" in result.stderr_text
+            assert result.returncode != 0
+            return result
+
+    def del_subca(self, host, name):
+        host.run_command([
+            'ipa', 'ca-disable', name
         ])
-        auth_id = "".join(re.findall(AUTH_ID_RE, result.stdout_text))
-        return '{} {}'.format(IPA_CA_NICKNAME, auth_id)
+        result = host.run_command([
+            'ipa', 'ca-del', name
+        ])
+        assert "Deleted CA \"{}\"".format(name) in result.stdout_text
 
     def check_subca(self, host, name, cert_nick):
-        host.run_command(['ipa', 'ca-show', name])
+        result = host.run_command(['ipa', 'ca-show', name])
+        # ipa ca-show returns 0 even if the cert cannot be found locally.
+        assert "ipa: ERROR:" not in result.stderr_text
         tasks.run_certutil(
             host, ['-L', '-n', cert_nick], paths.PKI_TOMCAT_ALIAS_DIR
         )
@@ -603,8 +627,12 @@ class TestSubCAkeyReplication(IntegrationTest):
         master = self.master
         replica = self.replicas[0]
 
-        TEST_KEY_FILE = '/etc/pki/tls/private/test_subca.key'
-        TEST_CRT_FILE = '/etc/pki/tls/private/test_subca.crt'
+        TEST_KEY_FILE = os.path.join(
+            paths.OPENSSL_PRIVATE_DIR, 'test_subca.key'
+        )
+        TEST_CRT_FILE = os.path.join(
+            paths.OPENSSL_PRIVATE_DIR, 'test_subca.crt'
+        )
 
         caacl_cmd = [
             'ipa', 'caacl-add-ca', 'hosts_services_caIPAserviceCert',
@@ -626,6 +654,30 @@ class TestSubCAkeyReplication(IntegrationTest):
                    '-nameopt', 'space_eq']
         ssl = replica.run_command(ssl_cmd)
         assert 'Issuer: CN = {}'.format(self.SUBCA_MASTER) in ssl.stdout_text
+
+    def test_del_subca_master_on_replica(self):
+        self.del_subca(self.replicas[0], self.SUBCA_MASTER)
+
+    def test_del_subca_replica(self):
+        self.del_subca(self.replicas[0], self.SUBCA_REPLICA)
+
+    def test_scale_add_subca(self):
+        master = self.master
+        replica = self.replicas[0]
+
+        subcas = {}
+        for i in range(0, 16):
+            name = "_".join((self.SUBCA_MASTER, str(i)))
+            cn = "_".join((self.SUBCA_MASTER_CN, str(i)))
+            subcas[name] = self.add_subca(master, name, cn)
+            self.add_subca(master, name, cn, raiseonerr=False)
+
+        # give replication some time
+        time.sleep(15)
+
+        for name in subcas:
+            self.check_subca(replica, name, subcas[name])
+            self.del_subca(replica, name)
 
 
 class TestReplicaInstallCustodia(IntegrationTest):
@@ -767,6 +819,8 @@ class TestHiddenReplicaPromotion(IntegrationTest):
 
     @classmethod
     def install(cls, mh):
+        for srv in (cls.master, cls.replicas[0]):
+            tasks.install_packages(srv, HEALTHCHECK_PKG)
         # master with DNSSEC master
         tasks.install_master(cls.master, setup_dns=True, setup_kra=True)
         cls.master.run_command([
@@ -845,11 +899,27 @@ class TestHiddenReplicaPromotion(IntegrationTest):
             assert values.get(hservice, set()) == hidden
 
     def test_hidden_replica_install(self):
-        # TODO: check that all services are running on hidden replica
         self._check_server_role(self.master, 'enabled')
         self._check_server_role(self.replicas[0], 'hidden')
         self._check_dnsrecords([self.master], [self.replicas[0]])
         self._check_config([self.master], [self.replicas[0]])
+
+    def test_ipahealthcheck_hidden_replica(self):
+        """Ensure that ipa-healthcheck runs successfully on all members
+        of an IPA cluster that includes a hidden replica.
+        """
+        # verify state
+        self._check_config([self.master], [self.replicas[0]])
+        # A DNA range is needed on the replica for ipa-healthcheck to work.
+        # Create a user so that the replica gets a range.
+        tasks.user_add(self.replicas[0], 'testuser')
+        tasks.user_del(self.replicas[0], 'testuser')
+        for srv in (self.master, self.replicas[0]):
+            returncode, _unused = run_healthcheck(
+                srv,
+                failures_only=True
+            )
+            assert returncode == 0
 
     def test_hide_master_fails(self):
         # verify state

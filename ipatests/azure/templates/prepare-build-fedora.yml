@@ -11,6 +11,7 @@ steps:
         autoconf \
         rpm-build \
         gettext-devel \
+        git \
         automake \
         libtool \
         docker \
@@ -19,5 +20,5 @@ steps:
 
     echo "Installing FreeIPA development dependencies"
     sudo dnf builddep -y freeipa
-    sudo dnf builddep -y --skip-broken -D "with_wheels 1" -D "with_lint 1" --spec freeipa.spec.in --best --allowerasing --setopt=install_weak_deps=False
+    sudo dnf builddep -y --skip-broken -D "with_wheels 1" -D "with_lint 1" -D "with_doc 1" --spec freeipa.spec.in --best --allowerasing --setopt=install_weak_deps=False
   displayName: Prepare build environment

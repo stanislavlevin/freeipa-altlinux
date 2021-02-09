@@ -6,7 +6,7 @@ from __future__ import absolute_import
 import six
 
 from ipapython.dn import DN
-from ipatests.test_xmlrpc.tracker.base import Tracker
+from ipatests.test_xmlrpc.tracker.base import Tracker, EnableTracker
 from ipatests.util import assert_deepequal
 from ipatests.test_xmlrpc.xmlrpc_test import (
     fuzzy_issuer,
@@ -22,7 +22,7 @@ if six.PY3:
     unicode = str
 
 
-class CATracker(Tracker):
+class CATracker(Tracker, EnableTracker):
     """Implementation of a Tracker class for CA plugin."""
 
     ldap_keys = {
@@ -42,7 +42,7 @@ class CATracker(Tracker):
     update_keys = ldap_keys - {'dn'}
 
     def __init__(self, name, subject, desc=u"Test generated CA",
-                 default_version=None):
+                 default_version=None, auto_disable_for_delete=True):
         super(CATracker, self).__init__(default_version=default_version)
         self.attrs = {}
         self.ipasubjectdn = subject
@@ -51,6 +51,9 @@ class CATracker(Tracker):
         self.dn = DN(('cn', name),
                      self.api.env.container_ca,
                      self.api.env.basedn)
+
+        # Whether to run ca-disable automatically before deleting the CA.
+        self.auto_disable_for_delete = auto_disable_for_delete
 
     def make_create_command(self):
         """Make function that creates the plugin entry object."""
@@ -80,9 +83,25 @@ class CATracker(Tracker):
         )
         self.exists = True
 
+    def make_disable_command(self):
+        return self.make_command('ca_disable', self.name)
+
+    def check_disable(self, result):
+        assert_deepequal(dict(
+            result=True,
+            value=self.name,
+            summary=f'Disabled CA "{self.name}"',
+        ), result)
+
     def make_delete_command(self):
         """Make function that deletes the plugin entry object."""
-        return self.make_command('ca_del', self.name)
+        if self.auto_disable_for_delete:
+            def disable_then_delete():
+                self.make_command('ca_disable', self.name)()
+                return self.make_command('ca_del', self.name)()
+            return disable_then_delete
+        else:
+            return self.make_command('ca_del', self.name)
 
     def check_delete(self, result):
         assert_deepequal(dict(

@@ -26,7 +26,6 @@ import shutil
 import sys
 import tempfile
 import time
-import pwd
 
 import six
 
@@ -185,6 +184,7 @@ class Backup(admintool.AdminTool):
         paths.OPENDNSSEC_KASP_FILE,
         paths.OPENDNSSEC_ZONELIST_FILE,
         paths.OPENDNSSEC_KASP_DB,
+        paths.DNSSEC_OPENSSL_CONF,
         paths.DNSSEC_SOFTHSM2_CONF,
         paths.DNSSEC_SOFTHSM_PIN_SO,
         paths.IPA_ODS_EXPORTER_KEYTAB,
@@ -194,6 +194,8 @@ class Backup(admintool.AdminTool):
         paths.GSSPROXY_CONF,
         paths.HOSTS,
         paths.SYSTEMD_PKI_TOMCAT_IPA_CONF,
+        paths.NETWORK_MANAGER_IPA_CONF,
+        paths.SYSTEMD_RESOLVED_IPA_CONF,
     ) + tuple(
         os.path.join(paths.IPA_NSSDB_DIR, file)
         for file in (certdb.NSS_DBM_FILES + certdb.NSS_SQL_FILES)
@@ -203,6 +205,12 @@ class Backup(admintool.AdminTool):
       paths.VAR_LOG_PKI_DIR,
       paths.VAR_LOG_HTTPD_DIR,
       paths.IPASERVER_INSTALL_LOG,
+      paths.IPASERVER_ADTRUST_INSTALL_LOG,
+      paths.IPASERVER_DNS_INSTALL_LOG,
+      paths.IPASERVER_KRA_INSTALL_LOG,
+      paths.IPAREPLICA_INSTALL_LOG,
+      paths.IPAREPLICA_CONNCHECK_LOG,
+      paths.IPAREPLICA_CA_INSTALL_LOG,
       paths.KADMIND_LOG,
       paths.MESSAGES,
       paths.IPACLIENT_INSTALL_LOG,
@@ -294,19 +302,16 @@ class Backup(admintool.AdminTool):
 
         logger.info("Preparing backup on %s", api.env.host)
 
-        pent = pwd.getpwnam(constants.DS_USER)
-
         self.top_dir = tempfile.mkdtemp("ipa")
-        os.chown(self.top_dir, pent.pw_uid, pent.pw_gid)
+        constants.DS_USER.chown(self.top_dir)
         os.chmod(self.top_dir, 0o750)
         self.dir = os.path.join(self.top_dir, "ipa")
         os.mkdir(self.dir, 0o750)
-        os.chown(self.dir, pent.pw_uid, pent.pw_gid)
+        constants.DS_USER.chown(self.dir)
         self.tarfile = None
 
         self.header = os.path.join(self.top_dir, 'header')
 
-        cwd = os.getcwd()
         try:
             dirsrv = services.knownservices.dirsrv
 
@@ -359,10 +364,6 @@ class Backup(admintool.AdminTool):
                                  options.gpg_keyring)
 
         finally:
-            try:
-                os.chdir(cwd)
-            except Exception as e:
-                logger.error('Cannot change directory to %s: %s', cwd, e)
             shutil.rmtree(self.top_dir)
 
     def check_roles(self, raiseonerr=True):
@@ -625,7 +626,7 @@ class Backup(admintool.AdminTool):
     def file_backup(self, options):
 
         def verify_directories(dirs):
-            return [s for s in dirs if os.path.exists(s)]
+            return [s for s in dirs if s and os.path.exists(s)]
 
         self.tarfile = os.path.join(self.dir, 'files.tar')
 
@@ -761,11 +762,10 @@ class Backup(admintool.AdminTool):
                 'Unexpected error: %s' % e
             )
 
-        os.chdir(self.dir)
         args = [
             'tar', '--xattrs', '--selinux', '-czf', filename, '.'
         ]
-        result = run(args, raiseonerr=False)
+        result = run(args, raiseonerr=False, cwd=self.dir)
         if result.returncode != 0:
             raise admintool.ScriptError(
                 'tar returned non-zero code %s: %s' %

@@ -21,7 +21,6 @@ from __future__ import absolute_import
 
 import logging
 import os
-import pwd
 import shutil
 import tempfile
 import base64
@@ -34,9 +33,8 @@ from ipapython import ipautil
 from ipapython.dn import DN
 from ipaserver.install import cainstance
 from ipaserver.install import installutils
-from ipaserver.install import ldapupdate
 from ipaserver.install.dogtaginstance import DogtagInstance
-from ipaserver.plugins import ldap2
+
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +65,9 @@ class KRAInstance(DogtagInstance):
     # use for that certificate.  'configure_renewal()' reads this
     # dict.  The profile MUST be specified.
     tracking_reqs = {
-        'auditSigningCert cert-pki-kra': 'caInternalAuthAuditSigningCert',
-        'transportCert cert-pki-kra': 'caInternalAuthTransportCert',
-        'storageCert cert-pki-kra': 'caInternalAuthDRMstorageCert',
+        'auditSigningCert cert-pki-kra': 'caAuditSigningCert',
+        'transportCert cert-pki-kra': 'caTransportCert',
+        'storageCert cert-pki-kra': 'caStorageCert',
     }
 
     def __init__(self, realm):
@@ -184,8 +182,7 @@ class KRAInstance(DogtagInstance):
         if self.clone:
             krafile = self.pkcs12_info[0]
             shutil.copy(krafile, p12_tmpfile_name)
-            pent = pwd.getpwnam(self.service_user)
-            os.chown(p12_tmpfile_name, pent.pw_uid, pent.pw_gid)
+            self.service_user.chown(p12_tmpfile_name)
 
             self._configure_clone(
                 cfg,
@@ -208,11 +205,10 @@ class KRAInstance(DogtagInstance):
                 )
 
         # Generate configuration file
-        pent = pwd.getpwnam(self.service_user)
         config = self._create_spawn_config(cfg)
         with tempfile.NamedTemporaryFile('w', delete=False) as f:
             config.write(f)
-            os.fchown(f.fileno(), pent.pw_uid, pent.pw_gid)
+            self.service_user.chown(f.fileno())
             cfg_file = f.name
 
         nolog_list = [
@@ -237,13 +233,10 @@ class KRAInstance(DogtagInstance):
         Create KRA agent, assign a certificate, and add the user to
         the appropriate groups for accessing KRA services.
         """
+        conn = api.Backend.ldap2
 
         # get RA agent certificate
         cert = x509.load_certificate_from_file(paths.RA_AGENT_PEM)
-
-        # connect to KRA database
-        conn = ldap2.ldap2(api)
-        conn.connect(autobind=True)
 
         # create ipakra user with RA agent certificate
         entry = conn.make_entry(
@@ -267,20 +260,12 @@ class KRAInstance(DogtagInstance):
             KRA_BASEDN)
         conn.add_entry_to_group(KRA_AGENT_DN, group_dn, 'uniqueMember')
 
-        conn.disconnect()
-
     def __add_vault_container(self):
         self._ldap_mod(
             'vault.ldif', {'SUFFIX': self.suffix}, raise_on_err=True)
 
     def __apply_updates(self):
-        sub_dict = {
-            'SUFFIX': self.suffix,
-        }
-
-        ld = ldapupdate.LDAPUpdate(dm_password=self.dm_password,
-                                   sub_dict=sub_dict)
-        ld.update([os.path.join(paths.UPDATES_DIR, '40-vault.update')])
+        self._ldap_update(['40-vault.update'])
 
     def enable_ephemeral(self):
         """

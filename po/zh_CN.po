@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: freeipa 4.9.0.dev201908140712+gitc9938e3d8\n"
 "Report-Msgid-Bugs-To: https://pagure.io/freeipa/new_issue\n"
-"POT-Creation-Date: 2020-06-10 22:17+0300\n"
+"POT-Creation-Date: 2020-12-23 16:29+0200\n"
 "PO-Revision-Date: 2019-11-11 10:25+0000\n"
 "Last-Translator: Copied by Zanata <copied-by-zanata@zanata.org>\n"
 "Language-Team: Chinese (China)\n"
@@ -1329,13 +1329,6 @@ msgstr "检查存在组的GID。使用--group-overwrite-gid选项来覆盖GID"
 
 msgid "7 is not a valid revocation reason"
 msgstr "7不是一个有效的撤销原因"
-
-msgid ""
-"<i class=\"fa fa-info-circle\"></i> <strong>One-Time-Password(OTP):</strong> "
-"Generate new OTP code for each OTP field."
-msgstr ""
-"<i class=\"fa fa-info-circle\"></i> <strong>One-Time-Password(OTP):</strong> "
-"为每个OTP字段生成新的OTP码。"
 
 msgid ""
 "<p>Implicit method (password) will be used if no method is chosen.</"
@@ -3585,9 +3578,6 @@ msgstr "删除Sudo规则。"
 
 msgid "Delete a CA ACL."
 msgstr "删除一个CA ACL。"
-
-msgid "Delete a CA."
-msgstr "删除一个CA。"
 
 msgid "Delete a Certificate Profile."
 msgstr "删除一个证书配置文件。"
@@ -7184,15 +7174,6 @@ msgstr "需要组，权限或它们自己中的一个"
 msgid "One time password commands"
 msgstr "一次性密码命令"
 
-msgid "One-Time-Password"
-msgstr "一次性密码"
-
-msgid "One-Time-Password Not Present"
-msgstr "没有找到一次性密码"
-
-msgid "One-Time-Password Present"
-msgstr "找到一次性密码"
-
 msgid "Only one value is allowed"
 msgstr "只允许一个值"
 
@@ -7397,9 +7378,6 @@ msgstr "密码过期"
 
 msgid "Password history size"
 msgstr "密码历史大小"
-
-msgid "Password or Password+One-Time-Password"
-msgstr "密码或密码+一次性密码"
 
 msgid "Password plugin features"
 msgstr "密码插件功能"
@@ -8373,9 +8351,6 @@ msgstr "重置Kerberos票据策略为默认值。"
 msgid "Reset OTP"
 msgstr "重置OTP"
 
-msgid "Reset One-Time-Password"
-msgstr "重置一次性密码"
-
 msgid "Reset Password"
 msgstr "重置密码"
 
@@ -8532,12 +8507,6 @@ msgstr "反向区域%(name)s恰好需要%(count)d个IP地址组件，已给出%(
 
 msgid "Reverse zone IP network"
 msgstr "反向区域IP网络"
-
-#, python-format
-msgid ""
-"Reverse zone for PTR record should be a sub-zone of one the following fully "
-"qualified domains: %s"
-msgstr "反向区域的PTR记录应该是下面完全其中一个限制域：%s的子区域"
 
 msgid "Revert"
 msgstr "返回"
@@ -8705,9 +8674,6 @@ msgstr "进来的SID黑名单"
 
 msgid "SID blacklist outgoing"
 msgstr "出去的SID黑名单"
-
-msgid "SID blacklists"
-msgstr "SID黑名单"
 
 msgid "SID does not match any trusted domain"
 msgstr "SID不能匹配任何信任域"
@@ -9541,9 +9507,6 @@ msgstr "设置域级别"
 
 msgid "Set OTP"
 msgstr "设置OTP"
-
-msgid "Set One-Time-Password"
-msgstr "设置一次性密码"
 
 msgid "Set SSH key"
 msgstr "设置SSH公钥"
@@ -12257,5 +12220,10 @@ msgstr "{attr}：没有这样的属性"
 msgid "{role}: role not found"
 msgstr "{role}：角色没有找到"
 
-#~ msgid "This principal is required by the IPA master"
-#~ msgstr "这个主体是IPA主服务器所需的"
+#~ msgid "Delete a CA."
+#~ msgstr "删除一个CA。"
+
+#~ msgid ""
+#~ "Reverse zone for PTR record should be a sub-zone of one the following "
+#~ "fully qualified domains: %s"
+#~ msgstr "反向区域的PTR记录应该是下面完全其中一个限制域：%s的子区域"

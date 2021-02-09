@@ -26,14 +26,16 @@ import os
 
 class BasePathNamespace:
     BIN_HOSTNAMECTL = "/bin/hostnamectl"
+    CRYPTO_POLICY_OPENSSLCNF_FILE = None
     ECHO = "/bin/echo"
     FIPS_MODE_SETUP = "/usr/bin/fips-mode-setup"
     GZIP = "/bin/gzip"
     LS = "/bin/ls"
     SYSTEMCTL = "/bin/systemctl"
+    SYSTEMD_RUN = "/bin/systemd-run"
     SYSTEMD_DETECT_VIRT = "/usr/bin/systemd-detect-virt"
+    SYSTEMD_TMPFILES = "/usr/bin/systemd-tmpfiles"
     TAR = "/bin/tar"
-    PACKAGE_MANAGER = "/usr/bin/rpm"
     AUTOFS_LDAP_AUTH_CONF = "/etc/autofs_ldap_auth.conf"
     ETC_FEDORA_RELEASE = "/etc/fedora-release"
     GROUP = "/etc/group"
@@ -55,7 +57,6 @@ class BasePathNamespace:
     HTTPD_CERT_FILE = "/var/lib/ipa/certs/httpd.crt"
     HTTPD_KEY_FILE = "/var/lib/ipa/private/httpd.key"
     HTTPD_PASSWD_FILE_FMT = "/var/lib/ipa/passwds/{host}-443-RSA"
-    HTTPD_DEFAULT_STARTED_SITE_CONF = None
     # only used on Fedora
     HTTPD_IPA_WSGI_MODULES_CONF = None
     OLD_IPA_KEYTAB = "/etc/httpd/conf/ipa.keytab"
@@ -70,6 +71,7 @@ class BasePathNamespace:
     IPA_DEFAULT_CONF = "/etc/ipa/default.conf"
     IPA_DNSKEYSYNCD_KEYTAB = "/etc/ipa/dnssec/ipa-dnskeysyncd.keytab"
     IPA_ODS_EXPORTER_KEYTAB = "/etc/ipa/dnssec/ipa-ods-exporter.keytab"
+    DNSSEC_OPENSSL_CONF = "/etc/ipa/dnssec/openssl.cnf"
     DNSSEC_SOFTHSM2_CONF = "/etc/ipa/dnssec/softhsm2.conf"
     DNSSEC_SOFTHSM_PIN_SO = "/etc/ipa/dnssec/softhsm_pin_so"
     IPA_NSSDB_DIR = "/etc/ipa/nssdb"
@@ -100,8 +102,6 @@ class BasePathNamespace:
     NSS_LDAP_CONF = "/etc/nss_ldap.conf"
     NSSWITCH_CONF = "/etc/nsswitch.conf"
     CHRONY_CONF = "/etc/chrony.conf"
-    NTPD_CONF = "/etc/ntp.conf"
-    ONTPD_CONF = "/etc/ntpd.conf"
     NTP_CONF = "/etc/ntp.conf"
     NTP_STEP_TICKERS = "/etc/ntp/step-tickers"
     ETC_OPENDNSSEC_DIR = "/etc/opendnssec"
@@ -124,6 +124,11 @@ class BasePathNamespace:
     PKI_TOMCAT_ALIAS_PWDFILE_TXT = "/etc/pki/pki-tomcat/alias/pwdfile.txt"
     PKI_TOMCAT_PASSWORD_CONF = "/etc/pki/pki-tomcat/password.conf"
     PKI_TOMCAT_SERVER_XML = "/etc/pki/pki-tomcat/server.xml"
+    PKI_ACME_CONFIGSOURCES_CONF = "/etc/pki/pki-tomcat/acme/configsources.conf"
+    PKI_ACME_DATABASE_CONF = "/etc/pki/pki-tomcat/acme/database.conf"
+    PKI_ACME_ENGINE_CONF = "/etc/pki/pki-tomcat/acme/engine.conf"
+    PKI_ACME_ISSUER_CONF = "/etc/pki/pki-tomcat/acme/issuer.conf"
+    PKI_ACME_REALM_CONF = "/etc/pki/pki-tomcat/acme/realm.conf"
     ETC_REDHAT_RELEASE = "/etc/redhat-release"
     RESOLV_CONF = "/etc/resolv.conf"
     SAMBA_KEYTAB = "/etc/samba/samba.keytab"
@@ -131,6 +136,8 @@ class BasePathNamespace:
     LIMITS_CONF = "/etc/security/limits.conf"
     SSH_CONFIG_DIR = "/etc/ssh"
     SSH_CONFIG = "/etc/ssh/ssh_config"
+    SSH_IPA_CONFIG_TEMPLATE = "/usr/share/ipa/client/ssh_ipa.conf.template"
+    SSH_IPA_CONFIG = "/etc/ssh/ssh_config.d/04-ipa.conf"
     SSHD_CONFIG = "/etc/ssh/sshd_config"
     SSHD_IPA_CONFIG = "/etc/ssh/sshd_config.d/04-ipa.conf"
     SSHD_IPA_CONFIG_TEMPLATE = "/usr/share/ipa/client/sshd_ipa.conf.template"
@@ -189,7 +196,7 @@ class BasePathNamespace:
     CHROMIUM_BROWSER = "/usr/bin/chromium-browser"
     FIREFOX = "/usr/bin/firefox"
     GETCERT = "/usr/bin/getcert"
-    GPG2 = "/usr/bin/gpg2"
+    GPG2 = "/usr/bin/gpg"
     GPG_CONF = "/usr/bin/gpgconf"
     GPG_CONNECT_AGENT = "/usr/bin/gpg-connect-agent"
     GPG_AGENT = "/usr/bin/gpg-agent"
@@ -211,6 +218,9 @@ class BasePathNamespace:
     ODS_ENFORCER = "/usr/sbin/ods-enforcer"
     ODS_ENFORCER_DB_SETUP = "/usr/sbin/ods-enforcer-db-setup"
     OPENSSL = "/usr/bin/openssl"
+    OPENSSL_DIR = "/etc/pki/tls"
+    OPENSSL_CERTS_DIR = "/etc/pki/tls/certs"
+    OPENSSL_PRIVATE_DIR = "/etc/pki/tls/private"
     PK12UTIL = "/usr/bin/pk12util"
     SOFTHSM2_UTIL = "/usr/bin/softhsm2-util"
     SSLGET = "/usr/bin/sslget"
@@ -256,8 +266,6 @@ class BasePathNamespace:
     IPA_REPLICA_CONNCHECK = "/usr/sbin/ipa-replica-conncheck"
     IPA_RMKEYTAB = "/usr/sbin/ipa-rmkeytab"
     IPACTL = "/usr/sbin/ipactl"
-    NAMED = "/usr/sbin/named"
-    NAMED_PKCS11 = "/usr/sbin/named-pkcs11"
     CHRONYC = "/usr/bin/chronyc"
     CHRONYD = "/usr/sbin/chronyd"
     PKIDESTROY = "/usr/sbin/pkidestroy"
@@ -266,8 +274,10 @@ class BasePathNamespace:
     RESTORECON = "/usr/sbin/restorecon"
     SELINUXENABLED = "/usr/sbin/selinuxenabled"
     SETSEBOOL = "/usr/sbin/setsebool"
+    SEMODULE = "/usr/sbin/semodule"
     SMBD = "/usr/sbin/smbd"
     USERADD = "/usr/sbin/useradd"
+    FONTS_DIR = "/usr/share/fonts"
     FONTS_OPENSANS_DIR = "/usr/share/fonts/open-sans"
     FONTS_FONTAWESOME_DIR = "/usr/share/fonts/fontawesome"
     USR_SHARE_IPA_DIR = "/usr/share/ipa/"
@@ -332,9 +342,11 @@ class BasePathNamespace:
     SSSD_DB = "/var/lib/sss/db"
     SSSD_MC_GROUP = "/var/lib/sss/mc/group"
     SSSD_MC_PASSWD = "/var/lib/sss/mc/passwd"
+    SSSD_MC_INITGROUPS = "/var/lib/sss/mc/initgroups"
     SSSD_PUBCONF_DIR = "/var/lib/sss/pubconf"
     SSSD_PUBCONF_KNOWN_HOSTS = "/var/lib/sss/pubconf/known_hosts"
     SSSD_PUBCONF_KRB5_INCLUDE_D_DIR = "/var/lib/sss/pubconf/krb5.include.d/"
+    SSSD_KEYTABS_DIR = "/var/lib/sss/keytabs"
     VAR_LOG_AUDIT = "/var/log/audit/audit.log"
     VAR_LOG_HTTPD_DIR = "/var/log/httpd"
     VAR_LOG_HTTPD_ERROR = "/var/log/httpd/error_log"
@@ -348,6 +360,8 @@ class BasePathNamespace:
     IPAREPLICA_INSTALL_LOG = "/var/log/ipareplica-install.log"
     IPARESTORE_LOG = "/var/log/iparestore.log"
     IPASERVER_INSTALL_LOG = "/var/log/ipaserver-install.log"
+    IPASERVER_ADTRUST_INSTALL_LOG = "/var/log/ipaserver-adtrust-install.log"
+    IPASERVER_DNS_INSTALL_LOG = "/var/log/ipaserver-dns-install.log"
     IPASERVER_KRA_INSTALL_LOG = "/var/log/ipaserver-kra-install.log"
     IPASERVER_UNINSTALL_LOG = "/var/log/ipaserver-uninstall.log"
     IPAUPGRADE_LOG = "/var/log/ipaupgrade.log"
@@ -386,12 +400,14 @@ class BasePathNamespace:
     CERTMONGER = '/usr/sbin/certmonger'
     NETWORK_MANAGER_CONFIG_DIR = '/etc/NetworkManager/conf.d'
     NETWORK_MANAGER_IPA_CONF = '/etc/NetworkManager/conf.d/zzz-ipa.conf'
+    SYSTEMD_RESOLVED_IPA_CONF = '/etc/systemd/resolved.conf.d/zzz-ipa.conf'
     IPA_CUSTODIA_CONF_DIR = '/etc/ipa/custodia'
     IPA_CUSTODIA_CONF = '/etc/ipa/custodia/custodia.conf'
     IPA_CUSTODIA_KEYS = '/etc/ipa/custodia/server.keys'
     IPA_CUSTODIA_SOCKET = '/run/httpd/ipa-custodia.sock'
     IPA_CUSTODIA_AUDIT_LOG = '/var/log/ipa-custodia.audit.log'
     IPA_CUSTODIA_HANDLER = "/usr/libexec/ipa/custodia"
+    IPA_CUSTODIA_CHECK = "/usr/libexec/ipa/ipa-custodia-check"
     IPA_GETKEYTAB = '/usr/sbin/ipa-getkeytab'
     EXTERNAL_SCHEMA_DIR = '/usr/share/ipa/schema.d'
     GSSPROXY_CONF = '/etc/gssproxy/10-ipa.conf'
@@ -434,6 +450,7 @@ class BasePathNamespace:
     LIBARCH = "64"
     TDBTOOL = '/usr/bin/tdbtool'
     SECRETS_TDB = '/var/lib/samba/private/secrets.tdb'
+    LETS_ENCRYPT_LOG = '/var/log/letsencrypt/letsencrypt.log'
 
     def check_paths(self):
         """Check paths for missing files

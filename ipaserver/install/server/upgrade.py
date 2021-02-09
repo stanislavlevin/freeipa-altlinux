@@ -11,7 +11,6 @@ import re
 import os
 import glob
 import shutil
-import pwd
 import fileinput
 import ssl
 import stat
@@ -28,10 +27,11 @@ from ipalib.facts import is_ipa_configured
 import SSSDConfig
 import ipalib.util
 import ipalib.errors
+from ipaclient.install import timeconf
 from ipaclient.install.client import sssd_enable_ifp
+from ipalib.install.dnsforwarders import detect_resolve1_resolv_conf
 from ipaplatform import services
 from ipaplatform.tasks import tasks
-from ipapython import certdb
 from ipapython import ipautil, version
 from ipapython import ipaldap
 from ipapython import directivesetter
@@ -388,15 +388,34 @@ def ca_enable_ldap_profile_subsystem(ca):
     needs_update = False
     directive = None
     try:
-        for i in range(15):
+        i = 0
+        while True:
+            # find profile subsystem
+            directive = "subsystem.{}.id".format(i)
+            value = directivesetter.get_directive(
+                paths.CA_CS_CFG_PATH,
+                directive,
+                separator='=')
+            if not value:
+                logger.error('Unable to find profile subsystem in %s',
+                             paths.CA_CS_CFG_PATH)
+                return False
+            if value != 'profile':
+                i = i + 1
+                continue
+
+            # check profile subsystem class name
             directive = "subsystem.{}.class".format(i)
             value = directivesetter.get_directive(
                 paths.CA_CS_CFG_PATH,
                 directive,
                 separator='=')
-            if value == 'com.netscape.cmscore.profile.ProfileSubsystem':
+            if value != 'com.netscape.cmscore.profile.LDAPProfileSubsystem':
                 needs_update = True
-                break
+
+            # break after finding profile subsystem
+            break
+
     except OSError as e:
         logger.error('Cannot read CA configuration file "%s": %s',
                      paths.CA_CS_CFG_PATH, e)
@@ -483,20 +502,6 @@ def ca_disable_publish_cert(ca):
     return True  # restart needed
 
 
-def upgrade_ca_audit_cert_validity(ca):
-    """
-    Update the Dogtag audit signing certificate.
-
-    Returns True if restart is needed, False otherwise.
-    """
-    logger.info('[Verifying that CA audit signing cert has 2 year validity]')
-    if ca.is_configured():
-        return ca.set_audit_renewal()
-    else:
-        logger.info('CA is not configured')
-        return False
-
-
 def ca_initialize_hsm_state(ca):
     """Initializse HSM state as False / internal token
     """
@@ -507,6 +512,24 @@ def ca_initialize_hsm_state(ca):
         config.set(section_name, 'pki_hsm_enable', 'False')
         ca.set_hsm_state(config)
 
+
+def dnssec_set_openssl_engine(dnskeysyncd):
+    """
+    Setup OpenSSL engine for BIND
+    """
+    if constants.NAMED_OPENSSL_ENGINE is None:
+        return False
+
+    if sysupgrade.get_upgrade_state('dns', 'openssl_engine'):
+        return False
+
+    logger.info('[Set OpenSSL engine for BIND]')
+    dnskeysyncd.setup_named_openssl_conf()
+    dnskeysyncd.setup_named_sysconfig()
+    dnskeysyncd.setup_ipa_dnskeysyncd_sysconfig()
+    sysupgrade.set_upgrade_state('dns', 'openssl_engine', True)
+
+    return True
 
 
 def certificate_renewal_update(ca, kra, ds, http):
@@ -718,8 +741,7 @@ def copy_crl_file(old_path, new_path=None):
         os.symlink(realpath, new_path)
     else:
         shutil.copy2(old_path, new_path)
-        pent = pwd.getpwnam(constants.PKI_USER)
-        os.chown(new_path, pent.pw_uid, pent.pw_gid)
+        constants.PKI_USER.chown(new_path)
 
     tasks.restore_context(new_path)
 
@@ -1067,8 +1089,7 @@ def update_http_keytab(http):
                 'Cannot remove file %s (%s). Please remove the file manually.',
                 paths.OLD_IPA_KEYTAB, e
             )
-    pent = pwd.getpwnam(http.keytab_user)
-    os.chown(http.keytab, pent.pw_uid, pent.pw_gid)
+    http.keytab_user.chown(http.keytab)
 
 
 def ds_enable_sidgen_extdom_plugins(ds):
@@ -1090,9 +1111,23 @@ def ca_upgrade_schema(ca):
         logger.info('CA is not configured')
         return False
 
+    # ACME schema file moved in pki-server-10.9.0-0.3
+    # ACME database connections were abstrated in pki-acme-10.10.0
+    for path in [
+        '/usr/share/pki/acme/conf/database/ds/schema.ldif',
+        '/usr/share/pki/acme/conf/database/ldap/schema.ldif',
+        '/usr/share/pki/acme/database/ldap/schema.ldif',
+    ]:
+        if os.path.exists(path):
+            acme_schema_ldif = path
+            break
+    else:
+        raise RuntimeError('ACME schema file not found')
+
     schema_files=[
         '/usr/share/pki/server/conf/schema-certProfile.ldif',
         '/usr/share/pki/server/conf/schema-authority.ldif',
+        acme_schema_ldif,
     ]
     try:
         modified = schemaupdate.update_schema(schema_files, ldapi=True)
@@ -1119,45 +1154,6 @@ def add_default_caacl(ca):
         cainstance.ensure_default_caacl()
 
     sysupgrade.set_upgrade_state('caacl', 'add_default_caacl', True)
-
-
-def setup_krb_paths(krb):
-    logger.info("[Setup KRB5 paths]")
-
-    aug = Augeas(flags=Augeas.NO_LOAD | Augeas.NO_MODL_AUTOLOAD,
-                 loadpath=paths.USR_SHARE_IPA_DIR)
-    try:
-        NEW_KRB_HOME = "/var/lib/kerberos"
-        OLD_KRB_HOME = "/var/kerberos"
-        aug.transform("IPAKrb5", paths.KRB5KDC_KDC_CONF)
-        aug.load()
-
-        path = '/files{}/realms/{}'.format(paths.KRB5KDC_KDC_CONF, krb.realm)
-        modified = False
-
-        expr = '{}/*[.=~regexp("{}")]'.format(
-            path, ".*{}.*".format(OLD_KRB_HOME))
-        matches = aug.match(expr)
-        for m in matches:
-            old_value = aug.get(m)
-            new_value = old_value.replace(OLD_KRB_HOME, NEW_KRB_HOME)
-            aug.set(m, new_value)
-            modified = True
-
-        if modified:
-            try:
-                aug.save()
-            except IOError:
-                for error_path in aug.match('/augeas//error'):
-                    logger.error('augeas: %s', aug.get(error_path))
-                    raise
-
-            kadmin = service.SimpleServiceInstance("kadmin")
-            if kadmin.is_configured():
-                kadmin.restart()
-
-    finally:
-        aug.close()
 
 
 def setup_pkinit(krb):
@@ -1255,7 +1251,27 @@ def enable_server_snippet():
     tasks.restore_context(paths.KRB5_FREEIPA_SERVER)
 
 
-def ntp_cleanup(fqdn):
+def ntpd_cleanup(fqdn, fstore):
+    sstore = sysrestore.StateFile(paths.SYSRESTORE)
+    timeconf.restore_forced_timeservices(sstore, 'ntpd')
+    if sstore.has_state('ntp'):
+        instance = services.service('ntpd', api)
+        sstore.restore_state(instance.service_name, 'enabled')
+        sstore.restore_state(instance.service_name, 'running')
+        sstore.restore_state(instance.service_name, 'step-tickers')
+        try:
+            instance.disable()
+            instance.stop()
+        except Exception as e:
+            logger.debug("Service ntpd was not disabled or stopped")
+
+    for ntpd_file in [paths.NTP_CONF, paths.NTP_STEP_TICKERS,
+                      paths.SYSCONFIG_NTPD]:
+        try:
+            fstore.restore_file(ntpd_file)
+        except ValueError as e:
+            logger.debug(e)
+
     try:
         api.Backend.ldap2.delete_entry(DN(('cn', 'NTP'), ('cn', fqdn),
                                        api.env.container_masters))
@@ -1274,6 +1290,7 @@ def ntp_cleanup(fqdn):
             updated_role_instances += tuple([role_instance])
 
     servroles.role_instances = updated_role_instances
+    sysupgrade.set_upgrade_state('ntpd', 'ntpd_cleaned', True)
 
 
 def update_replica_config(db_suffix):
@@ -1395,20 +1412,6 @@ def fix_permissions():
             os.chmod(filename, mode)
 
 
-def fix_pki_nssdb_permissions():
-    """Fix permission of pki instance's nssdb directory and files.
-    Remove this when it will be fixed in dogtag pki upstream.
-    """
-    shutil.chown(paths.PKI_TOMCAT_ALIAS_DIR, group=constants.PKI_GROUP)
-
-    for basename in certdb.NSS_FILES:
-        filename = os.path.join(paths.PKI_TOMCAT_ALIAS_DIR, basename)
-        try:
-            shutil.chown(filename, group=constants.PKI_GROUP)
-        except FileNotFoundError:
-            pass
-
-
 def upgrade_bind(fstore):
     """Update BIND named DNS server instance
     """
@@ -1426,19 +1429,76 @@ def upgrade_bind(fstore):
         logger.info("DNS service is not configured")
         return False
 
-    # get rid of old upgrade states
+    bind_switch_service(bind)
+
+    # get rid of old states
+    bind_old_states(bind)
     bind_old_upgrade_states()
 
-    changed = bind.setup_named_conf(backup=True)
-    if changed:
-        logger.info("named.conf has been modified, restarting named")
+    # only upgrade with drop-in is missing and /etc/resolv.conf is a link to
+    # resolve1's stub resolver config file.
+    has_resolved_ipa_conf = os.path.isfile(paths.SYSTEMD_RESOLVED_IPA_CONF)
+    if not has_resolved_ipa_conf and detect_resolve1_resolv_conf():
+        ip_addresses = installutils.resolve_ip_addresses_nss(
+            api.env.host
+        )
+        bind.ip_addresses = ip_addresses
+        bind.setup_resolv_conf()
+        logger.info("Updated systemd-resolved configuration")
+
+    if bind.is_configured() and not bind.is_running():
+        # some upgrade steps may require bind running
+        bind_started = True
+        bind.start()
+    else:
+        bind_started = False
+
     try:
-        if bind.is_running():
-            bind.restart()
-    except ipautil.CalledProcessError as e:
-        logger.error("Failed to restart %s: %s", bind.service_name, e)
+        changed = bind.setup_named_conf(backup=True)
+        if changed:
+            logger.info("named.conf has been modified, restarting named")
+        try:
+            if bind.is_running():
+                bind.restart()
+        except ipautil.CalledProcessError as e:
+            logger.error("Failed to restart %s: %s", bind.service_name, e)
+    finally:
+        if bind_started:
+            bind.stop()
 
     return changed
+
+
+def bind_switch_service(bind):
+    """
+    Mask either named or named-pkcs11, we need to run only one,
+    running both can cause unexpected errors.
+    """
+    named_conflict_name = bind.named_conflict.systemd_name
+    named_conflict_old = sysupgrade.get_upgrade_state('dns', 'conflict_named')
+
+    # nothing changed
+    if named_conflict_old and named_conflict_old == named_conflict_name:
+        return False
+
+    bind.switch_service()
+
+    sysupgrade.set_upgrade_state('dns', 'conflict_named', named_conflict_name)
+    return True
+
+
+def bind_old_states(bind):
+    """Remove old states
+    """
+    # no longer used states
+    old_states = [
+        "enabled",
+        "running",
+        "named-regular-enabled",
+        "named-regular-running",
+    ]
+    for state in old_states:
+        bind.delete_state(state)
 
 
 def bind_old_upgrade_states():
@@ -1492,14 +1552,14 @@ def upgrade_configuration():
     if not ds_running:
         ds.start(ds.serverid)
 
-    ntp_cleanup(fqdn)
+    if not sysupgrade.get_upgrade_state('ntpd', 'ntpd_cleaned'):
+        ntpd_cleanup(fqdn, fstore)
 
     if tasks.configure_pkcs11_modules(fstore):
         print("Disabled p11-kit-proxy")
 
     check_certs()
     fix_permissions()
-    fix_pki_nssdb_permissions()
 
     auto_redirect = find_autoredirect(fqdn)
     sub_dict = dict(
@@ -1512,11 +1572,13 @@ def upgrade_configuration():
         WSGI_PREFIX_DIR=paths.WSGI_PREFIX_DIR,
         WSGI_PROCESSES=constants.WSGI_PROCESSES,
         GSSAPI_SESSION_KEY=paths.GSSAPI_SESSION_KEY,
+        FONTS_DIR=paths.FONTS_DIR,
         FONTS_OPENSANS_DIR=paths.FONTS_OPENSANS_DIR,
         FONTS_FONTAWESOME_DIR=paths.FONTS_FONTAWESOME_DIR,
         IPA_CCACHES=paths.IPA_CCACHES,
         IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET,
         KDCPROXY_CONFIG=paths.KDCPROXY_CONFIG,
+        DOMAIN=api.env.domain,
     )
 
     subject_base = find_subject_base()
@@ -1553,13 +1615,6 @@ def upgrade_configuration():
         upgrade_file(sub_dict, paths.HTTPD_IPA_CONF,
                      os.path.join(paths.USR_SHARE_IPA_DIR,
                                   "ipa.conf.template"))
-        # move old config
-        if not os.path.exists(paths.HTTPD_IPA_REWRITE_CONF):
-            try:
-                shutil.move("/etc/httpd2/conf/ipa-rewrite.conf",
-                            paths.HTTPD_IPA_REWRITE_CONF)
-            except OSError:
-                pass
         upgrade_file(sub_dict, paths.HTTPD_IPA_REWRITE_CONF,
                      os.path.join(paths.USR_SHARE_IPA_DIR,
                                   "ipa-rewrite.conf.template"))
@@ -1666,10 +1721,8 @@ def upgrade_configuration():
     update_ipa_httpd_service_conf(http)
     update_ipa_http_wsgi_conf(http)
     migrate_to_mod_ssl(http)
-    tasks.configure_ipa_gssproxy_dir()
     update_http_keytab(http)
     http.configure_gssproxy()
-    http.configure_httpd_mods()
     http.start()
 
     uninstall_selfsign(ds, http)
@@ -1679,12 +1732,12 @@ def upgrade_configuration():
         (otpdinstance.OtpdInstance(), 'OTPD'),
     )
 
-    for service, ldap_name in simple_service_list:
+    for svc, ldap_name in simple_service_list:
         try:
-            if not service.is_configured():
-                service.create_instance(ldap_name, fqdn,
-                                        ipautil.realm_to_suffix(api.env.realm),
-                                        realm=api.env.realm)
+            if not svc.is_configured():
+                svc.create_instance(ldap_name, fqdn,
+                                    ipautil.realm_to_suffix(api.env.realm),
+                                    realm=api.env.realm)
         except ipalib.errors.DuplicateEntry:
             pass
 
@@ -1694,6 +1747,10 @@ def upgrade_configuration():
             if not dnskeysyncd.is_configured():
                 dnskeysyncd.create_instance(fqdn, api.env.realm)
                 dnskeysyncd.start_dnskeysyncd()
+            else:
+                if dnssec_set_openssl_engine(dnskeysyncd):
+                    dnskeysyncd.start_dnskeysyncd()
+            dnskeysyncd.set_dyndb_ldap_workdir_permissions()
 
     cleanup_kdc(fstore)
     cleanup_adtrust(fstore)
@@ -1708,7 +1765,6 @@ def upgrade_configuration():
     ca_restart = any([
         ca_restart,
         ca_upgrade_schema(ca),
-        upgrade_ca_audit_cert_validity(ca),
         certificate_renewal_update(ca, kra, ds, http),
         ca_enable_pkix(ca),
         ca_configure_profiles_acl(ca),
@@ -1740,6 +1796,7 @@ def upgrade_configuration():
         cainstance.repair_profile_caIPAserviceCert()
         ca.setup_lightweight_ca_key_retrieval()
         cainstance.ensure_ipa_authority_entry()
+        ca.setup_acme()
         ca_initialize_hsm_state(ca)
 
     migrate_to_authselect()
@@ -1767,7 +1824,6 @@ def upgrade_configuration():
                         CACERT_PEM=paths.CACERT_PEM,
                         KDC_CA_BUNDLE_PEM=paths.KDC_CA_BUNDLE_PEM,
                         CA_BUNDLE_PEM=paths.CA_BUNDLE_PEM)
-    setup_krb_paths(krb)
     krb.add_anonymous_principal()
     setup_spake(krb)
     setup_pkinit(krb)
@@ -1776,6 +1832,13 @@ def upgrade_configuration():
     # Must be executed after certificate_renewal_update
     # (see function docstring for details)
     http_certificate_ensure_ipa_ca_dnsname(http)
+
+    # Convert configuredService to either enabledService or hiddenService
+    # depending on the state of the server role.  This is to fix situations
+    # when deployment has happened before introduction of hidden replicas
+    # as those services will stay as configuredService and will not get
+    # started after upgrade, rendering the system non-functioning
+    service.sync_services_state(fqdn)
 
     if not ds_running:
         ds.stop(ds.serverid)

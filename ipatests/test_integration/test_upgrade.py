@@ -9,6 +9,7 @@ import base64
 import configparser
 import os
 import io
+import textwrap
 
 from cryptography.hazmat.primitives import serialization
 import pytest
@@ -259,3 +260,51 @@ class TestUpgrade(IntegrationTest):
         self.master.run_command(['ipa-server-upgrade'])
         result = self.master.run_command(["ipa", "user-show", "admin"])
         assert rootprinc in result.stdout_text
+
+    def test_pwpolicy_upgrade(self):
+        """Test that ipapwdpolicy objectclass is added to all policies"""
+        entry_ldif = textwrap.dedent("""
+            dn: cn=global_policy,cn={realm},cn=kerberos,{base_dn}
+            changetype: modify
+            delete: objectclass
+            objectclass: ipapwdpolicy
+        """).format(
+            base_dn=str(self.master.domain.basedn),
+            realm=self.master.domain.realm)
+        tasks.ldapmodify_dm(self.master, entry_ldif)
+
+        tasks.kinit_admin(self.master)
+        self.master.run_command(['ipa-server-upgrade'])
+        result = self.master.run_command(["ipa", "pwpolicy-find"])
+        # if it is still missing the oc it won't be displayed
+        assert 'global_policy' in result.stdout_text
+
+    def test_kra_detection(self):
+        """Test that ipa-server-upgrade correctly detects KRA presence
+
+        Test for https://pagure.io/freeipa/issue/8596
+        When the directory /var/lib/pki/pki-tomcat/kra/ exists, the upgrade
+        wrongly assumes that KRA component is installed and crashes.
+        The test creates an empty dir and calls kra.is_installed()
+        to make sure that KRA detection is not based on the directory
+        presence.
+        Note: because of issue https://github.com/dogtagpki/pki/issues/3397
+        ipa-server-upgrade fails even with the kra detection fix. That's
+        why the test does not exercise the whole ipa-server-upgrade command
+        but only the KRA detection part.
+        """
+        kra_path = os.path.join(paths.VAR_LIB_PKI_TOMCAT_DIR, "kra")
+        try:
+            self.master.run_command(["mkdir", "-p", kra_path])
+            script = (
+                "from ipalib import api; "
+                "from ipaserver.install import krainstance; "
+                "api.bootstrap(); "
+                "api.finalize(); "
+                "kra = krainstance.KRAInstance(api.env.realm); "
+                "print(kra.is_installed())"
+            )
+            result = self.master.run_command(['python3', '-c', script])
+            assert "False" in result.stdout_text
+        finally:
+            self.master.run_command(["rmdir", kra_path])

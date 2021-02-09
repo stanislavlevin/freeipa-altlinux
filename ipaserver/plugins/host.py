@@ -22,14 +22,12 @@ from __future__ import absolute_import
 
 import logging
 
-import dns.resolver
-
 import six
 
 from ipalib import api, errors, util
 from ipalib import messages
 from ipalib import Str, StrEnum, Flag
-from ipalib.parameters import Principal, Certificate
+from ipalib.parameters import Data, Principal, Certificate
 from ipalib.plugable import Registry
 from .baseldap import (LDAPQuery, LDAPObject, LDAPCreate,
                                      LDAPDelete, LDAPUpdate, LDAPSearch,
@@ -64,7 +62,7 @@ from ipapython.ipautil import (
     CheckedIPAddress,
     TMP_PWD_ENTROPY_BITS
 )
-from ipapython.dnsutil import DNSName
+from ipapython.dnsutil import DNSName, zone_for_name
 from ipapython.ssh import SSHPublicKey
 from ipapython.dn import DN
 from ipapython import kerberos
@@ -262,6 +260,12 @@ class HostPassword(Str):
     setting a password on the command-line which would break
     backwards compatibility.
     """
+
+    kwargs = Data.kwargs + (
+        ('pattern', (str,), None),
+        ('noextrawhitespace', bool, False),
+    )
+
     def safe_value(self, value):
         return u'********'
 
@@ -586,7 +590,7 @@ class host(LDAPObject):
             'krbprincipalauthind*',
             cli_name='auth_ind',
             label=_('Authentication Indicators'),
-            doc=_("Defines a whitelist for Authentication Indicators."
+            doc=_("Defines an allow list for Authentication Indicators."
                   " Use 'otp' to allow OTP-based 2FA authentications."
                   " Use 'radius' to allow RADIUS-based 2FA authentications."
                   " Use 'pkinit' to allow PKINIT-based 2FA authentications."
@@ -826,7 +830,7 @@ class host_del(LDAPDelete):
         if updatedns:
             # Remove A, AAAA, SSHFP and PTR records of the host
             fqdn_dnsname = DNSName(fqdn).make_absolute()
-            zone = DNSName(dns.resolver.zone_for_name(fqdn_dnsname))
+            zone = DNSName(zone_for_name(fqdn_dnsname))
             relative_hostname = fqdn_dnsname.relativize(zone)
 
             # Get all resources for this host

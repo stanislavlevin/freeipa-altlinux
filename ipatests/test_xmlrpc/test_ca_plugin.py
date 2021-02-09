@@ -48,7 +48,7 @@ def default_ca(request):
 def crud_subca(request, xmlrpc_setup):
     name = u'crud-subca'
     subject = u'CN=crud subca test,O=crud testing inc'
-    tracker = CATracker(name, subject)
+    tracker = CATracker(name, subject, auto_disable_for_delete=False)
 
     return tracker.make_fixture(request)
 
@@ -78,7 +78,13 @@ class TestDefaultCA(XMLRPC_test):
     def test_default_ca_present(self, default_ca):
         default_ca.retrieve()
 
+    def test_default_ca_disable(self, default_ca):
+        """IPA CA cannot be disabled."""
+        with pytest.raises(errors.ProtectedEntryError):
+            default_ca.disable()
+
     def test_default_ca_delete(self, default_ca):
+        """IPA CA cannot be deleted."""
         with pytest.raises(errors.ProtectedEntryError):
             default_ca.delete()
 
@@ -104,7 +110,14 @@ class TestCAbasicCRUD(XMLRPC_test):
         )
         command()
 
-    def test_delete(self, crud_subca):
+    def test_delete_while_enabled_fails(self, crud_subca):
+        with pytest.raises(errors.ProtectedEntryError):
+            crud_subca.delete()
+
+    def test_disable(self, crud_subca):
+        crud_subca.disable()
+
+    def test_delete_after_disable_succeeds(self, crud_subca):
         crud_subca.delete()
 
     def test_find(self, crud_subca):
@@ -195,3 +208,11 @@ class TestCAbasicCRUD(XMLRPC_test):
             self, unrecognised_subject_dn_attrs_subca):
         with pytest.raises(errors.ValidationError):
             unrecognised_subject_dn_attrs_subca.create()
+
+    def test_pre_cleanup_disable(self, crud_subca):
+        # crud_subca was initialised with auto_disable_for_delete=False.  But
+        # we already tested disablement and deletion.  Then we recreated it for
+        # subsequent tests.  Now we have finished the tests; crud_subca is
+        # about to be deleted.  But we have to explicitly disable it first,
+        # otherwise deletion will will and raise a test teardown failure.
+        crud_subca.disable()

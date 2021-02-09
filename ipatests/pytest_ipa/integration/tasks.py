@@ -49,6 +49,7 @@ from cryptography.hazmat.backends import default_backend
 
 from ipapython import certdb
 from ipapython import ipautil
+from ipapython.dnsutil import DNSResolver
 from ipaplatform.paths import paths
 from ipaplatform.services import knownservices
 from ipapython.dn import DN
@@ -79,7 +80,8 @@ def check_arguments_are(slice, instanceof):
     def wrapper(func):
         def wrapped(*args, **kwargs):
             for i in args[slice[0]:slice[1]]:
-                assert isinstance(i, instanceof), "Wrong type: %s: %s" % (i, type(i))
+                assert isinstance(i, instanceof), "Wrong type: %s: %s" % (
+                    i, type(i))
             return func(*args, **kwargs)
         return wrapped
     return wrapper
@@ -87,9 +89,10 @@ def check_arguments_are(slice, instanceof):
 
 def prepare_reverse_zone(host, ip):
     zone = get_reverse_zone_default(ip)
-    result = host.run_command(["ipa",
-                      "dnszone-add",
-                      zone], raiseonerr=False)
+    result = host.run_command(
+        ["ipa", "dnszone-add", zone, '--skip-overlap-check'],
+        raiseonerr=False
+    )
     if result.returncode > 0:
         logger.warning("%s", result.stderr_text)
     return zone, result.returncode
@@ -145,6 +148,29 @@ def apply_common_fixes(host):
     rpcbind_kadmin_workaround(host)
 
 
+def prepare_dse_changes(host, log_level=8192):
+    """Put custom changes for dse.ldif on the host
+    """
+    ipatests_dse_path = os.path.join(host.config.test_dir, "ipatests_dse.ldif")
+    ldif = textwrap.dedent(
+        """\
+        # replication debugging
+        dn: cn=config
+        changetype: modify
+        replace: nsslapd-errorlog-level
+        nsslapd-errorlog-level: {log_level}
+
+        # server writes all access log entries directly to disk
+        dn: cn=config
+        changetype: modify
+        replace: nsslapd-accesslog-logbuffering
+        nsslapd-accesslog-logbuffering: off
+        """
+    ).format(log_level=log_level)
+    host.put_file_contents(ipatests_dse_path, ldif)
+    return ipatests_dse_path
+
+
 def allow_sync_ptr(host):
     kinit_admin(host)
     host.run_command(["ipa", "dnsconfig-mod", "--allow-sync-ptr=true"],
@@ -192,8 +218,10 @@ def fix_apache_semaphores(master):
         master.run_command([paths.SBIN_SERVICE, 'httpd', 'stop'],
                            raiseonerr=False)
 
-    master.run_command('for line in `ipcs -s | grep apache | cut -d " " -f 2`; '
-                       'do ipcrm -s $line; done', raiseonerr=False)
+    master.run_command(
+        'for line in `ipcs -s | grep apache ''| cut -d " " -f 2`; '
+        'do ipcrm -s $line; done', raiseonerr=False
+    )
 
 
 def unapply_fixes(host):
@@ -244,17 +272,6 @@ def restore_hostname(host):
         host.run_command(['rm', backupname])
 
 
-def enable_replication_debugging(host, log_level=0):
-    logger.info('Set LDAP debug level')
-    logging_ldif = textwrap.dedent("""
-        dn: cn=config
-        changetype: modify
-        replace: nsslapd-errorlog-level
-        nsslapd-errorlog-level: {log_level}
-        """.format(log_level=log_level))
-    ldapmodify_dm(host, logging_ldif)
-
-
 def enable_ds_audit_log(host, enabled='on'):
     """Enable 389-ds audit log and auditfail log
 
@@ -293,6 +310,10 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
         domain_level = host.config.domain_level
     check_domain_level(domain_level)
     apply_common_fixes(host)
+    if "--dirsrv-config-file" not in extra_args:
+        ipatests_dse = prepare_dse_changes(host)
+    else:
+        ipatests_dse = None
     fix_apache_semaphores(host)
     fw = Firewall(host)
     fw_services = ["freeipa-ldap", "freeipa-ldaps"]
@@ -305,6 +326,9 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
         '-a', host.config.admin_password,
         "--domain-level=%i" % domain_level,
     ]
+    if ipatests_dse:
+        args.extend(["--dirsrv-config-file", ipatests_dse])
+
     if unattended:
         args.append('-U')
 
@@ -330,7 +354,6 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
         fw.enable_services(fw_services)
     if result.returncode == 0 and not external_ca:
         # external CA step 1 doesn't have DS and KDC fully configured, yet
-        enable_replication_debugging(host)
         enable_ds_audit_log(host, 'on')
         setup_sssd_debugging(host)
         kinit_admin(host)
@@ -403,6 +426,12 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
         domain_level = domainlevel(master)
     check_domain_level(domain_level)
     apply_common_fixes(replica)
+
+    if "--dirsrv-config-file" not in extra_args:
+        ipatests_dse = prepare_dse_changes(replica)
+    else:
+        ipatests_dse = None
+
     allow_sync_ptr(master)
     fw = Firewall(replica)
     fw_services = ["freeipa-ldap", "freeipa-ldaps"]
@@ -452,12 +481,14 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
     fix_apache_semaphores(replica)
     args.extend(['--realm', replica.domain.realm,
                  '--domain', replica.domain.name])
+    if ipatests_dse:
+        args.extend(["--dirsrv-config-file", ipatests_dse])
+
     fw.enable_services(fw_services)
 
     result = replica.run_command(args, raiseonerr=raiseonerr,
                                  stdin_text=stdin_text)
     if result.returncode == 0:
-        enable_replication_debugging(replica)
         enable_ds_audit_log(replica, 'on')
         setup_sssd_debugging(replica)
         kinit_admin(replica)
@@ -630,7 +661,7 @@ def unconfigure_windows_dns_for_trust(ad, master):
     ad.run_command(['dnscmd', '/zonedelete', master.domain.name, '/f'])
 
 
-def establish_trust_with_ad(master, ad_domain, extra_args=(),
+def establish_trust_with_ad(master, ad_domain, ad_admin=None, extra_args=(),
                             shared_secret=None):
     """
     Establishes trust with Active Directory. Trust type is detected depending
@@ -638,6 +669,9 @@ def establish_trust_with_ad(master, ad_domain, extra_args=(),
 
     Use extra arguments to pass extra arguments to the trust-add command, such
     as --range-type="ipa-ad-trust" to enforce a particular range type.
+
+    If ad_admin is not provided, name will be constructed as
+    "Administrator@<ad_domain>".
     """
 
     # Force KDC to reload MS-PAC info by trying to get TGT for HTTP
@@ -655,7 +689,9 @@ def establish_trust_with_ad(master, ad_domain, extra_args=(),
         extra_args += ['--trust-secret']
         stdin_text = shared_secret
     else:
-        extra_args += ['--admin', 'Administrator', '--password']
+        if ad_admin is None:
+            ad_admin = 'Administrator@{}'.format(ad_domain)
+        extra_args += ['--admin', ad_admin, '--password']
         stdin_text = master.config.ad_admin_password
     run_repeatedly(
         master, ['ipa', 'trust-add', '--type', 'ad', ad_domain] + extra_args,
@@ -666,10 +702,12 @@ def establish_trust_with_ad(master, ad_domain, extra_args=(),
     time.sleep(60)
 
 
-def remove_trust_with_ad(master, ad_domain):
+def remove_trust_with_ad(master, ad_domain, ad_hostname):
     """
     Removes trust with Active Directory. Also removes the associated ID range.
     """
+
+    remove_trust_info_from_ad(master, ad_domain, ad_hostname)
 
     kinit_admin(master)
 
@@ -680,14 +718,13 @@ def remove_trust_with_ad(master, ad_domain):
     range_name = ad_domain.upper() + '_id_range'
     master.run_command(['ipa', 'idrange-del', range_name])
 
-    remove_trust_info_from_ad(master, ad_domain)
 
-
-def remove_trust_info_from_ad(master, ad_domain):
+def remove_trust_info_from_ad(master, ad_domain, ad_hostname):
     # Remove record about trust from AD
-    master.run_command(['rpcclient', ad_domain,
-                        '-U\\Administrator%{}'.format(
-                            master.config.ad_admin_password),
+    kinit_as_user(master,
+                  'Administrator@{}'.format(ad_domain.upper()),
+                  master.config.ad_admin_password)
+    master.run_command(['rpcclient', '-k', ad_hostname,
                         '-c', 'deletetrustdom {}'.format(master.domain.name)],
                        raiseonerr=False)
 
@@ -867,6 +904,7 @@ def clear_sssd_cache(host):
                      "xargs rm -fv")
     host.run_command(['rm', '-fv', paths.SSSD_MC_GROUP])
     host.run_command(['rm', '-fv', paths.SSSD_MC_PASSWD])
+    host.run_command(['rm', '-fv', paths.SSSD_MC_INITGROUPS])
 
     if systemd_available:
         host.run_command(['systemctl', 'start', 'sssd'])
@@ -930,9 +968,14 @@ def disconnect_replica(master, replica, domain_level=None,
                             ])
 
 
+def kinit_user(host, user, password, raiseonerr=True):
+    return host.run_command(['kinit', user], raiseonerr=raiseonerr,
+                            stdin_text=password)
+
+
 def kinit_admin(host, raiseonerr=True):
-    return host.run_command(['kinit', 'admin'], raiseonerr=raiseonerr,
-                            stdin_text=host.config.admin_password)
+    return kinit_user(host, 'admin', host.config.admin_password,
+                      raiseonerr=raiseonerr)
 
 
 def uninstall_master(host, ignore_topology_disconnect=True,
@@ -952,6 +995,15 @@ def uninstall_master(host, ignore_topology_disconnect=True,
 
     result = host.run_command(uninstall_cmd)
     assert "Traceback" not in result.stdout_text
+
+    # Check that IPA certs have been deleted after uninstall
+    # Related: https://pagure.io/freeipa/issue/8614
+    assert host.run_command(['test', '-f', paths.IPA_CA_CRT],
+                            raiseonerr=False).returncode == 1
+    assert host.run_command(['test', '-f', paths.IPA_P11_KIT],
+                            raiseonerr=False).returncode == 1
+    assert "IPA CA" not in host.run_command(['trust', 'list']).stdout_text
+
     if clean:
         Firewall(host).disable_services(["freeipa-ldap", "freeipa-ldaps",
                                          "freeipa-trust", "dns"])
@@ -967,8 +1019,8 @@ def uninstall_master(host, ignore_topology_disconnect=True,
                       paths.IPA_RENEWAL_LOCK,
                       paths.REPLICA_INFO_GPG_TEMPLATE % host.hostname],
                      raiseonerr=False)
-    host.run_command("find /var/lib/sss/keytabs -name '*.keytab' | "
-                     "xargs rm -fv", raiseonerr=False)
+    host.run_command("find %s -name '*.keytab' | "
+                     "xargs rm -fv" % paths.SSSD_KEYTABS_DIR, raiseonerr=False)
     host.run_command("find /run/ipa -name 'krb5*' | xargs rm -fv",
                      raiseonerr=False)
     if clean:
@@ -1004,10 +1056,13 @@ def create_segment(master, leftnode, rightnode, suffix=DOMAIN_SUFFIX_NAME):
     lefthost = leftnode.hostname
     righthost = rightnode.hostname
     segment_name = "%s-to-%s" % (lefthost, righthost)
-    result = master.run_command(["ipa", "topologysegment-add", suffix,
-                                 segment_name,
-                                 "--leftnode=%s" % lefthost,
-                                 "--rightnode=%s" % righthost], raiseonerr=False)
+    result = master.run_command(
+        ["ipa", "topologysegment-add", suffix,
+         segment_name,
+         "--leftnode=%s" % lefthost,
+         "--rightnode=%s" % righthost],
+        raiseonerr=False
+    )
     if result.returncode == 0:
         return {'leftnode': lefthost,
                 'rightnode': righthost,
@@ -1052,6 +1107,8 @@ def _topo(name):
         topologies[name] = func
         return func
     return add_topo
+
+
 topologies = collections.OrderedDict()
 
 
@@ -1427,7 +1484,7 @@ def resolve_record(nameserver, query, rtype="SOA", retry=True, timeout=100):
     :timeout: max period of time while method will try to resolve query
      (requires retry=True)
     """
-    res = dns.resolver.Resolver()
+    res = DNSResolver()
     res.nameservers = [nameserver]
     res.lifetime = 10  # wait max 10 seconds for reply
 
@@ -1435,7 +1492,7 @@ def resolve_record(nameserver, query, rtype="SOA", retry=True, timeout=100):
 
     while time.time() < wait_until:
         try:
-            ans = res.query(query, rtype)
+            ans = res.resolve(query, rtype)
             return ans
         except dns.exception.DNSException:
             if not retry:
@@ -1503,7 +1560,8 @@ def ipa_restore(master, backup_path):
                         backup_path])
 
 
-def install_kra(host, domain_level=None, first_instance=False, raiseonerr=True):
+def install_kra(host, domain_level=None,
+                first_instance=False, raiseonerr=True):
     if domain_level is None:
         domain_level = domainlevel(host)
     check_domain_level(domain_level)
@@ -1685,7 +1743,7 @@ def restart_named(*args):
 
 
 def run_repeatedly(host, command, assert_zero_rc=True, test=None,
-                timeout=30, **kwargs):
+                   timeout=30, **kwargs):
     """
     Runs command on host repeatedly until it's finished successfully (returns
     0 exit code and its stdout passes the test function).
@@ -1740,7 +1798,8 @@ def get_host_ip_with_hostmask(host):
         return None
 
 
-def ldappasswd_user_change(user, oldpw, newpw, master, use_dirman=False):
+def ldappasswd_user_change(user, oldpw, newpw, master, use_dirman=False,
+                           raiseonerr=True):
     container_user = dict(DEFAULT_CONFIG)['container_user']
     basedn = master.domain.basedn
 
@@ -1755,7 +1814,7 @@ def ldappasswd_user_change(user, oldpw, newpw, master, use_dirman=False):
     else:
         args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
                 '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
-    master.run_command(args)
+    return master.run_command(args, raiseonerr=raiseonerr)
 
 
 def ldappasswd_sysaccount_change(user, oldpw, newpw, master, use_dirman=False):
@@ -1890,6 +1949,11 @@ def user_add(host, login, first='test', last='user', extra_args=(),
     return host.run_command(cmd, stdin_text=stdin_text)
 
 
+def user_del(host, login):
+    cmd = ["ipa", "user-del", login]
+    return host.run_command(cmd)
+
+
 def group_add(host, groupname, extra_args=()):
     cmd = [
         "ipa", "group-add", groupname,
@@ -1960,10 +2024,25 @@ def create_active_user(host, login, password, first='test', last='user',
     user_add(host, login, first=first, last=last, extra_args=extra_args,
              password=temp_password)
     if krb5_trace:
-        host.run_command(
+        # Retrieve kdcinfo.$REALM before changing the user's password.
+        get_kdcinfo(host)
+        # This tends to fail when the KDC the password is
+        # reset on is not the same as the one we immediately
+        # request a TGT from. This should not be the case as SSSD
+        # tries to pin itself to an IPA server.
+        #
+        # Note raiseonerr=False:
+        # the assert is located after kdcinfo retrieval.
+        result = host.run_command(
             "KRB5_TRACE=/dev/stdout kinit %s" % login,
-            stdin_text='{0}\n{1}\n{1}\n'.format(temp_password, password)
+            stdin_text='{0}\n{1}\n{1}\n'.format(
+                temp_password, password, raiseonerr=False
+            )
         )
+        # Retrieve kdc.$REALM after the password change, just in case SSSD
+        # domain status flipped to online during the password change.
+        get_kdcinfo(host)
+        assert result.returncode == 0
     else:
         host.run_command(
             ['kinit', login],
@@ -1991,13 +2070,70 @@ def run_command_as_user(host, user, command, *args, **kwargs):
 
 
 def kinit_as_user(host, user, password, krb5_trace=False):
+    """Launch kinit as user on host.
+    If krb5_trace, then set KRB5_TRACE=/dev/stdout and collect
+    /var/lib/sss/pubconf/kdcinfo.$REALM
+    as this file contains the list of KRB5KDC IPs SSSD uses.
+    https://pagure.io/freeipa/issue/8510
+    """
+
     if krb5_trace:
-        host.run_command(
+        # Retrieve kdcinfo.$REALM before changing the user's password.
+        get_kdcinfo(host)
+        # This tends to fail when the KDC the password is
+        # reset on is not the same as the one we immediately
+        # request a TGT from. This should not be the case as SSSD
+        # tries to pin itself to an IPA server.
+        #
+        # Note raiseonerr=False:
+        # the assert is located after kdcinfo retrieval.
+        result = host.run_command(
             "KRB5_TRACE=/dev/stdout kinit %s" % user,
-            stdin_text='{0}\n'.format(password)
+            stdin_text='{0}\n'.format(password),
+            raiseonerr=False
         )
+        # Retrieve kdc.$REALM after the password change, just in case SSSD
+        # domain status flipped to online during the password change.
+        get_kdcinfo(host)
+        assert result.returncode == 0
     else:
         host.run_command(['kinit', user], stdin_text='{0}\n'.format(password))
+
+
+def get_kdcinfo(host):
+    """Retrieve /var/lib/sss/pubconf/kdcinfo.$REALM on host.
+    That file contains the IP of the KDC SSSD should be pinned to.
+    """
+    logger.info(
+        'Collecting kdcinfo log from: %s', host.hostname
+    )
+    if check_if_sssd_is_online(host):
+        logger.info("SSSD considers domain %s online.", host.domain.realm)
+    else:
+        logger.warning(
+            "SSSD considers domain %s offline.", host.domain.realm
+        )
+    kdcinfo = None
+    try:
+        kdcinfo = host.get_file_contents(
+            "/var/lib/sss/pubconf/kdcinfo.{}".format(host.domain.realm)
+        )
+        logger.info(
+            'kdcinfo %s contains:\n%s', host.hostname, kdcinfo
+        )
+        if check_if_sssd_is_online(host) is False:
+            logger.warning(
+                "SSSD still considers domain %s offline.",
+                host.domain.realm
+            )
+    except (OSError, IOError) as e:
+        logger.warning(
+            "Exception collecting kdcinfo.%s: %s\n"
+            "SSSD is able to function without this file but logon "
+            "attempts immediately after a password change might break.",
+            host.domain.realm, e
+        )
+    return kdcinfo
 
 
 KeyEntry = collections.namedtuple('KeyEntry',
@@ -2034,10 +2170,7 @@ class KerberosKeyCopier:
             princ = self.host_princ_template.format(master=self.host.hostname,
                                                     realm=self.realm)
         result = self.host.run_command(
-            [paths.KLIST, "-eK", "-k", keytab],
-            log_stdout=False, raiseonerr=False)
-        if result.returncode != 0:
-            return None
+            [paths.KLIST, "-eK", "-k", keytab], log_stdout=False)
 
         keys_to_sync = []
         for l in result.stdout_text.splitlines():
@@ -2064,11 +2197,25 @@ class KerberosKeyCopier:
                     kvno=keyentry.kvno, etype=keyentry.etype,
                     key=keyentry.key[2:])
 
-        result = self.host.run_command(
-            [paths.KTUTIL], stdin_text=stdin,
-            raiseonerr=False, log_stdout=False)
+        def get_keytab_mtime():
+            """Get keytab file mtime.
 
-        return result.returncode == 0
+            Returns mtime with sub-second precision as a string with format
+            "2020-08-25 14:35:05.980503425 +0200" or None if file does not
+            exist.
+            """
+            if self.host.transport.file_exists(keytab):
+                return self.host.run_command(
+                    ['stat', '-c', '%y', keytab]).stdout_text.strip()
+            return None
+
+        mtime_before = get_keytab_mtime()
+
+        self.host.run_command([paths.KTUTIL], stdin_text=stdin,
+                              log_stdout=False)
+        if mtime_before == get_keytab_mtime():
+            raise Exception('{} did not update keytab file "{}"'.format(
+                paths.KTUTIL, keytab))
 
     def copy_keys(self, origin, destination, principal=None, replacement=None):
         def sync_keys(origkeys, destkeys):
@@ -2083,23 +2230,23 @@ class KerberosKeyCopier:
                             destkey.etype == origkey.etype]):
                         if any([destkey.key != origkey.key,
                                 destkey.kvno != origkey.kvno]):
-                            copied = self.copy_key(destination, origkey)
+                            self.copy_key(destination, origkey)
+                            copied = True
                             break
                         uptodate = True
                 if not (copied or uptodate):
-                    copied = self.copy_key(destination, origkey)
-            return copied or uptodate
+                    self.copy_key(destination, origkey)
 
         if not self.host.transport.file_exists(origin):
-            return False
+            raise ValueError('File "{}" does not exist'.format(origin))
         origkeys = self.extract_key_refs(origin, princ=principal)
         if self.host.transport.file_exists(destination):
             destkeys = self.extract_key_refs(destination)
             if any([origkeys is None, destkeys is None]):
-                logger.warning('Either %s or %s are missing or unreadable',
-                               origin, destination)
-                return False
-            return sync_keys(origkeys, destkeys)
+                raise Exception(
+                    'Either {} or {} are missing or unreadable'.format(
+                        origin, destination))
+            sync_keys(origkeys, destkeys)
         else:
             for origkey in origkeys:
                 if origkey.principal in replacement:
@@ -2107,9 +2254,7 @@ class KerberosKeyCopier:
                         [origkey.kvno, replacement.get(origkey.principal),
                          origkey.etype, origkey.key])
                     origkey = newkey
-                if not self.copy_key(destination, origkey):
-                    return False
-            return True
+                self.copy_key(destination, origkey)
 
 
 class FileBackup:
@@ -2295,6 +2440,23 @@ def wait_for_certmonger_status(host, status, request_id, timeout=120):
     return state
 
 
+def check_if_sssd_is_online(host):
+    """Check whether SSSD considers the IPA domain online.
+
+    Analyse sssctl domain-status <domain>'s output to see if SSSD considers
+    the IPA domain of the host online.
+
+    Could be extended for Trust domains as well.
+    """
+    pattern = re.compile(r'Online status: (?P<state>.*)\n')
+    result = host.run_command(
+        [paths.SSSCTL, "domain-status", host.domain.name, "-o"]
+    )
+    match = pattern.search(result.stdout_text)
+    state = match.group('state')
+    return state == 'Online'
+
+
 def wait_for_sssd_domain_status_online(host, timeout=120):
     """Wait up to timeout (in seconds) for sssd domain status to become Online
 
@@ -2305,14 +2467,8 @@ def wait_for_sssd_domain_status_online(host, timeout=120):
     as SSSD may need a while before it reconnects and switches from Offline
     mode to Online.
     """
-    pattern = re.compile(r'Online status: (?P<state>.*)\n')
     for _i in range(0, timeout, 5):
-        result = host.run_command(
-            [paths.SSSCTL, "domain-status", host.domain.name, "-o"]
-        )
-        match = pattern.search(result.stdout_text)
-        state = match.group('state')
-        if state == 'Online':
+        if check_if_sssd_is_online(host):
             break
         time.sleep(5)
     else:
@@ -2323,6 +2479,40 @@ def get_sssd_version(host):
     """Get sssd version on remote host."""
     version = host.run_command('sssd --version').stdout_text.strip()
     return parse_version(version)
+
+
+def get_pki_version(host):
+    """Get pki version on remote host."""
+    data = host.get_file_contents("/usr/share/pki/VERSION", encoding="utf-8")
+
+    groups = re.match(r'.*\nSpecification-Version: ([\d+\.]*)\n.*', data)
+    if groups:
+        version_string = groups.groups(0)[0]
+        return parse_version(version_string)
+    else:
+        raise ValueError("get_pki_version: pki is not installed")
+
+
+def get_healthcheck_version(host):
+    """
+    Function to get healthcheck version on fedora and rhel
+    """
+    platform = get_platform(host)
+    if platform in ("rhel", "fedora"):
+        cmd = host.run_command(
+            ["rpm", "-qa", "--qf", "%{VERSION}", "*ipa-healthcheck"]
+        )
+        healthcheck_version = cmd.stdout_text
+        if not healthcheck_version:
+            raise ValueError(
+                "get_healthcheck_version: "
+                "ipa-healthcheck package is not installed"
+            )
+    else:
+        raise ValueError(
+            "get_healthcheck_version: unknown platform %s" % platform
+        )
+    return healthcheck_version
 
 
 def run_ssh_cmd(

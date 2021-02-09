@@ -20,15 +20,15 @@
 from __future__ import absolute_import
 
 import logging
-import socket
 
 import six
 
-from dns import resolver, rdatatype
+from dns import rdatatype
 from dns.exception import DNSException
 from ipalib import errors
+from ipalib.constants import FQDN
 from ipalib.util import validate_domain_name
-from ipapython.dnsutil import query_srv
+from ipapython.dnsutil import query_srv, resolve
 
 from ipaplatform.paths import paths
 from ipapython.ipautil import valid_ip, realm_to_suffix
@@ -222,7 +222,7 @@ class IPADiscovery:
             if not domain:  # domain not provided do full DNS discovery
                 # get the local host name
                 if not hostname:
-                    hostname = socket.getfqdn()
+                    hostname = FQDN
                     logger.debug('Hostname: %s', hostname)
                 if not hostname:
                     return BAD_HOST_CONFIG
@@ -562,7 +562,7 @@ class IPADiscovery:
         logger.debug("Search DNS for TXT record of %s", qname)
 
         try:
-            answers = resolver.query(qname, rdatatype.TXT)
+            answers = resolve(qname, rdatatype.TXT)
         except DNSException as e:
             logger.debug("DNS record not found: %s", e.__class__.__name__)
             answers = []

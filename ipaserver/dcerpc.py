@@ -24,17 +24,18 @@
 
 from __future__ import absolute_import
 
+from contextlib import contextmanager
 import logging
 import re
 import time
 
 from ipalib import api, _
 from ipalib import errors
+from ipalib.constants import FQDN
 from ipapython import ipautil
 from ipapython.dn import DN
 from ipapython.dnsutil import query_srv
 from ipapython.ipaldap import ldap_initialize
-from ipaserver.install import installutils
 from ipaserver.dcerpc_common import (TRUST_BIDIRECTIONAL,
                                      TRUST_JOIN_EXTERNAL,
                                      trust_type_string)
@@ -50,9 +51,18 @@ from samba import credentials
 from samba.dcerpc import security, lsa, drsblobs, nbt, netlogon
 from samba.ndr import ndr_pack, ndr_print
 from samba import net
-from samba import arcfour_encrypt
 from samba import ntstatus
 import samba
+
+try:
+    from samba.trust_utils import CreateTrustedDomainRelax
+except ImportError:
+    CreateTrustedDomainRelax = None
+try:
+    from samba import arcfour_encrypt
+except ImportError:
+    if CreateTrustedDomainRelax is None:
+        raise ImportError("No supported Samba Python bindings")
 
 import ldap as _ldap
 from ipapython import ipaldap
@@ -843,6 +853,7 @@ class TrustDomainInstance:
         self._policy_handle = None
         self.read_only = False
         self.ftinfo_records = None
+        self.ftinfo_data = None
         self.validation_attempts = 0
 
     def __gen_lsa_connection(self, binding):
@@ -1002,6 +1013,16 @@ class TrustDomainInstance:
 
         self.info['is_pdc'] = (result.role == lsa.LSA_ROLE_PRIMARY)
 
+        if all([self.info['is_pdc'],
+                self.info['dns_domain'] == self.info['dns_forest']]):
+            try:
+                netr_pipe = netlogon.netlogon(self.binding,
+                                              self.parm, self.creds)
+                self.ftinfo_data = netr_pipe.netr_DsRGetForestTrustInformation(
+                    self.info['dc'], None, 0)
+            except RuntimeError as e:
+                raise assess_dcerpc_error(e)
+
     def generate_auth(self, trustdom_secret):
         password_blob = string_to_array(trustdom_secret.encode('utf-16-le'))
 
@@ -1021,29 +1042,34 @@ class TrustDomainInstance:
         outgoing = drsblobs.trustAuthInOutBlob()
         outgoing.count = 1
         outgoing.current = authinfo_array
+        self.auth_inoutblob = outgoing
 
-        confounder = [3]*512
-        for i in range(512):
-            confounder[i] = random.randint(0, 255)
+        if CreateTrustedDomainRelax is None:
+            # Samba Python bindings with no support for FIPS wrapper
+            # We have to generate AuthInfo ourselves which means
+            # we have to use RC4 encryption directly
+            confounder = [3] * 512
+            for i in range(512):
+                confounder[i] = random.randint(0, 255)
 
-        trustpass = drsblobs.trustDomainPasswords()
-        trustpass.confounder = confounder
+            trustpass = drsblobs.trustDomainPasswords()
+            trustpass.confounder = confounder
 
-        trustpass.outgoing = outgoing
-        trustpass.incoming = outgoing
+            trustpass.outgoing = outgoing
+            trustpass.incoming = outgoing
 
-        trustpass_blob = ndr_pack(trustpass)
+            trustpass_blob = ndr_pack(trustpass)
 
-        encrypted_trustpass = arcfour_encrypt(self._pipe.session_key,
-                                              trustpass_blob)
+            encrypted_trustpass = arcfour_encrypt(self._pipe.session_key,
+                                                  trustpass_blob)
 
-        auth_blob = lsa.DATA_BUF2()
-        auth_blob.size = len(encrypted_trustpass)
-        auth_blob.data = string_to_array(encrypted_trustpass)
+            auth_blob = lsa.DATA_BUF2()
+            auth_blob.size = len(encrypted_trustpass)
+            auth_blob.data = string_to_array(encrypted_trustpass)
 
-        auth_info = lsa.TrustDomainInfoAuthInfoInternal()
-        auth_info.auth_blob = auth_blob
-        self.auth_info = auth_info
+            auth_info = lsa.TrustDomainInfoAuthInfoInternal()
+            auth_info.auth_blob = auth_blob
+            self.auth_info = auth_info
 
     def generate_ftinfo(self, another_domain):
         """
@@ -1053,6 +1079,9 @@ class TrustDomainInstance:
 
         Only top level name and top level name exclusions are handled here.
         """
+        if another_domain.ftinfo_data is not None:
+            return another_domain.ftinfo_data
+
         if not another_domain.ftinfo_records:
             return None
 
@@ -1311,7 +1340,6 @@ class TrustDomainInstance:
                                                  'the same NetBIOS name: %s')
                                          % self.info['name'])
 
-        self.generate_auth(trustdom_secret)
 
         info = lsa.TrustDomainInfoInfoEx()
         info.domain_name.string = another_domain.info['dns_domain']
@@ -1360,10 +1388,19 @@ class TrustDomainInstance:
                 raise access_denied_error
 
         try:
-            trustdom_handle = self._pipe.CreateTrustedDomainEx2(
-                                           self._policy_handle,
-                                           info, self.auth_info,
-                                           security.SEC_STD_DELETE)
+            self.generate_auth(trustdom_secret)
+            if CreateTrustedDomainRelax is not None:
+                trustdom_handle = CreateTrustedDomainRelax(
+                    self._pipe, self._policy_handle, info,
+                    security.SEC_STD_DELETE,
+                    self.auth_inoutblob, self.auth_inoutblob)
+            else:
+                # Samba Python bindings with no support for FIPS wrapper
+                # We keep using older code
+                trustdom_handle = self._pipe.CreateTrustedDomainEx2(
+                    self._policy_handle,
+                    info, self.auth_info,
+                    security.SEC_STD_DELETE)
         except RuntimeError as e:
             raise assess_dcerpc_error(e)
 
@@ -1479,21 +1516,14 @@ class TrustDomainInstance:
         return False
 
 
-def fetch_domains(api, mydomain, trustdomain, creds=None, server=None):
-    def communicate(td):
-        td.init_lsa_pipe(td.info['dc'])
-        netr_pipe = netlogon.netlogon(td.binding, td.parm, td.creds)
-        # Older FreeIPA versions used netr_DsrEnumerateDomainTrusts call
-        # but it doesn't provide information about non-domain UPNs associated
-        # with the forest, thus we have to use netr_DsRGetForestTrustInformation
-        domains = netr_pipe.netr_DsRGetForestTrustInformation(td.info['dc'], None, 0)
-        return domains
-
-    domains = None
+@contextmanager
+def discover_trust_instance(api, mydomain, trustdomain,
+                            creds=None, server=None):
     domain_validator = DomainValidator(api)
     configured = domain_validator.is_configured()
     if not configured:
-        return None
+        yield None
+        return
 
     td = TrustDomainInstance('')
     td.parm.set('workgroup', mydomain)
@@ -1519,9 +1549,11 @@ def fetch_domains(api, mydomain, trustdomain, creds=None, server=None):
         # Rely on existing Kerberos credentials in the environment
         td.creds = credentials.Credentials()
         td.creds.set_kerberos_state(credentials.MUST_USE_KERBEROS)
+        enforce_smb_encryption(td.creds)
         td.creds.guess(td.parm)
         td.creds.set_workstation(domain_validator.flatname)
-        domains = communicate(td)
+        logger.error('environment: %s', str(os.environ))
+        yield td
     else:
         # Attempt to authenticate as HTTP/ipa.master and use cross-forest trust
         # or as passed-in user in case of a one-way trust
@@ -1537,14 +1569,37 @@ def fetch_domains(api, mydomain, trustdomain, creds=None, server=None):
                                                  'cross-forest communication'))
         td.creds = credentials.Credentials()
         td.creds.set_kerberos_state(credentials.MUST_USE_KERBEROS)
+        enforce_smb_encryption(td.creds)
         if ccache_name:
             with ipautil.private_ccache(path=ccache_name):
                 td.creds.guess(td.parm)
                 td.creds.set_workstation(domain_validator.flatname)
-                domains = communicate(td)
+                yield td
 
-    if domains is None:
-        return None
+
+def fetch_domains(api, mydomain, trustdomain, creds=None, server=None):
+    def communicate(td):
+        td.init_lsa_pipe(td.info['dc'])
+        netr_pipe = netlogon.netlogon(td.binding, td.parm, td.creds)
+        # Older FreeIPA versions used netr_DsrEnumerateDomainTrusts call
+        # but it doesn't provide information about non-domain UPNs associated
+        # with the forest, thus we have to use netr_DsRGetForestTrustInformation
+        domains = netr_pipe.netr_DsRGetForestTrustInformation(td.info['dc'],
+                                                              None, 0)
+        return domains
+
+    domains = None
+    with discover_trust_instance(api, mydomain, trustdomain,
+                                 creds=creds, server=server) as td:
+        if td is None:
+            return None
+        if td.ftinfo_data is not None:
+            domains = td.ftinfo_data
+        else:
+            domains = communicate(td)
+
+        if domains is None:
+            return None
 
     result = {'domains': {}, 'suffixes': {}}
     # netr_DsRGetForestTrustInformation returns two types of entries:
@@ -1552,25 +1607,56 @@ def fetch_domains(api, mydomain, trustdomain, creds=None, server=None):
     # top level name info -- a name suffix associated with the forest
     # We should ignore forest root name/name suffix as it is already part
     # of trust information for IPA purposes and only add what's inside the forest
+    ftinfo_records = []
+    ftinfo = drsblobs.ForestTrustInfo()
     for t in domains.entries:
+        record = drsblobs.ForestTrustInfoRecord()
+        record.flags = t.flags
+        record.timestamp = t.time
+        record.type = t.type
+
         if t.type == lsa.LSA_FOREST_TRUST_DOMAIN_INFO:
+            record.data.sid = t.forest_trust_data.domain_sid
+            record.data.dns_name.string = \
+                t.forest_trust_data.dns_domain_name.string
+            record.data.netbios_name.string = \
+                t.forest_trust_data.netbios_domain_name.string
+
             tname = unicode(t.forest_trust_data.dns_domain_name.string)
-            if tname == trustdomain:
-                continue
-            result['domains'][tname] = {
-                'cn': tname,
-                'ipantflatname': unicode(
-                    t.forest_trust_data.netbios_domain_name.string),
-                'ipanttrusteddomainsid': unicode(
-                    t.forest_trust_data.domain_sid)
-            }
+            if tname != trustdomain:
+                result['domains'][tname] = {
+                    'cn': tname,
+                    'ipantflatname': unicode(
+                        t.forest_trust_data.netbios_domain_name.string),
+                    'ipanttrusteddomainsid': unicode(
+                        t.forest_trust_data.domain_sid)
+                }
         elif t.type == lsa.LSA_FOREST_TRUST_TOP_LEVEL_NAME:
+            record.data.string = t.forest_trust_data.string
+
             tname = unicode(t.forest_trust_data.string)
             if tname == trustdomain:
                 continue
 
             result['suffixes'][tname] = {'cn': tname}
+        elif t.type == lsa.LSA_FOREST_TRUST_TOP_LEVEL_NAME_EX:
+            record.data.string = t.forest_trust_data.string
+
+        rc = drsblobs.ForestTrustInfoRecordArmor()
+        rc.record = record
+        ftinfo_records.append(rc)
+
+    ftinfo.count = len(ftinfo_records)
+    ftinfo.records = ftinfo_records
+    result['ftinfo_data'] = ndr_pack(ftinfo)
     return result
+
+
+def enforce_smb_encryption(creds):
+    try:
+        creds.set_smb_encryption(credentials.SMB_ENCRYPTION_REQUIRED)
+    except AttributeError:
+        pass
 
 
 def retrieve_remote_domain(hostname, local_flatname,
@@ -1596,22 +1682,39 @@ def retrieve_remote_domain(hostname, local_flatname,
     rd.read_only = True
     if realm_admin and realm_passwd:
         if 'name' in rd.info:
+            realm_netbios = ""
             names = realm_admin.split('\\')
             if len(names) > 1:
                 # realm admin is in DOMAIN\user format
                 # strip DOMAIN part as we'll enforce the one discovered
                 realm_admin = names[-1]
-            auth_string = r"%s\%s%%%s" \
-                          % (rd.info['name'], realm_admin, realm_passwd)
-            td = get_instance(local_flatname)
-            td.creds.parse_string(auth_string)
-            td.creds.set_workstation(hostname)
-            if realm_server is None:
-                # we must have rd.info['dns_hostname'] then
-                # as it is part of the anonymous discovery
-                td.retrieve(rd.info['dns_hostname'])
-            else:
-                td.retrieve(realm_server)
+                realm_netbios = names[0]
+            names = realm_admin.split('@')
+            if len(names) == 1:
+                if all([len(realm_netbios) != 0,
+                        realm_netbios.lower() != rd.info['name'].lower()]):
+                    raise errors.ValidationError(
+                        name=_('Credentials'),
+                        error=_('Non-Kerberos user name was specified, '
+                                'please provide user@REALM variant instead'))
+                realm_admin = r"%s@%s" % (
+                    realm_admin, rd.info['dns_domain'].upper())
+                realm = rd.info['dns_domain'].upper()
+            auth_string = r"%s%%%s" \
+                          % (realm_admin, realm_passwd)
+            with ipautil.private_krb5_config(realm, realm_server, dir='/tmp'):
+                with ipautil.private_ccache():
+                    td = get_instance(local_flatname)
+                    td.creds.set_kerberos_state(credentials.MUST_USE_KERBEROS)
+                    enforce_smb_encryption(td.creds)
+                    td.creds.parse_string(auth_string)
+                    td.creds.set_workstation(hostname)
+                    if realm_server is None:
+                        # we must have rd.info['dns_hostname'] then
+                        # as it is part of the anonymous discovery
+                        td.retrieve(rd.info['dns_hostname'])
+                    else:
+                        td.retrieve(realm_server)
             td.read_only = False
             return td
 
@@ -1643,9 +1746,10 @@ class TrustDomainJoins:
         ld = TrustDomainInstance(self.local_flatname)
         ld.creds = credentials.Credentials()
         ld.creds.set_kerberos_state(credentials.MUST_USE_KERBEROS)
+        enforce_smb_encryption(ld.creds)
         ld.creds.guess(ld.parm)
         ld.creds.set_workstation(ld.hostname)
-        ld.retrieve(installutils.get_fqdn())
+        ld.retrieve(FQDN)
         self.local_domain = ld
 
     def populate_remote_domain(self, realm, realm_server=None,
@@ -1731,26 +1835,36 @@ class TrustDomainJoins:
             # Establishing trust may throw an exception for topology
             # conflict. If it was solved, re-establish the trust again
             # Otherwise let the CLI to display a message about the conflict
-            try:
-                self.remote_domain.establish_trust(self.local_domain,
-                                                   trustdom_pass,
-                                                   trust_type, trust_external)
-            except TrustTopologyConflictSolved:
-                # we solved topology conflict, retry again
-                self.remote_domain.establish_trust(self.local_domain,
-                                                   trustdom_pass,
-                                                   trust_type, trust_external)
+            with ipautil.private_krb5_config(realm, realm_server, dir='/tmp'):
+                try:
+                    self.remote_domain.establish_trust(self.local_domain,
+                                                       trustdom_pass,
+                                                       trust_type,
+                                                       trust_external)
+                except TrustTopologyConflictSolved:
+                    # we solved topology conflict, retry again
+                    self.remote_domain.establish_trust(self.local_domain,
+                                                       trustdom_pass,
+                                                       trust_type,
+                                                       trust_external)
 
-            # For local domain we don't set topology information
-            self.local_domain.establish_trust(self.remote_domain,
-                                              trustdom_pass,
-                                              trust_type, trust_external)
+            try:
+                self.local_domain.establish_trust(self.remote_domain,
+                                                  trustdom_pass,
+                                                  trust_type, trust_external)
+            except TrustTopologyConflictSolved:
+                self.local_domain.establish_trust(self.remote_domain,
+                                                  trustdom_pass,
+                                                  trust_type, trust_external)
+
             # if trust is inbound, we don't need to verify it because
             # AD DC will respond with WERR_NO_SUCH_DOMAIN --
             # it only does verification for outbound trusts.
             result = True
             if trust_type == TRUST_BIDIRECTIONAL:
-                result = self.remote_domain.verify_trust(self.local_domain)
+                with ipautil.private_krb5_config(realm,
+                                                 realm_server, dir='/tmp'):
+                    result = self.remote_domain.verify_trust(self.local_domain)
             return dict(
                         local=self.local_domain,
                         remote=self.remote_domain,

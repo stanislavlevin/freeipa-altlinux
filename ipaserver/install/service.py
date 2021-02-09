@@ -22,8 +22,6 @@ from __future__ import absolute_import
 import logging
 import sys
 import os
-import pwd
-import socket
 import time
 import traceback
 import tempfile
@@ -36,12 +34,15 @@ from ipapython import ipautil
 from ipapython.dn import DN
 from ipapython import kerberos
 from ipalib import api, errors, x509
+from ipalib.constants import FQDN
 from ipaplatform import services
+from ipaplatform.constants import User
 from ipaplatform.paths import paths
 from ipaserver.masters import (
     CONFIGURED_SERVICE, ENABLED_SERVICE, HIDDEN_SERVICE, SERVICE_LIST
 )
 from ipaserver.servroles import HIDDEN
+from ipaserver.install.ldapupdate import LDAPUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -251,12 +252,18 @@ def _set_services_state(fqdn, dest_state):
         rules=ldap2.MATCH_ALL
     )
 
-    entries = ldap2.get_entries(
-        search_base,
-        filter=search_filter,
-        scope=api.Backend.ldap2.SCOPE_ONELEVEL,
-        attrs_list=['cn', 'ipaConfigString']
-    )
+    try:
+        entries = ldap2.get_entries(
+            search_base,
+            filter=search_filter,
+            scope=api.Backend.ldap2.SCOPE_ONELEVEL,
+            attrs_list=['cn', 'ipaConfigString']
+        )
+    except errors.EmptyResult:
+        logger.debug("No services with a state from %s, ignoring",
+                     list(source_states))
+        return
+
     for entry in entries:
         name = entry['cn']
         cfgstrings = entry.setdefault('ipaConfigString', [])
@@ -290,7 +297,7 @@ class Service:
         self.steps = []
         self.output_fd = sys.stdout
 
-        self.fqdn = socket.gethostname()
+        self.fqdn = FQDN
 
         if sstore:
             self.sstore = sstore
@@ -308,6 +315,8 @@ class Service:
         self.keytab = keytab
         self.cert = None
         self.api = api
+        if service_user is not None:
+            service_user = User(service_user)
         self.service_user = service_user
         self.keytab_user = service_user
         self.dm_password = None  # silence pylint
@@ -323,11 +332,31 @@ class Service:
             kerberos.Principal(
                 (self.service_prefix, self.fqdn), realm=self.realm))
 
+    def _ldap_update(self, filenames, *, basedir=paths.UPDATES_DIR):
+        """Apply update ldif files
+
+        Note: Additional substitution must be added to LDAPUpdate() to ensure
+        that ipa-ldap-updater is able to handle all update files as well.
+
+        :param filenames: list of file names
+        :param basedir: base directory for files (default: UPDATES_DIR)
+        :return: modified state
+        """
+        assert isinstance(filenames, (list, tuple))
+        if basedir is not None:
+            filenames = [os.path.join(basedir, fname) for fname in filenames]
+        ld = LDAPUpdate(api=self.api)
+        # assume that caller supplies files in correct order
+        return ld.update(filenames, ordered=False)
+
     def _ldap_mod(self, ldif, sub_dict=None, raise_on_err=True,
                   ldap_uri=None, dm_password=None):
         pw_name = None
         fd = None
-        path = os.path.join(paths.USR_SHARE_IPA_DIR, ldif)
+        if not os.path.isabs(ldif):
+            path = os.path.join(paths.USR_SHARE_IPA_DIR, ldif)
+        else:
+            path = ldif
         nologlist = []
 
         if sub_dict is not None:
@@ -533,6 +562,9 @@ class Service:
     def get_state(self, key):
         return self.sstore.get_state(self.service_name, key)
 
+    def delete_state(self, key):
+        self.sstore.delete_state(self.service_name, key)
+
     def print_msg(self, message):
         print_msg(message, self.output_fd)
 
@@ -660,6 +692,7 @@ class Service:
         ]
         extra_config_opts.extend(config)
 
+        self.unmask()
         self.disable()
 
         set_service_entry_config(
@@ -735,10 +768,8 @@ class Service:
         if keytab is None:
             keytab = self.keytab
         if owner is None:
-            owner = self.keytab_user
-
-        pent = pwd.getpwnam(owner)
-        os.chown(keytab, pent.pw_uid, pent.pw_gid)
+            owner = self.service_user
+        owner.chown(keytab)
 
     def run_getkeytab(self, ldap_uri, keytab, principal, retrieve=False):
         """

@@ -4,6 +4,7 @@ The following people have contributed to the FreeIPA project.
 (Listed in alphabetical order within category)
 
 Developers:
+	Abhijeet
 	Abhijeet Kasurde
 	Adam Misnyovszki
 	Adam Williamson
@@ -19,17 +20,23 @@ Developers:
 	Alexey Slaykovsky
 	Amit Kumar
 	Ana Krivokapić
+	Andika Triwidada
 	Andrew Wnuk
+	Antonio Torres
+	Antonio Torres Moríñigo
 	Anuja More
+	Ariel O. Barria
 	Armando Neto
 	Ben Lipton
 	Benjamin Drung
 	Brian Cook
 	Brian J. Murrell
+	Carl George
 	Cédric Jeanneret
 	Changmin Teng
 	Christian Heimes
 	Christian Hermann
+	Daniel Lara Souza
 	David Kreitschmann
 	David Kupka
 	David O'Brien
@@ -40,6 +47,7 @@ Developers:
 	Dmitri Pal
 	Don Davis
 	Drew Erny
+	Emilio Herrera
 	Endi Sukma Dewata
 	Fabiano Fidêncio
 	Felipe Volpone
@@ -67,14 +75,17 @@ Developers:
 	Jan Zelený
 	Jason Gerard DeRose
 	Jason Woods
+	Jayesh
 	Jayesh Garg
 	Jeremy Frasier
 	Jérôme Fenal
 	Jim Meyering
+	JoeDrane
 	John Dennis
 	John L
 	John Morris
 	Jr Aquino
+	Julian Gethmann
 	Justin Stephenson
 	Kaleemullah Siddiqui
 	Karl MacMillan
@@ -115,6 +126,7 @@ Developers:
 	Nikolai Kondrashov
 	Niranjan Mallapadi
 	Niranjan MR
+	Oğuz Ersen
 	Oleg Fayans
 	Oleg Kozlov
 	Oliver Gutierrez
@@ -131,6 +143,8 @@ Developers:
 	Petr Špaček
 	Petr Viktorin
 	Petr Voborník
+	Piotr Drąg
+	Rafael Fontenelle
 	Rafael Guterres Jeffman
 	realsobek
 	René Genz
@@ -138,13 +152,16 @@ Developers:
 	Rishabh Dave
 	Rob Crittenden
 	Robbie Harwood
+	Robert Collins
 	Robert Kuska
+	Sam Bristow
 	Sam Morris
 	Sergey Orlov
 	Sergio Oliveira Campos
 	Serhii Tsymbaliuk
 	shanyin
 	Simo Sorce
+	Slava Aseev
 	Spencer E. Olson
 	Stanislav Laznicka
 	Stanislav Levin
@@ -153,6 +170,7 @@ Developers:
 	sudharsanomprakash
 	Sudhir Menon
 	Sumedh Sidhaye
+	sumenon
 	Sumit Bose
 	Sylvain Baubeau
 	Takeshi MIZUTA
@@ -169,11 +187,13 @@ Developers:
 	Viktor Ashirov
 	Vit Mojzis
 	W. Michael Petullo
+	Weblate
 	William Brown
 	William Jon McCann
 	Xiao-Long Chen
 	Yuri Chornoivan
 	Zdenek Pytela
+	zdover
 
 Documentation:
 	Gabe Alford

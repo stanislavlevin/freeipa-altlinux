@@ -38,6 +38,7 @@
  * END COPYRIGHT BLOCK **/
 
 #include "ipa_cldap.h"
+#include "ipa_hostname.h"
 #include <endian.h>
 #include <talloc.h>
 #include <ctype.h>
@@ -156,7 +157,7 @@ char *make_netbios_name(TALLOC_CTX *mem_ctx, const char *s)
 #define NETLOGON_SAM_LOGON_RESPONSE_EX_pusher \
             (ndr_push_flags_fn_t)ndr_push_NETLOGON_SAM_LOGON_RESPONSE_EX_with_flags
 
-static int ipa_cldap_encode_netlogon(char *fq_hostname, char *domain,
+static int ipa_cldap_encode_netlogon(const char *fq_hostname, char *domain,
                                      char *guid, char *sid, char *name,
                                      uint32_t ntver, struct berval *reply)
 {
@@ -236,7 +237,7 @@ int ipa_cldap_netlogon(struct ipa_cldap_ctx *ctx,
                        struct ipa_cldap_req *req,
                        struct berval *reply)
 {
-    char hostname[MAXHOSTNAMELEN + 1]; /* NOTE: lenght hardcoded in kernel */
+    const char *hostname;
     char *domain = NULL;
     char *our_domain = NULL;
     char *guid = NULL;
@@ -321,13 +322,11 @@ int ipa_cldap_netlogon(struct ipa_cldap_ctx *ctx,
         goto done;
     }
 
-    ret = gethostname(hostname, MAXHOSTNAMELEN);
-    if (ret == -1) {
+    hostname = ipa_gethostfqdn();
+	if (hostname == NULL) {
         ret = errno;
         goto done;
     }
-    /* Make double sure it is terminated */
-    hostname[MAXHOSTNAMELEN] = '\0';
     dot = strchr(hostname, '.');
     if (!dot) {
         /* this name is not fully qualified, therefore invalid */

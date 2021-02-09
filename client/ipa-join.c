@@ -20,6 +20,7 @@
 #define _GNU_SOURCE
 
 #include "config.h"
+#include <stdbool.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -34,12 +35,19 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <limits.h>
 
+#ifdef WITH_IPA_JOIN_XML
 #include "xmlrpc-c/base.h"
 #include "xmlrpc-c/client.h"
+#else
+#include <curl/curl.h>
+#include <jansson.h>
+#endif
 
 #include "ipa-client-common.h"
 #include "ipa_ldap.h"
+#include "ipa_hostname.h"
 
 #define NAME "ipa-join"
 
@@ -52,9 +60,18 @@ char * get_config_entry(char * data, const char *section, const char *key);
 
 static int debug = 0;
 
+#define ASPRINTF(strp, fmt...) \
+    if (asprintf(strp, fmt) == -1) { \
+        if (!quiet) \
+            fprintf(stderr, _("Out of memory!\n")); \
+        rval = 3; \
+        goto cleanup; \
+    }
+
 /*
  * Translate some IPA exceptions into specific errors in this context.
  */
+#ifdef WITH_IPA_JOIN_XML
 static int
 handle_fault(xmlrpc_env * const envP) {
     if (envP->fault_occurred) {
@@ -70,6 +87,7 @@ handle_fault(xmlrpc_env * const envP) {
     }
     return 0;
 }
+#endif
 
 /* Get the IPA server from the configuration file.
  * The caller is responsible for freeing this value
@@ -123,6 +141,7 @@ static int check_perms(const char *keytab)
  *
  * The caller is responsible for freeing the return value.
  */
+ #ifdef WITH_IPA_JOIN_XML
 char *
 set_user_agent(const char *ipaserver) {
     int ret;
@@ -167,15 +186,13 @@ callRPC(char * user_agent,
     /* Have curl do SSL certificate validation */
     curlXportParmsP->no_ssl_verifypeer = 0;
     curlXportParmsP->no_ssl_verifyhost = 0;
-    curlXportParmsP->cainfo = "/etc/ipa/ca.crt";
+    curlXportParmsP->cainfo = DEFAULT_CA_CERT_FILE;
     curlXportParmsP->user_agent = user_agent;
-    /* Enable GSSAPI credentials delegation */
-    curlXportParmsP->gssapi_delegation = 1;
 
     clientparms.transport = "curl";
     clientparms.transportparmsP = (struct xmlrpc_xportparms *)
             curlXportParmsP;
-    clientparms.transportparm_size = XMLRPC_CXPSIZE(gssapi_delegation);
+    clientparms.transportparm_size = XMLRPC_CXPSIZE(cainfo);
     xmlrpc_client_create(envP, XMLRPC_CLIENT_NO_FLAGS, NAME, VERSION,
                          &clientparms, sizeof(clientparms),
                          &clientP);
@@ -194,6 +211,7 @@ callRPC(char * user_agent,
     xmlrpc_client_destroy(clientP);
     free((void*)clientparms.transportparmsP);
 }
+#endif
 
 /* The caller is responsible for unbinding the connection if ld is not NULL */
 static LDAP *
@@ -384,7 +402,7 @@ done:
  * the state of the entry.
  */
 static int
-join_ldap(const char *ipaserver, char *hostname, char ** binddn, const char *bindpw, const char *basedn, const char **princ, int quiet)
+join_ldap(const char *ipaserver, const char *hostname, char ** binddn, const char *bindpw, const char *basedn, const char **princ, bool quiet)
 {
     LDAP *ld;
     int rval = 0;
@@ -478,8 +496,9 @@ done:
     return rval;
 }
 
+#ifdef WITH_IPA_JOIN_XML
 static int
-join_krb5(const char *ipaserver, char *hostname, char **hostdn, const char **princ, int force, int quiet) {
+join_krb5_xmlrpc(const char *ipaserver, const char *hostname, char **hostdn, const char **princ, bool force, bool quiet) {
     xmlrpc_env env;
     xmlrpc_value * argArrayP = NULL;
     xmlrpc_value * paramArrayP = NULL;
@@ -527,15 +546,11 @@ join_krb5(const char *ipaserver, char *hostname, char **hostdn, const char **pri
 
     argArrayP = xmlrpc_array_new(&env);
     paramArrayP = xmlrpc_array_new(&env);
-
-    if (hostname == NULL)
-        paramP = xmlrpc_string_new(&env, uinfo.nodename);
-    else
-        paramP = xmlrpc_string_new(&env, hostname);
+    paramP = xmlrpc_string_new(&env, hostname);
     xmlrpc_array_append_item(&env, argArrayP, paramP);
 #ifdef REALM
     if (!quiet)
-        printf("Joining %s to IPA realm %s\n", uinfo.nodename, iparealm);
+        printf("Joining %s to IPA realm %s\n", hostname, iparealm);
 #endif
     xmlrpc_array_append_item(&env, paramArrayP, argArrayP);
     xmlrpc_DECREF(paramP);
@@ -612,25 +627,439 @@ cleanup_xmlrpc:
     return rval;
 }
 
+#else // ifdef WITH_IPA_JOIN_XML
+
+static inline struct curl_slist *
+curl_slist_append_log(struct curl_slist *list, char *string, bool quiet) {
+    list = curl_slist_append(list, string);
+    if (!list) {
+        if (!quiet)
+            fprintf(stderr, _("curl_slist_append() failed for value: '%s'\n"), string);
+        return NULL;
+    }
+    return list;
+}
+
+#define CURL_SETOPT(curl, opt, val) \
+    if (curl_easy_setopt(curl, opt, val) != CURLE_OK) { \
+        if (!quiet) \
+            fprintf(stderr, _("curl_easy_setopt() failed\n")); \
+        rval = 17; \
+        goto cleanup; \
+    }
+
+size_t
+jsonrpc_handle_response(char *ptr, size_t size, size_t nmemb, void *userdata) {
+    size_t realsize = size * nmemb;
+    curl_buffer *cb = (curl_buffer *) userdata;
+
+    char *buf = (char *) realloc(cb->payload, cb->size + realsize + 1);
+    if (!buf) {
+        fprintf(stderr, _("Expanding buffer in jsonrpc_handle_response failed"));
+        free(cb->payload);
+        cb->payload = NULL;
+        return 0;
+    }
+    cb->payload = buf;
+    memcpy(&(cb->payload[cb->size]), ptr, realsize);
+
+    cb->size += realsize;
+    cb->payload[cb->size] = 0;
+
+    return realsize;
+}
+
 static int
-unenroll_host(const char *server, const char *hostname, const char *ktname, int quiet)
+jsonrpc_request(const char *ipaserver, const json_t *json, curl_buffer *response, bool quiet) {
+    int rval = 0;
+
+    CURL *curl = NULL;
+
+    char *url = NULL;
+    char *referer = NULL;
+    char *user_agent = NULL;
+    struct curl_slist *headers = NULL;
+
+    char *json_str = NULL;
+
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+        if (!quiet)
+            fprintf(stderr, _("curl_global_init() failed\n"));
+
+        rval = 17;
+        goto cleanup;
+    }
+
+    curl = curl_easy_init();
+    if (!curl) {
+        if (!quiet)
+            fprintf(stderr, _("curl_easy_init() failed\n"));
+
+        rval = 17;
+        goto cleanup;
+    }
+
+    /* setting endpoint and custom headers */
+    ASPRINTF(&url, "https://%s/ipa/json", ipaserver);
+    CURL_SETOPT(curl, CURLOPT_URL, url);
+
+    ASPRINTF(&referer, "referer: https://%s/ipa", ipaserver);
+    headers = curl_slist_append_log(headers, referer, quiet);
+    if (!headers) {
+        rval = 17;
+        goto cleanup;
+    }
+
+    ASPRINTF(&user_agent, "User-Agent: %s/%s", NAME, VERSION);
+    headers = curl_slist_append_log(headers, user_agent, quiet);
+    if (!headers) {
+        rval = 17;
+        goto cleanup;
+    }
+
+    headers = curl_slist_append_log(headers, "Accept: application/json", quiet);
+    if (!headers) {
+        rval = 17;
+        goto cleanup;
+    }
+
+    headers = curl_slist_append_log(headers, "Content-Type: application/json", quiet);
+    if (!headers) {
+        rval = 17;
+        goto cleanup;
+    }
+    CURL_SETOPT(curl, CURLOPT_HTTPHEADER, headers);
+
+    CURL_SETOPT(curl, CURLOPT_CAINFO, DEFAULT_CA_CERT_FILE);
+
+    CURL_SETOPT(curl, CURLOPT_WRITEFUNCTION, &jsonrpc_handle_response);
+    CURL_SETOPT(curl, CURLOPT_WRITEDATA, response);
+
+    CURL_SETOPT(curl, CURLOPT_HTTPAUTH, CURLAUTH_NEGOTIATE);
+    CURL_SETOPT(curl, CURLOPT_USERPWD, ":");
+
+    if (debug)
+        CURL_SETOPT(curl, CURLOPT_VERBOSE, 1L);
+
+    json_str = json_dumps(json, 0);
+    if (!json_str) {
+        if (debug)
+            fprintf(stderr, _("json_dumps() failed\n"));
+
+        rval = 17;
+        goto cleanup;
+    }
+    CURL_SETOPT(curl, CURLOPT_POSTFIELDS, json_str);
+
+    if (debug)
+        fprintf(stderr, _("JSON-RPC request:\n%s\n"), json_str);
+
+    /* Perform the call and check for errors */
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK)
+    {
+        if (debug)
+            fprintf(stderr, _("JSON-RPC call failed: %s\n"), curl_easy_strerror(res));
+
+        rval = 17;
+        goto cleanup;
+    }
+
+    long resp_code;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &resp_code);
+
+    if (resp_code != 200) {
+        if (debug)
+            fprintf(stderr, _("JSON-RPC call failed with status code: %li\n"), resp_code);
+
+        if (!quiet && resp_code == 401)
+            fprintf(stderr, _("JSON-RPC call was unauthorized. Check your credentials.\n"));
+
+        rval = 17;
+        goto cleanup;
+    }
+
+    if (debug && response->payload) {
+        fprintf(stderr, _("JSON-RPC response:\n%s\n"), response->payload);
+    }
+
+cleanup:
+    curl_slist_free_all(headers);
+
+    if (curl)
+        curl_easy_cleanup(curl);
+    curl_global_cleanup();
+
+    if (url)
+        free(url);
+    if (referer)
+        free(referer);
+    if (user_agent)
+        free(user_agent);
+
+    if (json_str)
+        free(json_str);
+
+    return rval;
+}
+
+static int
+jsonrpc_parse_error(json_t *j_error_obj) {
+    int rval = 0;
+
+    json_error_t j_error;
+
+    int error_code = 0;
+    char *error_message = NULL;
+    if (json_unpack_ex(j_error_obj, &j_error, 0, "{s:i, s:s}",
+                       "code", &error_code,
+                       "message", &error_message) != 0) {
+        if (debug)
+            fprintf(stderr, _("Extracting the error from the JSON-RPC response failed: %s\n"), j_error.text);
+
+        rval = 17;
+        goto cleanup;
+    }
+
+    switch (error_code) {
+    case 2100:
+        fprintf(stderr, _("No permission to join this host to the IPA domain.\n"));
+        rval = 1;
+        break;
+    default:
+        if (error_message)
+            fprintf(stderr, "%s\n", error_message);
+        rval = 1;
+        break;
+    }
+
+cleanup:
+    return rval;
+}
+
+static int
+jsonrpc_parse_response(const char *payload, json_t** j_result_obj, bool quiet) {
+    int rval = 0;
+
+    json_error_t j_error;
+
+    json_t *j_root = NULL;
+    json_t *j_error_obj = NULL;
+
+    j_root = json_loads(payload, 0, &j_error);
+    if (!j_root) {
+        if (debug)
+            fprintf(stderr, _("Parsing JSON-RPC response failed: %s\n"), j_error.text);
+
+        rval = 17;
+        goto cleanup;
+    }
+
+    j_error_obj = json_object_get(j_root, "error");
+    if (j_error_obj && !json_is_null(j_error_obj))
+    {
+        rval = jsonrpc_parse_error(j_error_obj);
+        goto cleanup;
+    }
+
+    *j_result_obj = json_object_get(j_root, "result");
+    if (!*j_result_obj) {
+        if (debug)
+            fprintf(stderr, _("Parsing JSON-RPC response failed: no 'result' value found.\n"));
+
+        rval = 17;
+        goto cleanup;
+    }
+    json_incref(*j_result_obj);
+
+cleanup:
+    json_decref(j_root);
+
+    return rval;
+}
+
+static int
+jsonrpc_parse_join_response(const char *payload, join_info *join_i, bool quiet) {
+    int rval = 0;
+
+    json_error_t j_error;
+
+    json_t *j_result_obj = NULL;
+
+    rval = jsonrpc_parse_response(payload, &j_result_obj, quiet);
+    if (rval)
+        goto cleanup;
+
+    char *tmp_hostdn = NULL;
+    char *tmp_princ = NULL;
+    char *tmp_pwdch = NULL;
+    if (json_unpack_ex(j_result_obj, &j_error, 0, "[s, {s:[s], s?:[s]}]",
+                       &tmp_hostdn,
+                       "krbprincipalname", &tmp_princ,
+                       "krblastpwdchange", &tmp_pwdch) != 0) {
+        if (debug)
+            fprintf(stderr, _("Extracting the data from the JSON-RPC response failed: %s\n"), j_error.text);
+
+        rval = 17;
+        goto cleanup;
+    }
+    ASPRINTF(&join_i->dn, "%s", tmp_hostdn);
+    ASPRINTF(&join_i->krb_principal, "%s", tmp_princ);
+
+    join_i->is_provisioned = tmp_pwdch != NULL;
+
+cleanup:
+    json_decref(j_result_obj);
+
+    return rval;
+}
+
+static int
+join_krb5_jsonrpc(const char *ipaserver, const char *hostname, char **hostdn, const char **princ, bool force, bool quiet) {
+    int rval = 0;
+
+    struct utsname uinfo;
+
+    curl_buffer cb = {0};
+
+    json_error_t j_error;
+    json_t *json_req = NULL;
+
+    join_info join_i = {0};
+
+    *hostdn = NULL;
+    *princ = NULL;
+
+    uname(&uinfo);
+
+    /* create the JSON-RPC payload */
+    json_req = json_pack_ex(&j_error, 0, "{s:s, s:[[s], {s:s, s:s}]}",
+                             "method", "join",
+                             "params",
+                             hostname,
+                             "nsosversion", uinfo.release,
+                             "nshardwareplatform", uinfo.machine);
+
+    if (!json_req) {
+        if (debug)
+            fprintf(stderr, _("json_pack_ex() failed: %s\n"), j_error.text);
+
+        rval = 17;
+        goto cleanup;
+    }
+
+    rval = jsonrpc_request(ipaserver, json_req, &cb, quiet);
+    if (rval != 0)
+        goto cleanup;
+
+    rval = jsonrpc_parse_join_response(cb.payload, &join_i, quiet);
+    if (rval != 0)
+        goto cleanup;
+
+    *hostdn = join_i.dn;
+    *princ = join_i.krb_principal;
+
+    if (!force && join_i.is_provisioned) {
+        if (!quiet)
+            fprintf(stderr, _("Host is already joined.\n"));
+
+        rval = 13;
+        goto cleanup;
+    }
+
+cleanup:
+    json_decref(json_req);
+
+    if (cb.payload)
+        free(cb.payload);
+
+    return rval;
+}
+
+static int
+jsonrpc_parse_unenroll_response(const char *payload, bool* result, bool quiet) {
+    int rval = 0;
+
+    json_error_t j_error;
+
+    json_t *j_result_obj = NULL;
+
+    rval = jsonrpc_parse_response(payload, &j_result_obj, quiet);
+    if (rval)
+        goto cleanup;
+
+    if (json_unpack_ex(j_result_obj, &j_error, 0, "{s:b}",
+                       "result", result) != 0) {
+        if (debug)
+            fprintf(stderr, _("Extracting the data from the JSON-RPC response failed: %s\n"), j_error.text);
+
+        rval = 20;
+        goto cleanup;
+    }
+
+cleanup:
+    json_decref(j_result_obj);
+
+    return rval;
+}
+
+static int
+jsonrpc_unenroll_host(const char *ipaserver, const char *host, bool quiet) {
+    int rval = 0;
+
+    curl_buffer cb = {0};
+
+    json_error_t j_error;
+    json_t *json_req = NULL;
+
+    bool result = false;
+
+    /* create the JSON-RPC payload */
+    json_req = json_pack_ex(&j_error, 0, "{s:s, s:[[s], {}]}",
+                            "method", "host_disable",
+                            "params",
+                            host);
+
+    if (!json_req) {
+        if (debug)
+            fprintf(stderr, _("json_pack_ex() failed: %s\n"), j_error.text);
+
+        rval = 17;
+        goto cleanup;
+    }
+
+    rval = jsonrpc_request(ipaserver, json_req, &cb, quiet);
+    if (rval != 0)
+        goto cleanup;
+
+    rval = jsonrpc_parse_unenroll_response(cb.payload, &result, quiet);
+    if (rval != 0)
+        goto cleanup;
+
+    if (result == true) {
+        if (!quiet)
+            fprintf(stderr, _("Unenrollment successful.\n"));
+    } else {
+        if (!quiet)
+            fprintf(stderr, _("Unenrollment failed.\n"));
+    }
+
+cleanup:
+    json_decref(json_req);
+
+    if (cb.payload)
+        free(cb.payload);
+
+    return rval;
+}
+#endif
+
+#ifdef WITH_IPA_JOIN_XML
+static int
+xmlrpc_unenroll_host(const char *ipaserver, const char *host, bool quiet)
 {
     int rval = 0;
     int ret;
-    char *ipaserver = NULL;
-    char *host = NULL;
-    struct utsname uinfo;
-    char *principal = NULL;
-    char *realm = NULL;
-
-    krb5_context krbctx = NULL;
-    krb5_keytab keytab = NULL;
-    krb5_ccache ccache = NULL;
-    krb5_principal princ = NULL;
-    krb5_error_code krberr;
-    krb5_creds creds;
-    krb5_get_init_creds_opt gicopts;
-    char tgs[LINE_MAX];
 
     xmlrpc_env env;
     xmlrpc_value * argArrayP = NULL;
@@ -648,125 +1077,6 @@ unenroll_host(const char *server, const char *hostname, const char *ktname, int 
     xmlrpc_env_init(&env);
 
     xmlrpc_client_setup_global_const(&env);
-
-    if (server) {
-        ipaserver = strdup(server);
-    } else {
-        char * conf_data = read_config_file(IPA_CONFIG);
-        if ((ipaserver = getIPAserver(conf_data)) == NULL) {
-            if (!quiet)
-                fprintf(stderr, _("Unable to determine IPA server from %s\n"),
-                        IPA_CONFIG);
-            exit(1);
-        }
-        free(conf_data);
-    }
-
-    if (NULL == hostname) {
-        uname(&uinfo);
-        host = strdup(uinfo.nodename);
-    } else {
-        host = strdup(hostname);
-    }
-
-    if (NULL == host) {
-        rval = 3;
-        goto cleanup;
-    }
-
-    if (NULL == strstr(host, ".")) {
-        if (!quiet)
-            fprintf(stderr, _("The hostname must be fully-qualified: %s\n"),
-                    host);
-        rval = 16;
-        goto cleanup;
-    }
-
-    krberr = krb5_init_context(&krbctx);
-    if (krberr) {
-        if (!quiet)
-            fprintf(stderr, _("Unable to join host: "
-                              "Kerberos context initialization failed\n"));
-        rval = 1;
-        goto cleanup;
-    }
-    krberr = krb5_kt_resolve(krbctx, ktname, &keytab);
-    if (krberr != 0) {
-        if (!quiet)
-            fprintf(stderr, _("Error resolving keytab: %s.\n"),
-                error_message(krberr));
-        rval = 7;
-        goto cleanup;
-    }
-
-    krberr = krb5_get_default_realm(krbctx, &realm);
-    if (krberr != 0) {
-        if (!quiet)
-            fprintf(stderr, _("Error getting default Kerberos realm: %s.\n"),
-                error_message(krberr));
-        rval = 21;
-        goto cleanup;
-    }
-
-    ret = asprintf(&principal, "host/%s@%s", host,  realm);
-    if (ret == -1)
-    {
-        if (!quiet)
-            fprintf(stderr, _("Out of memory!\n"));
-        rval = 3;
-        goto cleanup;
-    }
-
-    krberr = krb5_parse_name(krbctx, principal, &princ);
-    if (krberr != 0) {
-        if (!quiet)
-            fprintf(stderr, _("Error parsing \"%1$s\": %2$s.\n"),
-                            principal, error_message(krberr));
-        rval = 4;
-        goto cleanup;
-    }
-    strcpy(tgs, KRB5_TGS_NAME);
-    snprintf(tgs + strlen(tgs), sizeof(tgs) - strlen(tgs), "/%.*s",
-             (krb5_princ_realm(krbctx, princ))->length,
-             (krb5_princ_realm(krbctx, princ))->data);
-    snprintf(tgs + strlen(tgs), sizeof(tgs) - strlen(tgs), "@%.*s",
-             (krb5_princ_realm(krbctx, princ))->length,
-             (krb5_princ_realm(krbctx, princ))->data);
-    memset(&creds, 0, sizeof(creds));
-    krb5_get_init_creds_opt_init(&gicopts);
-    krb5_get_init_creds_opt_set_forwardable(&gicopts, 1);
-    krberr = krb5_get_init_creds_keytab(krbctx, &creds, princ, keytab,
-                                      0, tgs, &gicopts);
-    if (krberr != 0) {
-        if (!quiet)
-            fprintf(stderr, _("Error obtaining initial credentials: %s.\n"),
-                    error_message(krberr));
-        rval = 19;
-        goto cleanup;
-    }
-
-    krberr = krb5_cc_resolve(krbctx, "MEMORY:ipa-join", &ccache);
-    if (krberr == 0) {
-        krberr = krb5_cc_initialize(krbctx, ccache, creds.client);
-    } else {
-        if (!quiet)
-            fprintf(stderr,
-                    _("Unable to generate Kerberos Credential Cache\n"));
-        rval = 19;
-        goto cleanup;
-    }
-    krberr = krb5_cc_store_cred(krbctx, ccache, &creds);
-    if (krberr != 0) {
-        if (!quiet)
-            fprintf(stderr,
-                    _("Error storing creds in credential cache: %s.\n"),
-                    error_message(krberr));
-        rval = 19;
-        goto cleanup;
-    }
-    krb5_cc_close(krbctx, ccache);
-    ccache = NULL;
-    putenv("KRB5CCNAME=MEMORY:ipa-join");
 
 #if 1
     ret = asprintf(&url, "https://%s:443/ipa/xml", ipaserver);
@@ -821,36 +1131,31 @@ unenroll_host(const char *server, const char *hostname, const char *ktname, int 
     }
 
 cleanup:
-
     free(user_agent);
-    if (keytab) krb5_kt_close(krbctx, keytab);
-    free(host);
-    free((char *)principal);
-    free((char *)ipaserver);
-    if (princ) krb5_free_principal(krbctx, princ);
-    if (ccache) krb5_cc_close(krbctx, ccache);
-    if (krbctx) krb5_free_context(krbctx);
-
     free(url);
+
+    if (argArrayP)
+        xmlrpc_DECREF(argArrayP);
+    if (paramArrayP)
+        xmlrpc_DECREF(paramArrayP);
+
     xmlrpc_env_clean(&env);
     xmlrpc_client_cleanup();
 
     return rval;
 }
-
+#endif
 
 static int
-join(const char *server, const char *hostname, const char *bindpw, const char *basedn, const char *keytab, int force, int quiet)
+join(const char *server, const char *hostname, const char *bindpw, const char *basedn, const char *keytab, bool force, bool quiet)
 {
     int rval = 0;
     pid_t childpid = 0;
     int status = 0;
     char *ipaserver = NULL;
     char *iparealm = NULL;
-    char * host = NULL;
     const char * princ = NULL;
     char * hostdn = NULL;
-    struct utsname uinfo;
 
     krb5_context krbctx = NULL;
     krb5_ccache ccache = NULL;
@@ -869,27 +1174,8 @@ join(const char *server, const char *hostname, const char *bindpw, const char *b
         free(conf_data);
     }
 
-    if (NULL == hostname) {
-        uname(&uinfo);
-        host = strdup(uinfo.nodename);
-    } else {
-        host = strdup(hostname);
-    }
-
-    if (NULL == strstr(host, ".")) {
-        fprintf(stderr, _("The hostname must be fully-qualified: %s\n"), host);
-        rval = 16;
-        goto cleanup;
-    }
-
-    if ((!strcmp(host, "localhost")) || (!strcmp(host, "localhost.localdomain"))){
-        fprintf(stderr, _("The hostname must not be: %s\n"), host);
-        rval = 16;
-        goto cleanup;
-    }
-
     if (bindpw)
-        rval = join_ldap(ipaserver, host, &hostdn, bindpw, basedn, &princ, quiet);
+        rval = join_ldap(ipaserver, hostname, &hostdn, bindpw, basedn, &princ, quiet);
     else {
         krberr = krb5_init_context(&krbctx);
         if (krberr) {
@@ -913,8 +1199,12 @@ join(const char *server, const char *hostname, const char *bindpw, const char *b
             rval = 6;
             goto cleanup;
         }
-        rval = join_krb5(ipaserver, host, &hostdn, &princ, force,
-                         quiet);
+
+#ifdef WITH_IPA_JOIN_XML
+        rval = join_krb5_xmlrpc(ipaserver, hostname, &hostdn, &princ, force, quiet);
+#else
+        rval = join_krb5_jsonrpc(ipaserver, hostname, &hostdn, &princ, force, quiet);
+#endif
     }
 
     if (rval) goto cleanup;
@@ -976,7 +1266,6 @@ join(const char *server, const char *hostname, const char *bindpw, const char *b
 
 cleanup:
     free((char *)princ);
-    free(host);
 
     if (bindpw)
         ldap_memfree((void *)hostdn);
@@ -988,6 +1277,157 @@ cleanup:
     if (uprinc) krb5_free_principal(krbctx, uprinc);
     if (ccache) krb5_cc_close(krbctx, ccache);
     if (krbctx) krb5_free_context(krbctx);
+
+    return rval;
+}
+
+static int
+unenroll_host(const char *server, const char *hostname, const char *ktname, bool quiet)
+{
+    int rval = 0;
+
+    char *ipaserver = NULL;
+    char *principal = NULL;
+    char *realm = NULL;
+
+    krb5_context krbctx = NULL;
+    krb5_keytab keytab = NULL;
+    krb5_ccache ccache = NULL;
+    krb5_principal princ = NULL;
+    krb5_error_code krberr;
+    krb5_creds creds;
+    krb5_get_init_creds_opt gicopts;
+    char tgs[LINE_MAX];
+
+    memset(&creds, 0, sizeof(creds));
+
+    if (server) {
+        ipaserver = strdup(server);
+    } else {
+        char * conf_data = read_config_file(IPA_CONFIG);
+        if ((ipaserver = getIPAserver(conf_data)) == NULL) {
+            if (!quiet)
+                fprintf(stderr, _("Unable to determine IPA server from %s\n"),
+                        IPA_CONFIG);
+            exit(1);
+        }
+        free(conf_data);
+    }
+
+    krberr = krb5_init_context(&krbctx);
+    if (krberr) {
+        if (!quiet)
+            fprintf(stderr, _("Unable to join host: "
+                              "Kerberos context initialization failed\n"));
+        rval = 1;
+        goto cleanup;
+    }
+
+    krberr = krb5_kt_resolve(krbctx, ktname, &keytab);
+    if (krberr != 0) {
+        if (!quiet)
+            fprintf(stderr, _("Error resolving keytab: %s.\n"),
+                    error_message(krberr));
+        rval = 7;
+        goto cleanup;
+    }
+
+    krberr = krb5_get_default_realm(krbctx, &realm);
+    if (krberr != 0) {
+        if (!quiet)
+            fprintf(stderr, _("Error getting default Kerberos realm: %s.\n"),
+                    error_message(krberr));
+        rval = 21;
+        goto cleanup;
+    }
+
+    ASPRINTF(&principal, "host/%s@%s", hostname,  realm);
+
+    krberr = krb5_parse_name(krbctx, principal, &princ);
+    if (krberr != 0) {
+        if (!quiet)
+            fprintf(stderr, _("Error parsing \"%1$s\": %2$s.\n"),
+                    principal, error_message(krberr));
+        rval = 4;
+        goto cleanup;
+    }
+    strcpy(tgs, KRB5_TGS_NAME);
+    snprintf(tgs + strlen(tgs), sizeof(tgs) - strlen(tgs), "/%.*s",
+             (krb5_princ_realm(krbctx, princ))->length,
+             (krb5_princ_realm(krbctx, princ))->data);
+    snprintf(tgs + strlen(tgs), sizeof(tgs) - strlen(tgs), "@%.*s",
+             (krb5_princ_realm(krbctx, princ))->length,
+             (krb5_princ_realm(krbctx, princ))->data);
+
+    krb5_get_init_creds_opt_init(&gicopts);
+    krb5_get_init_creds_opt_set_forwardable(&gicopts, 1);
+    krberr = krb5_get_init_creds_keytab(krbctx, &creds, princ, keytab,
+                                        0, tgs, &gicopts);
+    if (krberr != 0) {
+        if (!quiet)
+            fprintf(stderr, _("Error obtaining initial credentials: %s.\n"),
+                    error_message(krberr));
+        rval = 19;
+        goto cleanup;
+    }
+
+    krberr = krb5_cc_resolve(krbctx, "MEMORY:ipa-join", &ccache);
+    if (krberr == 0) {
+        krberr = krb5_cc_initialize(krbctx, ccache, creds.client);
+    } else {
+        if (!quiet)
+            fprintf(stderr,
+                    _("Unable to generate Kerberos Credential Cache\n"));
+        rval = 19;
+        goto cleanup;
+    }
+
+    if (krberr != 0) {
+        if (!quiet)
+            fprintf(stderr,
+                    _("Unable to generate Kerberos Credential Cache\n"));
+        rval = 19;
+        goto cleanup;
+    }
+
+    krberr = krb5_cc_store_cred(krbctx, ccache, &creds);
+    if (krberr != 0) {
+        if (!quiet)
+            fprintf(stderr,
+                    _("Error storing creds in credential cache: %s.\n"),
+                    error_message(krberr));
+        rval = 19;
+        goto cleanup;
+    }
+    krb5_cc_close(krbctx, ccache);
+    ccache = NULL;
+    putenv("KRB5CCNAME=MEMORY:ipa-join");
+
+#ifdef WITH_IPA_JOIN_XML
+    rval = xmlrpc_unenroll_host(ipaserver, hostname, quiet);
+#else
+    rval = jsonrpc_unenroll_host(ipaserver, hostname, quiet);
+#endif
+
+cleanup:
+    if (principal)
+        free(principal);
+    if (ipaserver)
+        free(ipaserver);
+    if (realm)
+        krb5_free_default_realm(krbctx, realm);
+
+    if (keytab)
+        krb5_kt_close(krbctx, keytab);
+    if (princ)
+        krb5_free_principal(krbctx, princ);
+    if (ccache)
+        krb5_cc_close(krbctx, ccache);
+
+    krb5_free_cred_contents(krbctx, &creds);
+
+    if (krbctx)
+        krb5_free_context(krbctx);
 
     return rval;
 }
@@ -1044,15 +1484,38 @@ main(int argc, const char **argv) {
         if (!quiet) {
             poptPrintUsage(pc, stderr, 0);
         }
+        poptFreeContext(pc);
         exit(2);
     }
     poptFreeContext(pc);
+
     if (debug)
         setenv("XMLRPC_TRACE_XML", "1", 1);
 
-
     if (!keytab)
         keytab = "/etc/krb5.keytab";
+
+    /* auto-detect and verify hostname */
+    if (!hostname) {
+        hostname = ipa_gethostfqdn();
+        if (hostname == NULL) {
+            if (!quiet)
+                fprintf(stderr, _("Cannot get host's FQDN!\n"));
+            exit(22);
+        }
+    }
+    if (NULL == strstr(hostname, ".")) {
+        if (!quiet) {
+            fprintf(stderr, _("The hostname must be fully-qualified: %s\n"), hostname);
+        }
+        exit(16);
+    }
+    if ((!strcmp(hostname, "localhost")) || (!strcmp(hostname, "localhost.localdomain"))){
+        if (!quiet) {
+            fprintf(stderr, _("The hostname must not be: %s\n"), hostname);
+        }
+        exit(16);
+    }
 
     if (unenroll) {
         ret = unenroll_host(server, hostname, keytab, quiet);

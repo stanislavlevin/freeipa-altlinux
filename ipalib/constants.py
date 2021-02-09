@@ -23,17 +23,14 @@ All constants centralised in one file.
 """
 
 import os
-import socket
+
+from ipaplatform.constants import constants as _constants
 from ipapython.dn import DN
+from ipapython.fqdn import gethostfqdn
 from ipapython.version import VERSION, API_VERSION
 
-try:
-    FQDN = socket.getfqdn()
-except Exception:
-    try:
-        FQDN = socket.gethostname()
-    except Exception:
-        FQDN = None
+
+FQDN = gethostfqdn()
 
 # TLS related constants
 # * SSL2 and SSL3 are broken.
@@ -198,12 +195,9 @@ DEFAULT_CONFIG = (
     ('ca_host', FQDN),  # Set in Env._finalize_core()
     ('ca_port', 80),
     ('ca_agent_port', 443),
-    ('ca_ee_port', 443),
     # For the following ports, None means a default specific to the installed
     # Dogtag version.
     ('ca_install_port', None),
-    ('ca_agent_install_port', None),
-    ('ca_ee_install_port', None),
 
     # Topology plugin
     ('recommended_max_agmts', 4),  # Recommended maximum number of replication
@@ -319,7 +313,10 @@ RA_AGENT_PROFILE = 'caSubsystemCert'
 CA_DBUS_TIMEOUT = 120
 
 # Maximum hostname length in Linux
+# It's the max length of uname's nodename and return value of gethostname().
 MAXHOSTNAMELEN = 64
+# DNS name is 255 octets, effectively 253 ASCII characters.
+MAXHOSTFQDNLEN = 253
 
 # regexp definitions
 PATTERN_GROUPUSER_NAME = (
@@ -330,8 +327,8 @@ PATTERN_GROUPUSER_NAME = (
 ANON_USER = 'WELLKNOWN/ANONYMOUS'
 
 # IPA API Framework user
-IPAAPI_USER = 'ipaapi'
-IPAAPI_GROUP = 'ipaapi'
+IPAAPI_USER = _constants.IPAAPI_USER
+IPAAPI_GROUP = _constants.IPAAPI_GROUP
 
 # Use cache path
 USER_CACHE_PATH = (

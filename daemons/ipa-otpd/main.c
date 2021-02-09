@@ -32,6 +32,7 @@
 
 #include <signal.h>
 #include <stdbool.h>
+#include "ipa_hostname.h"
 
 /* Our global state. */
 struct otpd_context ctx;
@@ -212,7 +213,8 @@ static krb5_error_code setup_ldap(const char *uri, krb5_boolean bind,
 
 int main(int argc, char **argv)
 {
-    char hostname[HOST_NAME_MAX + 1];
+    const char *hostname;
+    char fqdn[IPA_HOST_FQDN_LEN + 1];
     krb5_error_code retval;
     krb5_data hndata;
     verto_ev *sig;
@@ -227,10 +229,12 @@ int main(int argc, char **argv)
     memset(&ctx, 0, sizeof(ctx));
     ctx.exitstatus = 1;
 
-    if (gethostname(hostname, sizeof(hostname)) < 0) {
+    hostname = ipa_gethostfqdn();
+    if (hostname == NULL) {
         otpd_log_err(errno, "Unable to get hostname");
         goto error;
     }
+    strncpy(fqdn, hostname, IPA_HOST_FQDN_LEN);
 
     retval = krb5_init_context(&ctx.kctx);
     if (retval != 0) {
@@ -252,7 +256,7 @@ int main(int argc, char **argv)
     }
 
     /* Set NAS-Identifier. */
-    hndata.data = hostname;
+    hndata.data = fqdn;
     hndata.length = strlen(hndata.data);
     retval = krad_attrset_add(ctx.attrs, krad_attr_name2num("NAS-Identifier"),
                               &hndata);

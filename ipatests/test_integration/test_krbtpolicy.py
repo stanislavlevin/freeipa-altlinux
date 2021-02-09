@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2019  FreeIPA Contributors see COPYING for license
+# Copyright (C) 2019,2020  FreeIPA Contributors see COPYING for license
 #
 
 """
@@ -8,8 +8,11 @@ Module provides tests for Kerberos ticket policy options
 
 from __future__ import absolute_import
 
+import pytest
 import time
 from datetime import datetime
+
+from ipaplatform.paths import paths
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.test_integration.test_otp import add_otptoken, del_otptoken
@@ -21,7 +24,7 @@ USER2 = "testuser2"
 MAXLIFE = 86400
 
 
-def maxlife_within_policy(input, maxlife, slush=5):
+def maxlife_within_policy(input, maxlife, slush=3600):
     """Given klist output of the TGT verify that it is within policy
 
        Ensure that the validity period is somewhere within the
@@ -31,6 +34,8 @@ def maxlife_within_policy(input, maxlife, slush=5):
 
        Input should be a string like:
        11/19/2019 16:37:40  11/20/2019 16:37:39  krbtgt/...
+
+       slush defaults to 1 * 60 * 60 matching the jitter window.
     """
     data = input.split()
     start = datetime.strptime(data[0] + ' ' + data[1], '%m/%d/%Y %H:%M:%S')
@@ -40,12 +45,32 @@ def maxlife_within_policy(input, maxlife, slush=5):
     return maxlife >= diff >= maxlife - slush
 
 
-def reset_to_default_policy(host, user):
+@pytest.fixture
+def reset_to_default_policy():
     """Reset default user authentication and user authentication type"""
+
+    state = dict()
+
+    def _reset_to_default_policy(host, user=None):
+        state['host'] = host
+        state['user'] = user
+
+    yield _reset_to_default_policy
+
+    host = state['host']
+    user = state['user']
     tasks.kinit_admin(host)
-    host.run_command(['ipa', 'user-mod', user, '--user-auth-type='])
     host.run_command(['ipa', 'krbtpolicy-reset'])
-    host.run_command(['ipa', 'krbtpolicy-reset', user])
+    if user:
+        host.run_command(['ipa', 'user-mod', user, '--user-auth-type='])
+        host.run_command(['ipa', 'krbtpolicy-reset', user])
+
+
+def kinit_check_life(master, user):
+    """Acquire a TGT and check if it's within the lifetime window"""
+    master.run_command(["kinit", user], stdin_text=f"{PASSWORD}\n")
+    result = master.run_command("klist | grep krbtgt")
+    assert maxlife_within_policy(result.stdout_text, MAXLIFE) is True
 
 
 class TestPWPolicy(IntegrationTest):
@@ -59,11 +84,15 @@ class TestPWPolicy(IntegrationTest):
         tasks.create_active_user(cls.master, USER1, PASSWORD)
         tasks.create_active_user(cls.master, USER2, PASSWORD)
 
+    @pytest.fixture(autouse=True, scope="function")
+    def with_admin(self):
+        tasks.kinit_admin(self.master)
+        yield
+        tasks.kdestroy_all(self.master)
+
     def test_krbtpolicy_default(self):
         """Test the default kerberos ticket policy 24-hr tickets"""
         master = self.master
-
-        tasks.kinit_admin(master)
         master.run_command(['ipa', 'krbtpolicy-mod', USER1,
                             '--maxlife', str(MAXLIFE)])
         tasks.kdestroy_all(master)
@@ -73,13 +102,9 @@ class TestPWPolicy(IntegrationTest):
         result = master.run_command('klist | grep krbtgt')
         assert maxlife_within_policy(result.stdout_text, MAXLIFE) is True
 
-        tasks.kdestroy_all(master)
-
     def test_krbtpolicy_hardended(self):
         """Test a hardened kerberos ticket policy with 10 min tickets"""
         master = self.master
-
-        tasks.kinit_admin(master)
         master.run_command(['ipa', 'user-mod', USER1,
                             '--user-auth-type', 'password',
                             '--user-auth-type', 'hardened'])
@@ -94,7 +119,8 @@ class TestPWPolicy(IntegrationTest):
         master.run_command(['kinit', USER1],
                            stdin_text=PASSWORD + '\n')
         result = master.run_command('klist | grep krbtgt')
-        assert maxlife_within_policy(result.stdout_text, 600) is True
+        assert maxlife_within_policy(result.stdout_text, 600,
+                                     slush=600) is True
 
         tasks.kdestroy_all(master)
 
@@ -104,13 +130,9 @@ class TestPWPolicy(IntegrationTest):
         result = master.run_command('klist | grep krbtgt')
         assert maxlife_within_policy(result.stdout_text, MAXLIFE) is True
 
-        tasks.kdestroy_all(master)
-
     def test_krbtpolicy_password(self):
         """Test the kerberos ticket policy which issues 20 min tickets"""
         master = self.master
-
-        tasks.kinit_admin(master)
         master.run_command(['ipa', 'krbtpolicy-mod', USER2,
                             '--maxlife', '1200'])
 
@@ -119,27 +141,21 @@ class TestPWPolicy(IntegrationTest):
         master.run_command(['kinit', USER2],
                            stdin_text=PASSWORD + '\n')
         result = master.run_command('klist | grep krbtgt')
-        assert maxlife_within_policy(result.stdout_text, 1200) is True
-
-        tasks.kdestroy_all(master)
+        assert maxlife_within_policy(result.stdout_text, 1200,
+                                     slush=1200) is True
 
     def test_krbtpolicy_reset(self):
         """Test a hardened kerberos ticket policy reset"""
         master = self.master
-
-        tasks.kinit_admin(master)
         master.run_command(['ipa', 'krbtpolicy-reset', USER2])
         master.run_command(['kinit', USER2],
                            stdin_text=PASSWORD + '\n')
         result = master.run_command('klist | grep krbtgt')
         assert maxlife_within_policy(result.stdout_text, MAXLIFE) is True
 
-        tasks.kdestroy_all(master)
-
-    def test_krbtpolicy_otp(self):
+    def test_krbtpolicy_otp(self, reset_to_default_policy):
         """Test otp ticket policy"""
         master = self.master
-        tasks.kinit_admin(self.master)
         master.run_command(['ipa', 'user-mod', USER1,
                             '--user-auth-type', 'otp'])
         master.run_command(['ipa', 'config-mod',
@@ -149,6 +165,7 @@ class TestPWPolicy(IntegrationTest):
         armor = tasks.create_temp_file(self.master, create_file=False)
         otpuid, totp = add_otptoken(master, USER1, otptype="totp")
         otpvalue = totp.generate(int(time.time())).decode("ascii")
+        reset_to_default_policy(master, USER1)
         try:
             tasks.kdestroy_all(master)
             # create armor for FAST
@@ -174,6 +191,51 @@ class TestPWPolicy(IntegrationTest):
                                ok_returncode=1)
         finally:
             del_otptoken(master, otpuid)
-            reset_to_default_policy(master, USER1)
             self.master.run_command(['rm', '-f', armor])
             master.run_command(['ipa', 'config-mod', '--user-auth-type='])
+
+    def test_krbtpolicy_jitter(self):
+        """Test jitter lifetime with no auth indicators"""
+        kinit_check_life(self.master, USER1)
+
+    def test_krbtpolicy_jitter_otp(self, reset_to_default_policy):
+        """Test jitter lifetime with OTP"""
+        reset_to_default_policy(self.master, USER1)
+        self.master.run_command(["ipa", "user-mod", USER1,
+                                 "--user-auth-type", "otp"])
+        kinit_check_life(self.master, USER1)
+
+    def test_ccache_sweep(self, reset_to_default_policy):
+        """Test that the ccache sweeper works
+
+           - Force wipe all existing ccaches
+           - Set the ticket policy to a short value, 30 seconds.
+           - Do a series of kinit, ipa command, kdestroy to generate ccaches
+           - sleep()
+           - Run the sweeper
+           - Verify that all ccaches are gone
+        """
+        MAXLIFE = 20
+        reset_to_default_policy(self.master)  # this will reset at END of test
+        tasks.kinit_admin(self.master)
+        self.master.run_command(
+            ['ipa', 'krbtpolicy-mod', '--maxlife', str(MAXLIFE)]
+        )
+        tasks.kdestroy_all(self.master)
+        self.master.run_command(
+            ['find', paths.IPA_CCACHES, '-type', 'f', '-delete']
+        )
+        for _i in range(5):
+            tasks.kdestroy_all(self.master)
+            tasks.kinit_admin(self.master)
+            self.master.run_command(['ipa', 'user-show', 'admin'])
+        tasks.kdestroy_all(self.master)
+        time.sleep(MAXLIFE)
+        self.master.run_command(
+            ['/usr/libexec/ipa/ipa-ccache-sweeper', '-m', '0']
+        )
+        time.sleep(5)
+        result = self.master.run_command(
+            "ls -1 {0} | wc -l".format(paths.IPA_CCACHES)
+        )
+        assert int(result.stdout_text.strip()) == 0

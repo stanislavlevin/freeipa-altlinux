@@ -4,6 +4,7 @@ appdir = $(IPA_DATA_DIR)/updates
 app_DATA =				\
 	05-pre_upgrade_plugins.update	\
 	10-config.update		\
+	10-db-locks.update		\
 	10-enable-betxn.update		\
 	10-ipapwd.update		\
 	10-selinuxusermap.update	\
@@ -11,6 +12,7 @@ app_DATA =				\
 	10-uniqueness.update		\
 	19-managed-entries.update	\
 	20-aci.update			\
+	20-autobind.update		\
 	20-dna.update			\
 	20-enable_dirsrv_plugins.update	\
 	20-host_nis_groups.update	\
@@ -21,8 +23,6 @@ app_DATA =				\
 	20-sslciphers.update		\
 	20-syncrepl.update		\
 	20-user_private_groups.update	\
-	20-winsync_index.update		\
-	20-idoverride_index.update	\
 	20-uuid.update  \
 	20-default_password_policy.update \
 	20-whoami.update	\

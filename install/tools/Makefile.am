@@ -6,6 +6,7 @@ SUBDIRS = 			\
 
 dist_noinst_DATA =		\
 	ipa-ca-install.in		\
+	ipa-ccache-sweeper.in	\
 	ipa-dns-install.in		\
 	ipa-kra-install.in		\
 	ipa-server-install.in	\
@@ -36,6 +37,7 @@ dist_noinst_DATA =		\
 	ipa-httpd-pwdreader.in	\
 	ipa-pki-retrieve-key.in	\
 	ipa-pki-wait-running.in	\
+	ipa-acme-manage.in	\
 	$(NULL)
 
 nodist_sbin_SCRIPTS =		\
@@ -64,10 +66,12 @@ nodist_sbin_SCRIPTS =		\
 	ipa-pkinit-manage	\
 	ipa-crlgen-manage	\
 	ipa-cert-fix		\
+	ipa-acme-manage		\
 	$(NULL)
 
 appdir = $(libexecdir)/ipa/
 nodist_app_SCRIPTS =		\
+	ipa-ccache-sweeper	\
 	ipa-custodia		\
 	ipa-custodia-check	\
 	ipa-httpd-kdcproxy	\

@@ -12,13 +12,9 @@ from __future__ import print_function
 import enum
 import logging
 import os
-
-# absolute import is necessary because IPA module dns clashes with python-dns
-from dns import resolver
-import six
-
 import sys
 
+import six
 from subprocess import CalledProcessError
 
 from ipalib import api
@@ -26,6 +22,7 @@ from ipalib import errors
 from ipalib import util
 from ipalib.install import hostname, sysrestore
 from ipalib.install.service import enroll_only, prepare_only
+from ipalib.install import dnsforwarders
 from ipaplatform.paths import paths
 from ipaplatform.constants import constants
 from ipaplatform import services
@@ -294,7 +291,7 @@ def install_check(standalone, api, replica, options, hostname):
         if not options.forwarders:
             options.forwarders = []
         if options.auto_forwarders:
-            options.forwarders += resolver.get_default_resolver().nameservers
+            options.forwarders.extend(dnsforwarders.get_nameservers())
     elif standalone or not replica:
         options.forwarders = read_dns_forwarders()
 
@@ -326,14 +323,14 @@ def install_check(standalone, api, replica, options, hostname):
         print("Using reverse zone(s) %s" % ', '.join(reverse_zones))
 
 
-def install(standalone, replica, options, api=api, ntp_role=False):
+def install(standalone, replica, options, api=api):
     fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
     if standalone:
         # otherwise this is done by server/replica installer
         update_hosts_file(ip_addresses, api.env.host, fstore)
 
-    bind = bindinstance.BindInstance(fstore, api=api, ntp_role=ntp_role)
+    bind = bindinstance.BindInstance(fstore, api=api)
     bind.setup(api.env.host, ip_addresses, api.env.realm, api.env.domain,
                options.forwarders, options.forward_policy,
                reverse_zones, zonemgr=options.zonemgr,

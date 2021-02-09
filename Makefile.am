@@ -3,7 +3,7 @@ NULL =
 ACLOCAL_AMFLAGS = -I m4
 
 if ENABLE_SERVER
-    IPASERVER_SUBDIRS = ipaserver
+    IPASERVER_SUBDIRS = ipaserver ipasphinx
     SERVER_SUBDIRS = daemons init install
 endif
 
@@ -103,6 +103,7 @@ clean-local:
 	rm -f "$(top_builddir)"/$(PACKAGE)-*.tar.gz
 	rm -rf "$(top_srcdir)/cov-int"
 	rm -f "$(top_srcdir)/freeipa.tgz"
+	$(MAKE) -C "$(top_srcdir)/doc" distclean
 
 # convenience targets for RPM build
 .PHONY: rpmroot rpmdistdir version-update _dist-version-bakein _rpms-prep \
@@ -193,7 +194,7 @@ endif WITH_PYLINT
 if WITH_JSLINT
 JSLINT_TARGET = jslint
 endif WITH_JSLINT
-lint: acilint apilint $(POLINT_TARGET) $(PYLINT_TARGET) $(JSLINT_TARGET) yamllint
+lint: acilint apilint $(POLINT_TARGET) $(PYLINT_TARGET) $(JSLINT_TARGET) rpmlint yamllint
 
 .PHONY: devcheck
 devcheck: all
@@ -209,12 +210,12 @@ endif
 	@ # just tests, aci, api and pylint on Python 3
 	PATH=$(abspath ipatests):$$PATH PYTHONPATH=$(abspath $(top_srcdir)) \
 	    $(PYTHON) ipatests/ipa-run-tests --ipaclient-unittests
-	$(MAKE) $(AM_MAKEFLAGS) acilint apilint polint pylint jslint yamllint check
+	$(MAKE) $(AM_MAKEFLAGS) acilint apilint polint pylint jslint rpmlint yamllint check
 	@echo "All tests passed."
 
 .PHONY: fastcheck fasttest fastlint
 fastcheck:
-	@$(MAKE) -j1 $(AM_MAKEFLAGS) fastlint yamllint fasttest apilint acilint
+	@$(MAKE) -j1 $(AM_MAKEFLAGS) fastlint rpmlint yamllint fasttest apilint acilint
 
 fasttest: $(GENERATED_PYTHON_FILES) ipasetup.py
 	@ # --ignore doubles speed of total test run compared to pytest.skip()
@@ -326,6 +327,15 @@ yamllint:
 		$(PYTHON) -c "import yaml; f = open('$${YAML}'); yaml.safe_load(f); f.close()" || { echo Your YAML file: $${YAML} has a wrong syntax or this is a Jinja template. In the latter clause, consider to add your YAML file to the YAML_TEMPLATE_FILES list in Makefile.am.; exit 1; } \
 	done; \
 	echo "-----------"
+
+# Build & lint documentation.
+#
+.PHONY: doclint
+doclint:
+	@echo -e "\nBuild and lint documentation"
+	@echo "-----------"
+	$(MAKE) -C $(top_srcdir)/doc/ lint
+	@echo "-----------"
 
 # Run pylint for all python files. Finds all python files/packages, skips
 # folders rpmbuild, freeipa-* and dist. Skip (match, but don't print) .*,

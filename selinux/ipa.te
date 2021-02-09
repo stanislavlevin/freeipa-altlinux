@@ -63,6 +63,8 @@ init_script_file(ipa_custodia_dmldap_exec_t)
 type ipa_custodia_pki_tomcat_exec_t;
 init_script_file(ipa_custodia_pki_tomcat_exec_t)
 
+type ipa_custodia_pki_tomcat_t;
+
 type ipa_custodia_ra_agent_exec_t;
 init_script_file(ipa_custodia_ra_agent_exec_t)
 
@@ -71,6 +73,11 @@ logging_log_file(ipa_custodia_log_t)
 
 type ipa_custodia_tmp_t;
 files_tmp_file(ipa_custodia_tmp_t)
+
+type ipa_pki_retrieve_key_exec_t;
+type ipa_pki_retrieve_key_t;
+domain_type(ipa_pki_retrieve_key_t)
+init_script_file(ipa_pki_retrieve_key_exec_t)
 
 ########################################
 #
@@ -110,12 +117,29 @@ optional_policy(`
 
 ########################################
 #
+# password policy local policy
+#
+optional_policy(`
+    gen_require(`
+        type kadmind_t;
+        type crack_db_t;
+        class file getattr;
+        class file open;
+        class file read;
+        class dir search;
+    ')
+    allow kadmind_t crack_db_t:file { getattr open read };
+    allow kadmind_t crack_db_t:dir search;
+')
+
+
+########################################
+#
 # ipa-helper local policy
 #
 
-
-allow ipa_helper_t self:capability { net_admin dac_read_search dac_override chown };
-seutil_read_config(ipa_helper_t);
+allow ipa_helper_t self:capability { chown dac_override dac_read_search net_admin };
+seutil_read_config(ipa_helper_t)
 
 #kernel bug
 dontaudit ipa_helper_t self:capability2  block_suspend;
@@ -323,8 +347,10 @@ optional_policy(`
 allow ipa_custodia_t self:capability { setgid setuid };
 allow ipa_custodia_t self:fifo_file rw_fifo_file_perms;
 allow ipa_custodia_t self:netlink_route_socket { create_socket_perms nlmsg_read };
+allow ipa_custodia_t self:process execmem;
 allow ipa_custodia_t self:unix_stream_socket create_stream_socket_perms;
 allow ipa_custodia_t self:unix_dgram_socket create_socket_perms;
+allow ipa_custodia_t self:tcp_socket { bind create };
 allow ipa_custodia_t self:udp_socket create_socket_perms;
 
 manage_dirs_pattern(ipa_custodia_t,ipa_custodia_log_t,ipa_custodia_log_t)
@@ -333,9 +359,11 @@ logging_log_filetrans(ipa_custodia_t, ipa_custodia_log_t, { dir file })
 
 manage_dirs_pattern(ipa_custodia_t, ipa_custodia_tmp_t, ipa_custodia_tmp_t)
 manage_files_pattern(ipa_custodia_t, ipa_custodia_tmp_t, ipa_custodia_tmp_t)
+mmap_exec_files_pattern(ipa_custodia_t, ipa_custodia_tmp_t, ipa_custodia_tmp_t)
 files_tmp_filetrans(ipa_custodia_t, ipa_custodia_tmp_t, { dir file })
 
 kernel_dgram_send(ipa_custodia_t)
+kernel_read_network_state(ipa_custodia_t)
 
 auth_read_passwd(ipa_custodia_t)
 
@@ -345,6 +373,10 @@ can_exec(ipa_custodia_t, ipa_custodia_ra_agent_exec_t)
 
 corecmd_exec_bin(ipa_custodia_t)
 corecmd_mmap_bin_files(ipa_custodia_t)
+
+dev_read_urand(ipa_custodia_t)
+dev_read_rand(ipa_custodia_t)
+dev_read_sysfs(ipa_custodia_t)
 
 domain_use_interactive_fds(ipa_custodia_t)
 
@@ -356,6 +388,8 @@ files_read_etc_files(ipa_custodia_t)
 
 libs_exec_ldconfig(ipa_custodia_t)
 libs_ldconfig_exec_entry_type(ipa_custodia_t)
+
+logging_send_syslog_msg(ipa_custodia_t)
 
 miscfiles_read_generic_certs(ipa_custodia_t)
 miscfiles_read_localization(ipa_custodia_t)
@@ -379,7 +413,7 @@ optional_policy(`
 ')
 
 optional_policy(`
-    gen_require(`
+    gen_require(` #selint-disable:S-001
         type httpd_t;
     ')
     ipa_custodia_stream_connect(httpd_t)
@@ -400,4 +434,56 @@ optional_policy(`
 
 optional_policy(`
        systemd_private_tmp(ipa_custodia_tmp_t)
+')
+
+optional_policy(`
+    gen_require(` #selint-disable:S-001
+        type tomcat_t;
+    ')
+    can_exec(tomcat_t, ipa_pki_retrieve_key_exec_t)
+    pki_manage_tomcat_etc_rw(ipa_pki_retrieve_key_t)
+')
+
+optional_policy(`
+    gen_require(` #selint-disable:S-001
+        type devlog_t;
+    ')
+
+    dontaudit ipa_custodia_t devlog_t:lnk_file read_lnk_file_perms;
+')
+
+optional_policy(`
+    java_exec(ipa_custodia_pki_tomcat_t)
+    # allow Java to read system status and RNG
+')
+
+optional_policy(`
+    gen_require(` #selint-disable:S-001
+        type tomcat_t;
+    ')
+    kerberos_read_config(tomcat_t)
+    kerberos_read_keytab(tomcat_t)
+')
+
+optional_policy(`
+    gen_require(` #selint-disable:S-001
+        type node_t;
+    ')
+    allow ipa_custodia_t node_t:tcp_socket node_bind;
+')
+
+optional_policy(`
+    gen_require(` #selint-disable:S-001
+        type pki_tomcat_cert_t;
+    ')
+    allow ipa_custodia_t pki_tomcat_cert_t:dir remove_name;
+    allow ipa_custodia_t pki_tomcat_cert_t:file create;
+    allow ipa_custodia_t pki_tomcat_cert_t:file unlink;
+')
+
+optional_policy(`
+    gen_require(` #selint-disable:S-001
+        type oddjob_t;
+    ')
+	ipa_helper_noatsecure(oddjob_t)
 ')

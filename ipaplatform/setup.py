@@ -33,7 +33,6 @@ if __name__ == '__main__':
         package_dir={'ipaplatform': ''},
         packages=[
             "ipaplatform",
-            "ipaplatform.altlinux",
             "ipaplatform.base",
             "ipaplatform.debian",
             "ipaplatform.fedora",

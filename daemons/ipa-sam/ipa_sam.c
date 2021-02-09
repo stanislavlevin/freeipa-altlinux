@@ -36,6 +36,7 @@ char *smb_xstrdup(const char *s);
 #include <sasl/sasl.h>
 #include <krb5/krb5.h>
 #include <sss_idmap.h>
+#include "ipa_hostname.h"
 #include "ipa_asn1.h"
 #include "ipa_pwd.h"
 #include "ipa_mspac.h"
@@ -140,12 +141,14 @@ bool E_md4hash(const char *passwd, uint8_t p16[16]); /* available in libcliauth-
 #define LDAP_ATTRIBUTE_HOMEDIRECTORY "homeDirectory"
 #define LDAP_ATTRIBUTE_LOGON_SCRIPT "ipaNTLogonScript"
 #define LDAP_ATTRIBUTE_PROFILE_PATH "ipaNTProfilePath"
-#define LDAP_ATTRIBUTE_SID_BLACKLIST_INCOMING "ipaNTSIDBlacklistIncoming"
-#define LDAP_ATTRIBUTE_SID_BLACKLIST_OUTGOING "ipaNTSIDBlacklistOutgoing"
+#define LDAP_ATTRIBUTE_SID_BLOCKLIST_INCOMING "ipaNTSIDBlacklistIncoming"
+#define LDAP_ATTRIBUTE_SID_BLOCKLIST_OUTGOING "ipaNTSIDBlacklistOutgoing"
 #define LDAP_ATTRIBUTE_NTHASH "ipaNTHash"
 #define LDAP_ATTRIBUTE_UIDNUMBER "uidnumber"
 #define LDAP_ATTRIBUTE_GIDNUMBER "gidnumber"
 #define LDAP_ATTRIBUTE_ASSOCIATED_DOMAIN "associatedDomain"
+#define LDAP_ATTRIBUTE_DISPLAYNAME "displayName"
+#define LDAP_ATTRIBUTE_DESCRIPTION "description"
 
 #define LDAP_OBJ_KRB_PRINCIPAL "krbPrincipal"
 #define LDAP_OBJ_KRB_PRINCIPAL_AUX "krbPrincipalAux"
@@ -991,6 +994,49 @@ done:
 	return ret;
 }
 
+typedef NTSTATUS (*process_entry_fn)(struct ipasam_private *priv, LDAPMessage *entry, TALLOC_CTX *ctx, void *state);
+static NTSTATUS ipasam_search_entries(struct pdb_methods *methods,
+				      struct ipasam_private *priv,
+				      TALLOC_CTX *ctx,
+				      char *filter,
+				      const char **attrs_list,
+				      process_entry_fn process_entry,
+				      void *state)
+{
+	LDAPMessage *result = NULL;
+	LDAPMessage *entry = NULL;
+	int rc;
+	NTSTATUS res;
+
+	if ((priv == NULL) || (ctx == NULL) || (process_entry == NULL)) {
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	rc = smbldap_search_suffix(priv->ldap_state, filter, attrs_list, &result);
+	if (rc != LDAP_SUCCESS) {
+		return NT_STATUS_UNSUCCESSFUL;
+	}
+
+	smbldap_talloc_autofree_ldapmsg(ctx, result);
+
+	if (ldap_count_entries(priv2ld(priv), result) == 0) {
+		return NT_STATUS_UNSUCCESSFUL;
+	}
+
+	for (entry = ldap_first_entry(priv2ld(priv), result);
+		entry != NULL;
+		entry = ldap_next_entry(priv2ld(priv), entry)) {
+
+		res = process_entry(priv, entry, ctx, state);
+		if (!NT_STATUS_IS_OK(res)) {
+			return res;
+		}
+	}
+
+	return NT_STATUS_OK;
+}
+
+
 static bool ipasam_gid_to_sid(struct pdb_methods *methods, gid_t gid,
 			       struct dom_sid *sid)
 {
@@ -1659,6 +1705,106 @@ static bool ipasam_search_grouptype(struct pdb_methods *methods,
 	return ipasam_search_firstpage(search);
 }
 
+static NTSTATUS _ipasam_collect_map_entry(struct ipasam_private *ipasam_state,
+					  LDAPMessage *entry, TALLOC_CTX *ctx, void *state)
+{
+
+	GROUP_MAP *map = state;
+	char *value = NULL;
+	struct dom_sid *sid = NULL;
+	enum idmap_error_code err;
+	LDAP *ld = priv2ld(ipasam_state);
+
+	/* display name is the NT group name */
+	value = smbldap_talloc_single_attribute(ld, entry, LDAP_ATTRIBUTE_DISPLAYNAME, ctx);
+	if (!value) {
+		DBG_DEBUG("\"" LDAP_ATTRIBUTE_DISPLAYNAME "\" not found\n");
+
+		/* fallback to the 'cn' attribute */
+		value = smbldap_talloc_single_attribute(ld, entry, LDAP_ATTRIBUTE_CN, ctx);
+		if (!value) {
+			DBG_INFO("\"" LDAP_ATTRIBUTE_CN "\" not found\n");
+			return NT_STATUS_NO_SUCH_GROUP;
+		}
+	}
+
+	map->nt_name = talloc_steal(map, value);
+
+	value = smbldap_talloc_single_attribute(ld, entry, LDAP_ATTRIBUTE_DESCRIPTION, ctx);
+	if (!value) {
+		DBG_DEBUG("\"" LDAP_ATTRIBUTE_DESCRIPTION "\" not found\n");
+		value = talloc_strdup(ctx, "");
+	}
+	map->comment = talloc_steal(map, value);
+
+	value = smbldap_talloc_single_attribute(ld, entry, LDAP_ATTRIBUTE_SID, ctx);
+	if (!value) {
+		DBG_ERR("\"" LDAP_ATTRIBUTE_SID "\" not found\n");
+		return NT_STATUS_NO_SUCH_GROUP;
+	}
+
+	err = sss_idmap_sid_to_smb_sid(ipasam_state->idmap_ctx, value, &sid);
+	if (err != IDMAP_SUCCESS) {
+		DBG_ERR("Could not convert %s to SID\n", value);
+		return NT_STATUS_NO_SUCH_GROUP;
+	}
+
+	sid_copy(&map->sid, sid);
+	TALLOC_FREE(sid);
+	TALLOC_FREE(value);
+
+	/* all POSIX groups in FreeIPA are domain groups */
+	map->sid_name_use = SID_NAME_DOM_GRP;
+
+	return NT_STATUS_OK;
+
+}
+
+static NTSTATUS ipasam_getgrnam(struct pdb_methods *methods,
+				GROUP_MAP *map, const char *name)
+{
+	struct ipasam_private *ipasam_state =
+		talloc_get_type_abort(methods->private_data, struct ipasam_private);
+	TALLOC_CTX *tmp_ctx = NULL;
+	char *filter = NULL;
+	char *escaped = NULL;
+	const char *attrs_list[] = {LDAP_ATTRIBUTE_CN, LDAP_ATTRIBUTE_SECURITY_IDENTIFIER,
+				    LDAP_ATTRIBUTE_GIDNUMBER, LDAP_ATTRIBUTE_DISPLAYNAME,
+				    LDAP_ATTRIBUTE_DESCRIPTION, NULL};
+	NTSTATUS result;
+
+	if (map == NULL) {
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	tmp_ctx = talloc_new(ipasam_state);
+	if (tmp_ctx == NULL) {
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	escaped = escape_ldap_string(tmp_ctx, name);
+	if (escaped == NULL) {
+		TALLOC_FREE(tmp_ctx);
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	filter = talloc_asprintf(tmp_ctx,
+				 "(&(objectclass=%s)(objectclass=%s)(%s=%s))",
+				 LDAP_OBJ_GROUPMAP, LDAP_OBJ_POSIXGROUP,
+				 LDAP_ATTRIBUTE_CN, escaped);
+	if (filter == NULL) {
+		TALLOC_FREE(tmp_ctx);
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	result = ipasam_search_entries(methods, ipasam_state, tmp_ctx,
+				       filter, attrs_list,
+				       _ipasam_collect_map_entry, map);
+	talloc_free(tmp_ctx);
+	return result;
+}
+
+
 static bool ipasam_search_groups(struct pdb_methods *methods,
 				  struct pdb_search *search)
 {
@@ -2212,10 +2358,10 @@ static bool get_trusted_domain_by_name_int(struct ipasam_private *ipasam_state,
 	bool ok;
 
 	filter = talloc_asprintf(mem_ctx,
-				 "(&(objectClass=%s)(|(%s=%s)(%s=%s)(cn=%s)))",
+				 "(&(objectClass=%s)(|(%s=%s)(cn=%s)))",
 				 LDAP_OBJ_TRUSTED_DOMAIN,
 				 LDAP_ATTRIBUTE_FLAT_NAME, domain,
-				 LDAP_ATTRIBUTE_TRUST_PARTNER, domain, domain);
+				 domain);
 	if (filter == NULL) {
 		return false;
 	}
@@ -2285,15 +2431,73 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
 	struct pdb_trusted_domain *td;
 	struct dom_sid *sid = NULL;
 	enum idmap_error_code err;
+	char *strdn = NULL;
+	char *dnl = NULL;
+	int rc = 0;
+	int count = 0;
+	char *dns_domain = NULL;
+	LDAPDN dn = NULL;
 
 	if (entry == NULL) {
 		return false;
 	}
 
-	td = talloc_zero(mem_ctx, struct pdb_trusted_domain);
-	if (td == NULL) {
+	strdn = ldap_get_dn(priv2ld(ipasam_state), entry);
+	if (strdn == NULL) {
+		DEBUG(1, ("Couldn't retrieve DN of the trusted domain entry\n"));
 		return false;
 	}
+
+	dnl = strcasestr(strdn, ipasam_state->trust_dn);
+	if (dnl == NULL) {
+		DEBUG(1, ("DN %s of trusted domain entry is not under %s\n",
+			  strdn,
+			  ipasam_state->trust_dn));
+		free(strdn);
+		return false;
+	}
+
+	td = talloc_zero(mem_ctx, struct pdb_trusted_domain);
+	if (td == NULL) {
+		free(strdn);
+		return false;
+	}
+
+	/* dnl points to the begining of cn=ad,cn=trusts,... and we need
+	 * to go one character back and turn ',' into end of string. */
+	dnl--;
+	dnl[0] = '\0';
+
+	/* Now strdn has at most two RDNs:
+	 * - there is one RDN for the directly trusted one
+	 * - there are two RDNs for a subdomain
+	 */
+	rc = ldap_str2dn(strdn, &dn, LDAP_DN_FORMAT_LDAPV3);
+	if (rc) {
+		free(strdn);
+		return false;
+	}
+
+	for (count = 0; dn[count] != NULL; count++);
+
+	/* For subdomains, we must set parent domain */
+	if (count < 1 || count > 2) {
+		DEBUG(1, ("LDAP object with DN %s,%s "
+			  "cannot be used as a trusted domain\n",
+			  strdn, ipasam_state->trust_dn));
+		ldap_dnfree(dn);
+		free(strdn);
+		TALLOC_FREE(td);
+		return false;
+
+	}
+
+	dns_domain = talloc_asprintf(td, "%*s",
+				     (int)dn[0][0]->la_value.bv_len,
+				     dn[0][0]->la_value.bv_val);
+
+	ldap_dnfree(dn);
+	free(strdn);
 
 	/* All attributes are MAY */
 
@@ -2333,39 +2537,42 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
 			  LDAP_ATTRIBUTE_FLAT_NAME));
 	}
 
+	/* If ipaNTTrustPartner is missing, it should be the same as the domain
+	 * itself. */
 	td->domain_name = get_single_attribute(td, priv2ld(ipasam_state), entry,
 					       LDAP_ATTRIBUTE_TRUST_PARTNER);
 	if (td->domain_name == NULL) {
-		DEBUG(9, ("Attribute %s not present.\n",
-			  LDAP_ATTRIBUTE_TRUST_PARTNER));
+		td->domain_name = dns_domain;
 	}
 
+	/* For subdomains ipaNTTrustDirection is missing which is OK, we
+	 * default to 0 */
 	res = get_uint32_t_from_ldap_msg(ipasam_state, entry,
 					 LDAP_ATTRIBUTE_TRUST_DIRECTION,
 					 &td->trust_direction);
 	if (!res) {
+		TALLOC_FREE(td);
 		return false;
-	}
-	if (td->trust_direction == 0) {
-		/* attribute wasn't present, set default value */
-		td->trust_direction = LSA_TRUST_DIRECTION_INBOUND | LSA_TRUST_DIRECTION_OUTBOUND;
 	}
 
 	res = get_uint32_t_from_ldap_msg(ipasam_state, entry,
 					 LDAP_ATTRIBUTE_TRUST_ATTRIBUTES,
 					 &td->trust_attributes);
 	if (!res) {
+		TALLOC_FREE(td);
 		return false;
 	}
 	if (td->trust_attributes == 0) {
-		/* attribute wasn't present, set default value */
-		td->trust_attributes = LSA_TRUST_ATTRIBUTE_FOREST_TRANSITIVE;
+		/* attribute wasn't present, this is a subdomain within the
+		 * parent forest */
+		td->trust_attributes = LSA_TRUST_ATTRIBUTE_WITHIN_FOREST;
 	}
 
 	res = get_uint32_t_from_ldap_msg(ipasam_state, entry,
 					 LDAP_ATTRIBUTE_TRUST_TYPE,
 					 &td->trust_type);
 	if (!res) {
+		TALLOC_FREE(td);
 		return false;
 	}
 	if (td->trust_type == 0) {
@@ -2375,23 +2582,27 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
 
 	td->trust_posix_offset = talloc_zero(td, uint32_t);
 	if (td->trust_posix_offset == NULL) {
+		TALLOC_FREE(td);
 		return false;
 	}
 	res = get_uint32_t_from_ldap_msg(ipasam_state, entry,
 					 LDAP_ATTRIBUTE_TRUST_POSIX_OFFSET,
 					 td->trust_posix_offset);
 	if (!res) {
+		TALLOC_FREE(td);
 		return false;
 	}
 
 	td->supported_enc_type = talloc_zero(td, uint32_t);
 	if (td->supported_enc_type == NULL) {
+		TALLOC_FREE(td);
 		return false;
 	}
 	res = get_uint32_t_from_ldap_msg(ipasam_state, entry,
 					 LDAP_ATTRIBUTE_SUPPORTED_ENC_TYPE,
 					 td->supported_enc_type);
 	if (!res) {
+		TALLOC_FREE(td);
 		return false;
 	}
 	if (*td->supported_enc_type == 0) {
@@ -2714,19 +2925,19 @@ static NTSTATUS ipasam_set_trusted_domain(struct pdb_methods *methods,
 
 	/* Only add default blacklists for incoming and outgoing SIDs but don't modify existing ones */
 	in_blacklist = get_attribute_values(tmp_ctx, priv2ld(ipasam_state), entry,
-						LDAP_ATTRIBUTE_SID_BLACKLIST_INCOMING, &count);
+						LDAP_ATTRIBUTE_SID_BLOCKLIST_INCOMING, &count);
 	out_blacklist = get_attribute_values(tmp_ctx, priv2ld(ipasam_state), entry,
-						LDAP_ATTRIBUTE_SID_BLACKLIST_OUTGOING, &count);
+						LDAP_ATTRIBUTE_SID_BLOCKLIST_OUTGOING, &count);
 
 	for (i = 0; ipa_mspac_well_known_sids[i]; i++) {
 		if (in_blacklist == NULL) {
 			smbldap_make_mod(priv2ld(ipasam_state), entry, &mods,
-					      LDAP_ATTRIBUTE_SID_BLACKLIST_INCOMING,
+					      LDAP_ATTRIBUTE_SID_BLOCKLIST_INCOMING,
 					      ipa_mspac_well_known_sids[i]);
 		}
 		if (out_blacklist == NULL) {
 			smbldap_make_mod(priv2ld(ipasam_state), entry, &mods,
-					      LDAP_ATTRIBUTE_SID_BLACKLIST_OUTGOING,
+					      LDAP_ATTRIBUTE_SID_BLOCKLIST_OUTGOING,
 					      ipa_mspac_well_known_sids[i]);
 		}
 	}
@@ -3709,6 +3920,7 @@ static NTSTATUS ipasam_getsampwnam(struct pdb_methods *methods,
 	LDAPMessage *entry = NULL;
 	int ret;
 	int count;
+	bool search_for_upn = false;
 
 	lastidx = strlen(sname);
 	if (lastidx > 0) {
@@ -3731,16 +3943,36 @@ static NTSTATUS ipasam_getsampwnam(struct pdb_methods *methods,
 		return NT_STATUS_NO_MEMORY;
 	}
 
+	if (strchr(sname, '@') != NULL) {
+		search_for_upn = true;
+	}
+
 	escaped_user = escape_ldap_string(tmp_ctx, sname);
 	if (escaped_user == NULL) {
 		status = NT_STATUS_NO_MEMORY;
 		goto done;
 	}
 
-	filter = talloc_asprintf(tmp_ctx, "(&(%s=%s)(%s=%s))",
-					  LDAP_ATTRIBUTE_OBJECTCLASS,
-					  LDAP_OBJ_SAMBASAMACCOUNT,
-					  LDAP_ATTRIBUTE_UID, escaped_user);
+
+	if (search_for_upn) {
+		/* Search krbPrincipalName case-insensitive for UPN suffixes to
+		 * match because default matching rule is case-sensitive for
+		 * IA5String */
+		filter = talloc_asprintf(tmp_ctx,
+				"(&(%s=%s)(%s=%s)(%s:caseIgnoreIA5Match:=%s))",
+				LDAP_ATTRIBUTE_OBJECTCLASS,
+				LDAP_OBJ_SAMBASAMACCOUNT,
+				LDAP_ATTRIBUTE_OBJECTCLASS,
+				LDAP_OBJ_KRB_PRINCIPAL_AUX,
+				LDAP_ATTRIBUTE_KRB_PRINCIPAL,
+				escaped_user);
+	} else {
+		filter = talloc_asprintf(tmp_ctx, "(&(%s=%s)(%s=%s))",
+						  LDAP_ATTRIBUTE_OBJECTCLASS,
+						  LDAP_OBJ_SAMBASAMACCOUNT,
+						  LDAP_ATTRIBUTE_UID, escaped_user);
+	}
+
 	if (filter == NULL) {
 		status = NT_STATUS_NO_MEMORY;
 		goto done;
@@ -4036,7 +4268,7 @@ static NTSTATUS ipasam_search_domain_info(struct smbldap_state *ldap_state,
 		return NT_STATUS_OK;
 	}
 
-	DEBUG(0, ("iapsam_search_domain_info: Got [%d] domain info entries, "
+	DEBUG(0, ("ipasam_search_domain_info: Got [%d] domain info entries, "
 		  "but expected only 1.\n", count));
 
 	return NT_STATUS_UNSUCCESSFUL;
@@ -4440,8 +4672,8 @@ static char *sec_key(TALLOC_CTX *mem_ctx, const char *d)
 
 static NTSTATUS save_sid_to_secret(struct ipasam_private *ipasam_state)
 {
-	char hostname[255];
-	int ret;
+	char hostname[IPA_HOST_FQDN_LEN + 1];
+	const char *fqdn;
 	char *p;
 	TALLOC_CTX *tmp_ctx;
 	NTSTATUS status = NT_STATUS_UNSUCCESSFUL;
@@ -4466,13 +4698,15 @@ static NTSTATUS save_sid_to_secret(struct ipasam_private *ipasam_state)
 		goto done;
 	}
 
-	ret = gethostname(hostname, sizeof(hostname));
-	if (ret == -1) {
-		DEBUG(1, ("gethostname failed.\n"));
+	fqdn = ipa_gethostfqdn();
+	if (fqdn == NULL) {
+		DEBUG(1, ("ipa_gethostfqdn failed.\n"));
 		status = NT_STATUS_UNSUCCESSFUL;
 		goto done;
 	}
-	hostname[sizeof(hostname)-1] = '\0';
+	/* Copy is necessary, otherwise we this will corrupt the static
+	 * buffer returned by ipa_gethostfqdn(). */
+	strncpy(hostname, fqdn, IPA_HOST_FQDN_LEN);
 	p = strchr(hostname, '.');
 	if (p != NULL) {
 		*p = '\0';
@@ -4721,10 +4955,9 @@ static int bind_callback(LDAP *ldap_struct, struct smbldap_state *ldap_state, vo
 static NTSTATUS ipasam_generate_principals(struct ipasam_private *ipasam_state) {
 
 	krb5_error_code rc;
-	int ret;
 	krb5_context context;
 	NTSTATUS status = NT_STATUS_UNSUCCESSFUL;
-	char hostname[255];
+	const char *hostname;
 	char *default_realm = NULL;
 
 	if (!ipasam_state) {
@@ -4736,12 +4969,11 @@ static NTSTATUS ipasam_generate_principals(struct ipasam_private *ipasam_state) 
 		return status;
 	}
 
-	ret = gethostname(hostname, sizeof(hostname));
-	if (ret == -1) {
-		DEBUG(1, ("gethostname failed.\n"));
+	hostname = ipa_gethostfqdn();
+	if (hostname == NULL) {
+		DEBUG(1, ("ipa_gethostfqdn failed.\n"));
 		goto done;
 	}
-	hostname[sizeof(hostname)-1] = '\0';
 
 	rc = krb5_get_default_realm(context, &default_realm);
 	if (rc) {
@@ -5005,6 +5237,7 @@ static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
 
 	(*pdb_method)->getsampwnam = ipasam_getsampwnam;
 	(*pdb_method)->getsampwsid = ipasam_getsampwsid;
+	(*pdb_method)->getgrnam = ipasam_getgrnam;
 	(*pdb_method)->search_users = ipasam_search_users;
 	(*pdb_method)->search_groups = ipasam_search_groups;
 	(*pdb_method)->search_aliases = ipasam_search_aliases;

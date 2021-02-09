@@ -16,11 +16,14 @@ import stat
 import six
 
 import ipalib.constants
+
 from ipapython.dn import DN
 from ipapython import ipautil
+from ipaplatform.constants import constants as platformconstants
 from ipaplatform.paths import paths
 
 from ipaserver.dnssec.temp import TemporaryDirectory
+from ipaserver.install import installutils
 
 logger = logging.getLogger(__name__)
 
@@ -133,8 +136,11 @@ class BINDMgr:
             cmd.extend(['-f', 'KSK'])
         if attrs.get('idnsSecKeyRevoke', [b'FALSE'])[0].upper() == b'TRUE':
             cmd.extend(['-R', datetime.now().strftime(time_bindfmt)])
+        if platformconstants.NAMED_OPENSSL_ENGINE is not None:
+            cmd.extend(['-E', platformconstants.NAMED_OPENSSL_ENGINE])
         cmd.append(zone.to_text())
 
+        installutils.check_entropy()
         # keys has to be readable by ODS & named
         result = ipautil.run(cmd, capture_output=True)
         basename = result.output.strip()
@@ -176,10 +182,9 @@ class BINDMgr:
         zone_path = os.path.join(paths.BIND_LDAP_DNS_ZONE_WORKDIR,
                 self.get_zone_dir_name(zone))
         try:
-            os.makedirs(zone_path)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise e
+            os.mkdir(zone_path, 0o770)
+        except FileExistsError:
+            pass
 
         # fix HSM permissions
         # TODO: move out

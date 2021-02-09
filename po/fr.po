@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: freeipa 4.9.0.dev201908140712+gitc9938e3d8\n"
 "Report-Msgid-Bugs-To: https://pagure.io/freeipa/new_issue\n"
-"POT-Creation-Date: 2020-06-10 22:17+0300\n"
+"POT-Creation-Date: 2020-12-23 16:29+0200\n"
 "PO-Revision-Date: 2019-11-11 10:25+0000\n"
 "Last-Translator: Copied by Zanata <copied-by-zanata@zanata.org>\n"
 "Language-Team: French\n"
@@ -6983,14 +6983,6 @@ msgstr ""
 msgid "7 is not a valid revocation reason"
 msgstr "7 n'est pas une raison de révocation valide"
 
-msgid ""
-"<i class=\"fa fa-info-circle\"></i> <strong>One-Time-Password(OTP):</strong> "
-"Generate new OTP code for each OTP field."
-msgstr ""
-"<i class=\"fa fa-info-circle\"></i> <strong>Mot de passe à usage unique (One-"
-"Time-Password, OTP) :</strong> Création d'un nouveau code OTP pour chaque "
-"champ OTP."
-
 #, python-brace-format
 msgid ""
 "<ol> <li>Create a certificate database or use an existing one. To create a "
@@ -9318,9 +9310,6 @@ msgstr "Règle sudo supprimée."
 
 msgid "Delete a CA ACL."
 msgstr "Supprimer une LCA d'AC."
-
-msgid "Delete a CA."
-msgstr "Supprimer une AC."
 
 msgid "Delete a Certificate Profile."
 msgstr "Supprimer un profil de certificat."
@@ -13080,15 +13069,6 @@ msgstr "Un parmi « group », « permission » ou « self » est requis"
 msgid "One time password commands"
 msgstr "Commandes mots de passe à usage unique (OTP)"
 
-msgid "One-Time-Password"
-msgstr "Mot de passe à usage unique"
-
-msgid "One-Time-Password Not Present"
-msgstr "Absence de mot de passe à usage unique"
-
-msgid "One-Time-Password Present"
-msgstr "Présence de mot de passe à usage unique"
-
 msgid "Only one value is allowed"
 msgstr "Une seule valeur est autorisée"
 
@@ -13339,9 +13319,6 @@ msgstr "Expiration de mot de passe"
 
 msgid "Password history size"
 msgstr "Taille de l'historique des mots de passe"
-
-msgid "Password or Password+One-Time-Password"
-msgstr "Mot de passe ou Mot de passe + OTP"
 
 msgid "Password plugin features"
 msgstr "Fonctionnalités du greffon mots de passe"
@@ -14300,9 +14277,6 @@ msgstr "Réinitialiser la politique de tickets Kerberos."
 msgid "Reset OTP"
 msgstr "Remise à zéro OTP"
 
-msgid "Reset One-Time-Password"
-msgstr "Remise à zéro du mot de passe à usage unique"
-
 msgid "Reset Password"
 msgstr "Réinitialiser le mot de passe"
 
@@ -14461,14 +14435,6 @@ msgstr ""
 
 msgid "Reverse zone IP network"
 msgstr "Réseau IP de zone inverse"
-
-#, python-format
-msgid ""
-"Reverse zone for PTR record should be a sub-zone of one the following fully "
-"qualified domains: %s"
-msgstr ""
-"La zone inverse pour l'enregistrement PTR doit être une sous-zone de l'un "
-"des domaines pleinement qualifiés suivants : %s"
 
 msgid "Revert"
 msgstr "Rétablir"
@@ -14653,9 +14619,6 @@ msgstr "Entrant dans liste noire de SID"
 
 msgid "SID blacklist outgoing"
 msgstr "Sortant de liste noire de SID"
-
-msgid "SID blacklists"
-msgstr "Listes noires de SID"
 
 msgid "SID does not match any trusted domain"
 msgstr "Le SID ne correspond à aucun domaine approuvé"
@@ -15297,9 +15260,6 @@ msgstr "Définir le niveau du domaine"
 
 msgid "Set OTP"
 msgstr "Paramétrer le mot de passe à usage unique"
-
-msgid "Set One-Time-Password"
-msgstr "Définir mot de passe à usage unique"
 
 msgid "Set SSH key"
 msgstr "Définir la clé SSH"
@@ -18094,5 +18054,12 @@ msgstr "{attr} : attribut introuvable"
 msgid "{role}: role not found"
 msgstr "{role} : rôle introuvable"
 
-#~ msgid "This principal is required by the IPA master"
-#~ msgstr "Ce principal est nécessaire au serveur IPA"
+#~ msgid "Delete a CA."
+#~ msgstr "Supprimer une AC."
+
+#~ msgid ""
+#~ "Reverse zone for PTR record should be a sub-zone of one the following "
+#~ "fully qualified domains: %s"
+#~ msgstr ""
+#~ "La zone inverse pour l'enregistrement PTR doit être une sous-zone de l'un "
+#~ "des domaines pleinement qualifiés suivants : %s"

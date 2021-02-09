@@ -36,6 +36,7 @@ from ipalib.text import _
 from ipalib.util import json_serialize, validate_hostname
 from ipalib.capabilities import client_has_capability
 from ipalib.messages import add_message, SearchResultTruncated
+from ipalib.plugable import Registry
 from ipapython.dn import DN, RDN
 from ipapython.version import API_VERSION
 
@@ -331,6 +332,18 @@ external_host_param = Str('externalhost*', validate_externalhost,
         flags=['no_option'],
 )
 
+# Registry to store member validators called through add_external_pre_callback
+# Each validator should be defined as foo(ldap, dn, keys, options, value)
+# where (ldap, dn, keys, options) are part of the signature for the
+# add_external_pre_callback()
+member_validator = Registry()
+
+
+# validate hostname with allowed underscore characters, non-fqdn
+# hostnames are allowed
+@member_validator(membertype='host')
+def validate_host(ldap, dn, keys, options, hostname):
+    validate_hostname(hostname, check_fqdn=False, allow_underscore=True)
 
 def add_external_pre_callback(membertype, ldap, dn, keys, options):
     """
@@ -342,24 +355,24 @@ def add_external_pre_callback(membertype, ldap, dn, keys, options):
     """
     assert isinstance(dn, DN)
 
-    # validate hostname with allowed underscore characters, non-fqdn
-    # hostnames are allowed
-    def validate_host(hostname):
-        validate_hostname(hostname, check_fqdn=False, allow_underscore=True)
 
     if options.get(membertype):
-        if membertype == 'host':
-            validator = validate_host
-        else:
+        validator = None
+        for cb in member_validator:
+            if 'membertype' in cb and cb['membertype'] == membertype:
+                validator = cb['plugin']
+        if validator is None:
             param = api.Object[membertype].primary_key
 
-            def validator(value):
+            def generic_validator(ldap, dn, keys, options, value):
                 value = param(value)
                 param.validate(value)
 
+            validator = generic_validator
+
         for value in options[membertype]:
             try:
-                validator(value)
+                validator(ldap, dn, keys, options, value)
             except errors.ValidationError as e:
                 raise errors.ValidationError(name=membertype, error=e.error)
             except ValueError as e:
@@ -367,9 +380,63 @@ def add_external_pre_callback(membertype, ldap, dn, keys, options):
     return dn
 
 
+EXTERNAL_OBJ_PREFIX = 'external '
+
+
+def pre_callback_process_external_objects(member_attr, object_desc,
+                                          ldap, dn, found, not_found,
+                                          *keys, **options):
+    """
+    Takes the following arguments:
+        member_attr - member attribute to process external members for
+        object_desc - a tuple (type, prefix) to identify a type of an object
+                      ('user', 'group', ...) to associate and a prefix to skip
+                      when comparing with an external object. Prefix should be
+                      None for objects that do not have prefixes.
+        found - the dictionary with all members that were found
+        not_found - the dictionary with all members which weren't found
+        keys - list of arguments to the command where this callback is used
+        options - list of options to the command where this callback is used.
+
+    The callback performs validation of objects as external (not existing in
+    IPA LDAP) and then adds them to a list of not found objects with a mark
+    'external ..' object if they were resolved as an object from a trusted
+    domain.
+
+    Returns a DN object used for processing dn.
+    """
+
+    (o_type, o_prefix) = object_desc
+
+    if o_type not in options:
+        return dn
+
+    dn = add_external_pre_callback(o_type, ldap, dn, keys, options)
+    if 'trusted_objects' in options:
+        trusted_objects = options.pop('trusted_objects')
+        found_members = found.get(member_attr, {})
+        found_objects = found_members.get(o_type, [])
+        filtered_objects = []
+        for o_id in found_objects:
+            for obj in trusted_objects:
+                m = obj
+                if o_prefix is not None and obj.startswith(o_prefix):
+                    m = obj[len(o_prefix):]
+                if o_id[0].value.lower() == m.lower():
+                    filtered_objects.append(o_id)
+        found[member_attr][o_type] = list(
+            set(found_objects) - set(filtered_objects))
+        notfound_members = not_found.get(member_attr, {})
+        notfound_objects = notfound_members.get(o_type, [])
+        notfound_objects.extend(
+            [(m, EXTERNAL_OBJ_PREFIX + o_type) for m in trusted_objects])
+        notfound_members[o_type] = notfound_objects
+
+    return dn
+
 def add_external_post_callback(ldap, dn, entry_attrs, failed, completed,
                                memberattr, membertype, externalattr,
-                               normalize=True):
+                               normalize=True, reject_failures=False):
     """
     Takes the following arguments:
         failed - the list of failed entries, these are candidates for possible
@@ -401,13 +468,21 @@ def add_external_post_callback(ldap, dn, entry_attrs, failed, completed,
 
         failed_entries = []
         for entry in failed[memberattr][membertype]:
+            # entry is a tuple (name, error)
             membername = entry[0].lower()
             member_dn = api.Object[membertype].get_dn(membername)
             assert isinstance(member_dn, DN)
 
             if (membername not in lc_external_entries and
                 member_dn not in members):
-                # Not an IPA entry, assume external
+                # Not an IPA entry, only add if it has been marked
+                # as an external entry during the pre-callback validation
+                # or if we are not asked to reject failures
+                if (reject_failures and not entry[1].startswith(
+                        EXTERNAL_OBJ_PREFIX)):
+
+                    failed_entries.append(membername)
+                    continue
                 if normalize:
                     external_entries.append(membername)
                 else:

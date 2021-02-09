@@ -24,9 +24,9 @@ import ldap.schema
 
 import ipapython.version
 from ipalib import api
+from ipalib.constants import FQDN
 from ipapython.dn import DN
 from ipaserver.install.ldapupdate import connect
-from ipaserver.install import installutils
 
 
 SCHEMA_ELEMENT_CLASSES = (
@@ -83,7 +83,7 @@ def _get_oid_dependency_order(schema, cls):
     return ordered_oid_groups
 
 
-def update_schema(schema_files, ldapi=False, dm_password=None,):
+def update_schema(schema_files, ldapi=False):
     """Update schema to match the given ldif files
 
     Schema elements present in the LDIF files but missing from the DS schema
@@ -105,9 +105,7 @@ def update_schema(schema_files, ldapi=False, dm_password=None,):
     """
     SCHEMA_ELEMENT_CLASSES_KEYS = [x[0] for x in SCHEMA_ELEMENT_CLASSES]
 
-    conn = connect(ldapi=ldapi, dm_password=dm_password,
-                   realm=api.env.realm,
-                   fqdn=installutils.get_fqdn())
+    conn = connect(ldapi=ldapi, realm=api.env.realm, fqdn=FQDN)
 
     old_schema = conn.schema
 

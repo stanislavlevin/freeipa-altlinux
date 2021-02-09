@@ -129,6 +129,8 @@ class TestIPACommand(IntegrationTest):
     tested without having to fire up a full server to run one command.
     """
     topology = 'line'
+    num_replicas = 1
+    num_clients = 1
 
     @pytest.fixture
     def pwpolicy_global(self):
@@ -637,15 +639,34 @@ class TestIPACommand(IntegrationTest):
         # change private key permission to comply with SS rules
         os.chmod(first_priv_key_path, 0o600)
 
+        # start to look at logs a bit before "now"
+        # https://pagure.io/freeipa/issue/8432
+        since = time.strftime(
+            '%H:%M:%S', (datetime.now() - timedelta(seconds=10)).timetuple()
+        )
+
         tasks.run_ssh_cmd(
             to_host=self.master.external_hostname, username=test_user,
             auth_method="key", private_key_path=first_priv_key_path
         )
 
-        journal_cmd = ['journalctl', '--since=today', '-u', 'sshd']
-        result = self.master.run_command(journal_cmd)
-        output = result.stdout_text
-        assert not re.search('exited on signal 13', output)
+        expected_missing_msg = "exited on signal 13"
+        # closing session marker(depends on PAM stack of sshd)
+        expected_msgs = [
+            f"session closed for user {test_user}",
+            f"Disconnected from user {test_user}",
+        ]
+
+        def test_cb(stdout):
+            # check if expected message logged and expected missing one not
+            return (
+                any(m in stdout for m in expected_msgs)
+                and expected_missing_msg not in stdout
+            )
+
+        # sshd don't flush its logs to syslog immediately
+        cmd = ["journalctl", "-u", "sshd", f"--since={since}"]
+        tasks.run_repeatedly(self.master, command=cmd, test=test_cb)
 
         # cleanup
         self.master.run_command(['ipa', 'user-del', test_user])
@@ -743,7 +764,7 @@ class TestIPACommand(IntegrationTest):
 
         # test IFP as ipaapi
         result = self.master.run_command(
-            ['sudo', '-u', IPAAPI_USER, '--'] + cmd
+            ['runuser', '-u', IPAAPI_USER, '--'] + cmd
         )
         assert uid in result.stdout_text
 
@@ -989,7 +1010,7 @@ class TestIPACommand(IntegrationTest):
 
         # get minimum version from current crypto-policy
         openssl_cnf = self.master.get_file_contents(
-            "/etc/crypto-policies/back-ends/opensslcnf.config",
+            paths.CRYPTO_POLICY_OPENSSLCNF_FILE,
             encoding="utf-8"
         )
         mo = re.search(r"MinProtocol\s*=\s*(TLSv[0-9.]+)", openssl_cnf)
@@ -1196,13 +1217,18 @@ class TestIPACommand(IntegrationTest):
             expect_auth_failure=True
         )
 
-        # check if proper message logged
-        exp_msg = ("pam_sss(sshd:auth): received for user {}: 7"
-                   " (Authentication failure)".format(self.testuser))
-        result = self.master.run_command(['journalctl',
-                                          '-u', 'sshd',
-                                          '--since={}'.format(since)])
-        assert exp_msg in result.stdout_text
+        expected_msg = (
+            f"pam_sss(sshd:auth): received for user {self.testuser}: 7"
+            " (Authentication failure)"
+        )
+
+        def test_cb(stdout):
+            # check if proper message logged
+            return expected_msg in stdout
+
+        # sshd don't flush its logs to syslog immediately
+        cmd = ["journalctl", "-u", "sshd", f"--since={since}"]
+        tasks.run_repeatedly(self.master, command=cmd, test=test_cb)
 
     def get_dirsrv_id(self):
         serverid = realm_to_serverid(self.master.domain.realm)
@@ -1284,14 +1310,158 @@ class TestIPACommand(IntegrationTest):
         This testcase checks if ipa-nis-manage enable
         command throws error on console for invalid DS admin password
         """
-        msg = (
-            "Insufficient access: Invalid credentials "
-            "Invalid credentials\n"
-        )
+        msg1 = "Insufficient access: "
+        msg2 = "Invalid credentials"
         result = self.master.run_command(
             ["ipa-nis-manage", "enable"],
             stdin_text='Invalid_pwd',
             raiseonerr=False,
         )
         assert result.returncode == 1
-        assert msg in result.stderr_text
+        assert msg1 in result.stderr_text
+        assert msg2 in result.stderr_text
+
+    def test_pkispawn_log_is_present(self):
+        """
+        This testcase checks if pkispawn logged properly.
+        It is a candidate from being moved out of test_commands.
+        """
+        result = self.master.run_command(
+            ["ls", "/var/log/pki/"]
+        )
+        pkispawnlogfile = None
+        for file in result.stdout_text.splitlines():
+            if file.startswith("pki-ca-spawn"):
+                pkispawnlogfile = file
+                break
+        assert pkispawnlogfile is not None
+        pkispawnlogfile = os.path.sep.join(("/var/log/pki", pkispawnlogfile))
+        pkispawnlog = self.master.get_file_contents(
+            pkispawnlogfile, encoding='utf-8'
+        )
+        # Totally arbitrary. pkispawn debug logs tend to be > 10KiB.
+        assert len(pkispawnlog) > 1024
+        assert "DEBUG" in pkispawnlog
+        assert "INFO" in pkispawnlog
+
+    def test_reset_password_unlock(self):
+        """
+        Test that when a user is also unlocked when their password
+        is administratively reset.
+        """
+        user = 'tuser'
+        original_passwd = 'Secret123'
+        new_passwd = 'newPasswd123'
+        bad_passwd = 'foo'
+
+        tasks.kinit_admin(self.master)
+        tasks.user_add(self.master, user, password=original_passwd)
+        tasks.kinit_user(
+            self.master, user,
+            '{0}\n{1}\n{1}\n'.format(original_passwd, new_passwd)
+        )
+
+        # Lock out the user on master
+        for _i in range(0, 7):
+            tasks.kinit_user(self.master, user, bad_passwd, raiseonerr=False)
+
+        tasks.kinit_admin(self.replicas[0])
+        # Administrative reset on a different server
+        self.replicas[0].run_command(
+            ['ipa', 'passwd', user],
+            stdin_text='{0}\n{0}\n'.format(original_passwd)
+        )
+
+        ldap = self.master.ldap_connect()
+        tasks.wait_for_replication(ldap)
+
+        # The user can log in again
+        tasks.kinit_user(
+            self.master, user,
+            '{0}\n{1}\n{1}\n'.format(original_passwd, new_passwd)
+        )
+
+    def test_certupdate_no_schema(self):
+        """Test that certupdate without existing API schema.
+
+           With no existing credentials the API schema download
+           would cause the whole command to fail.
+        """
+        tasks.kdestroy_all(self.master)
+
+        self.master.run_command(
+            ["rm", "-rf",
+             "/root/.cache/ipa/servers",
+             "/root/.cache/ipa/schema"]
+        )
+
+        # It first has to retrieve schema then can run
+        self.master.run_command(["ipa-certupdate"])
+
+        # Run it again for good measure
+        self.master.run_command(["ipa-certupdate"])
+
+    def test_proxycommand_invalid_shell(self):
+        """Test that ssh works with a user with an invalid shell.
+
+           Specifically for this use-case:
+           # getent passwd test
+           test:x:1001:1001::/home/test:/sbin/nologin
+           # sudo -u user ssh -v root@ipa.example.test
+
+           ruser is our restricted user
+           tuser1 is a regular user we ssh to remotely as
+        """
+        password = 'Secret123'
+        restricted_user = 'ruser'
+        regular_user = 'tuser1'
+
+        tasks.kinit_admin(self.master)
+        tasks.user_add(self.master, restricted_user,
+                       extra_args=["--shell", "/sbin/nologin"],
+                       password=password)
+        tasks.user_add(self.master, regular_user,
+                       password=password)
+
+        user_kinit = "{password}\n{password}\n{password}\n".format(
+            password=password)
+        self.clients[0].run_command([
+            'kinit', regular_user],
+            stdin_text=user_kinit)
+        self.clients[0].run_command([
+            'kinit', restricted_user],
+            stdin_text=user_kinit)
+        tasks.kdestroy_all(self.clients[0])
+
+        # ssh as a restricted user to a user with a valid shell should
+        # work
+        self.clients[0].run_command(
+            ['sudo', '-u', restricted_user,
+             'sshpass', '-p', password,
+             'ssh', '-v',
+             '-o', 'StrictHostKeyChecking=no',
+             'tuser1@%s' % self.master.hostname, 'cat /etc/hosts'],
+        )
+
+        # Some versions of nologin do not support the -c option.
+        # ssh will still fail in a Match properly since it will return
+        # non-zero but we don't get the account failure message.
+        nologin = self.clients[0].run_command(
+            ['nologin', '-c', '/bin/true',],
+            raiseonerr=False
+        )
+
+        # ssh as a restricted user to a restricted user should fail
+        result = self.clients[0].run_command(
+            ['sudo', '-u', restricted_user,
+             'sshpass', '-p', password,
+             'ssh', '-v',
+             '-o', 'StrictHostKeyChecking=no',
+             'ruser@%s' % self.master.hostname, 'cat /etc/hosts'],
+            raiseonerr=False
+        )
+        assert result.returncode == 1
+
+        if 'invalid option' not in nologin.stderr_text:
+            assert 'This account is currently not available' in \
+                result.stdout_text
