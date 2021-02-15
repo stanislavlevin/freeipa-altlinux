@@ -746,6 +746,27 @@ class TestIpaHealthCheck(IntegrationTest):
             "Certificate is revoked, unspecified"
         )
 
+        # the number of tracked certs depends on kra installation,
+        # which is conditional
+        result = self.master.run_command(
+            [
+                "ipa",
+                "server-role-find",
+                "--server",
+                self.master.hostname,
+                "--role",
+                "KRA server",
+            ]
+        )
+        if "Role status: enabled" in result.stdout_text:
+            # additional 3 certs
+            # /etc/pki/pki-tomcat/alias, auditSigningCert cert-pki-kra
+            # /etc/pki/pki-tomcat/alias, transportCert cert-pki-kra
+            # /etc/pki/pki-tomcat/alias, storageCert cert-pki-kra
+            expected_certs_num = 12
+        else:
+            expected_certs_num = 9
+
         result = self.master.run_command(
             ["getcert", "list", "-f", paths.HTTPD_CERT_FILE]
         )
@@ -765,7 +786,7 @@ class TestIpaHealthCheck(IntegrationTest):
         )
 
         assert returncode == 1
-        assert len(data) == 12
+        assert len(data) == expected_certs_num
 
         version = tasks.get_healthcheck_version(self.master)
         for check in data:
