@@ -75,6 +75,7 @@ BuildRequires: libsss_idmap-devel
 BuildRequires: libsss_certmap-devel
 BuildRequires: libsss_nss_idmap-devel >= %sssd_version
 BuildRequires: libunistring-devel
+BuildRequires: libpwquality-devel
 
 BuildRequires: 389-ds-base-devel >= %ds_version
 BuildRequires: samba-devel >= %samba_version
