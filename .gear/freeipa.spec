@@ -816,6 +816,7 @@ fi
 %_libexecdir/certmonger/dogtag-ipa-ca-renew-agent-submit
 %_libexecdir/certmonger/ipa-server-guard
 %dir %_libexecdir/ipa
+%_libexecdir/ipa/ipa-ccache-sweeper
 %_libexecdir/ipa/ipa-custodia
 %_libexecdir/ipa/ipa-custodia-check
 %_libexecdir/ipa/ipa-httpd-kdcproxy
@@ -840,6 +841,8 @@ fi
 %attr(644,root,root) %_unitdir/ipa.service
 %attr(644,root,root) %_unitdir/ipa-otpd.socket
 %attr(644,root,root) %_unitdir/ipa-otpd@.service
+%attr(644,root,root) %_unitdir/ipa-ccache-sweep.service
+%attr(644,root,root) %_unitdir/ipa-ccache-sweep.timer
 # END
 %attr(755,root,root) %plugin_dir/libipa_pwd_extop.so
 %attr(755,root,root) %plugin_dir/libipa_enrollment_extop.so
