@@ -827,6 +827,8 @@ fi
 %_libexecdir/ipa/ipa-pki-wait-running
 %_libexecdir/ipa/ipa-otpd
 %_libexecdir/ipa/ipa-print-pac
+%dir %_libexecdir/ipa/acme
+%_libexecdir/ipa/acme/certbot-dns-ipa
 %dir %_libexecdir/ipa/custodia
 %attr(755,root,root) %_libexecdir/ipa/custodia/ipa-custodia-dmldap
 %attr(755,root,root) %_libexecdir/ipa/custodia/ipa-custodia-pki-tomcat
