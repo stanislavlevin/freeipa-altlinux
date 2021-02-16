@@ -27,5 +27,9 @@ if egrep -qs "^${ipa_service}$|^${ipa_pluginsdir}"; then
     if /bin/systemctl is-enabled ipa.service >/dev/null 2>&1; then
         /bin/systemctl restart ipa.service ||:
     fi
+
+    if ! /bin/systemctl is-enabled ipa-ccache-sweep.timer >/dev/null 2>&1; then
+        /bin/systemctl enable ipa-ccache-sweep.timer ||:
+    fi
 fi
 
