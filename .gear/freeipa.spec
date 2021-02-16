@@ -64,7 +64,8 @@ BuildRequires: libpopt-devel
 BuildRequires: libsasl2-devel
 BuildRequires: libssl-devel
 BuildRequires: libsystemd-devel
-BuildRequires: libxmlrpc-devel
+BuildRequires: libjansson-devel
+BuildRequires: libcurl-devel
 BuildRequires: openldap-devel >= %openldap_version
 
 %if_without only_client
