@@ -35,7 +35,7 @@
 %define ds_version 1.4.3.18
 %define gssproxy_version 0.8.0-alt2
 %define krb5_version 1.16.3
-%define pki_version 10.9.2
+%define pki_version 10.10.0
 %define python_ldap_version 3.2.0
 %define samba_version 4.7.6
 %define slapi_nis_version 0.56.3
@@ -178,6 +178,7 @@ Requires: gssproxy >= %gssproxy_version
 Requires: sssd-dbus >= %sssd_version
 Requires: pki-ca >= %pki_version
 Requires: pki-kra >= %pki_version
+Requires: pki-acme >= %pki_version
 Requires: certmonger >= %certmonger_version
 Requires: 389-ds-base >= %ds_version
 Requires: openssl
