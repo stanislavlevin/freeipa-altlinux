@@ -77,6 +77,15 @@ ACME_AGENT_GROUP = 'Enterprise ACME Administrators'
 
 PROFILES_DN = DN(('ou', 'certificateProfiles'), ('ou', 'ca'), ('o', 'ipaca'))
 
+ACME_CONFIG_FILES = (
+    ('pki-acme-configsources.conf.template',
+        paths.PKI_ACME_CONFIGSOURCES_CONF),
+    ('pki-acme-database.conf.template', paths.PKI_ACME_DATABASE_CONF),
+    ('pki-acme-engine.conf.template', paths.PKI_ACME_ENGINE_CONF),
+    ('pki-acme-issuer.conf.template', paths.PKI_ACME_ISSUER_CONF),
+    ('pki-acme-realm.conf.template', paths.PKI_ACME_REALM_CONF),
+)
+
 
 def check_ports():
     """Check that dogtag ports (8080, 8443) are available.
@@ -1066,13 +1075,13 @@ class CAInstance(DogtagInstance):
             logger.error(
                 "certmonger failed to start tracking certificate: %s", e)
 
-    def stop_tracking_certificates(self, stop_certmonger=True):
+    def stop_tracking_certificates(self):
         """
         Stop tracking our certificates. Called on uninstall.  Also called
         during upgrade to fix discrepancies.
 
         """
-        super(CAInstance, self).stop_tracking_certificates(False)
+        super(CAInstance, self).stop_tracking_certificates()
 
         # stop tracking lightweight CA signing certs
         for request_id in certmonger.get_requests_for_dir(self.nss_db):
@@ -1085,9 +1094,6 @@ class CAInstance(DogtagInstance):
         except RuntimeError as e:
             logger.error(
                 "certmonger failed to stop tracking certificate: %s", e)
-
-        if stop_certmonger:
-            services.knownservices.certmonger.stop()
 
     def is_renewal_master(self, fqdn=None):
         if fqdn is None:
@@ -1484,8 +1490,10 @@ class CAInstance(DogtagInstance):
             return False
 
         if not minimum_acme_support():
+            logger.debug('Minimum ACME support not available')
             return False
 
+        logger.debug('Deploying ACME')
         self._ldap_mod('/usr/share/pki/acme/database/ds/schema.ldif')
 
         configure_acme_acls()
@@ -1524,20 +1532,12 @@ class CAInstance(DogtagInstance):
         ipautil.run(['pki-server', 'acme-create'])
 
         # write configuration files
-        files = [
-            ('pki-acme-configsources.conf.template',
-                paths.PKI_ACME_CONFIGSOURCES_CONF),
-            ('pki-acme-database.conf.template', paths.PKI_ACME_DATABASE_CONF),
-            ('pki-acme-engine.conf.template', paths.PKI_ACME_ENGINE_CONF),
-            ('pki-acme-issuer.conf.template', paths.PKI_ACME_ISSUER_CONF),
-            ('pki-acme-realm.conf.template', paths.PKI_ACME_REALM_CONF),
-        ]
         sub_dict = dict(
             FQDN=self.fqdn,
             USER=acme_user,
             PASSWORD=password,
         )
-        for template_name, target in files:
+        for template_name, target in ACME_CONFIG_FILES:
             template_filename = \
                 os.path.join(paths.USR_SHARE_IPA_DIR, template_name)
             filled = ipautil.template_file(template_filename, sub_dict)
@@ -1959,7 +1959,7 @@ def import_included_profiles():
             _create_dogtag_profile(profile_id, profile_data, overwrite=True)
             logger.debug("Imported profile '%s'", profile_id)
         else:
-            logger.info(
+            logger.debug(
                 "Profile '%s' is already in LDAP; skipping", profile_id
             )
 
@@ -2034,7 +2034,7 @@ def migrate_profiles_to_ldap():
         state = profile_states.get(profile_id.lower(), ProfileState.MISSING)
         if state != ProfileState.MISSING:
             # We don't reconsile enabled/disabled state.
-            logger.info(
+            logger.debug(
                 "Profile '%s' is already in LDAP and %s; skipping",
                 profile_id, state.value
             )

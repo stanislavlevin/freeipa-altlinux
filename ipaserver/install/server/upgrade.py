@@ -648,9 +648,9 @@ def certificate_renewal_update(ca, kra, ds, http):
 
     # Ok, now we need to stop tracking, then we can start tracking them
     # again with new configuration:
-    ca.stop_tracking_certificates(stop_certmonger=False)
+    ca.stop_tracking_certificates()
     if kra.is_installed():
-        kra.stop_tracking_certificates(stop_certmonger=False)
+        kra.stop_tracking_certificates()
     ds.stop_tracking_certificates(serverid)
     http.stop_tracking_certificates()
 
@@ -920,7 +920,7 @@ def uninstall_dogtag_9(ds, http):
     ca = dogtaginstance.DogtagInstance(
         api.env.realm, "CA", "certificate server",
         nss_db=paths.VAR_LIB_PKI_CA_ALIAS_DIR)
-    ca.stop_tracking_certificates(False)
+    ca.stop_tracking_certificates()
 
     if serverid is not None:
         # drop the trailing / off the config_dirname so the directory
@@ -1547,6 +1547,26 @@ def bind_old_upgrade_states():
         sysupgrade.remove_upgrade_state("dns", state)
 
 
+def ca_update_acme_configuration(ca, fqdn):
+    """
+    Re-apply the templates in case anyting has been updated.
+    """
+    password = directivesetter.get_directive(
+        paths.PKI_ACME_ISSUER_CONF,
+        'password',
+        separator='=')
+    acme_user = ca.acme_uid(fqdn)
+    sub_dict = dict(
+        FQDN=fqdn,
+        USER=acme_user,
+        PASSWORD=password,
+    )
+    for template_name, target in cainstance.ACME_CONFIG_FILES:
+        upgrade_file(sub_dict, target,
+                     os.path.join(paths.USR_SHARE_IPA_DIR,
+                                  template_name))
+
+
 def upgrade_configuration():
     """
     Execute configuration upgrade of the IPA services
@@ -1826,6 +1846,7 @@ def upgrade_configuration():
         ca.setup_lightweight_ca_key_retrieval()
         cainstance.ensure_ipa_authority_entry()
         ca.setup_acme()
+        ca_update_acme_configuration(ca, fqdn)
         ca_initialize_hsm_state(ca)
 
     migrate_to_authselect()

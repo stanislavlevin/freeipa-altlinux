@@ -431,7 +431,7 @@ def install_check(installer):
 
     print("======================================="
           "=======================================")
-    print("This program will set up the FreeIPA Server.")
+    print("This program will set up the IPA Server.")
     print("Version {}".format(version.VERSION))
     print("")
     print("This includes:")
@@ -1110,6 +1110,8 @@ def uninstall_check(installer):
                           "uninstall procedure?", False):
             raise ScriptError("Aborting uninstall operation.")
 
+    kra.uninstall_check(options)
+
     try:
         api.Backend.ldap2.connect(autobind=True)
 
@@ -1177,6 +1179,10 @@ def uninstall(installer):
 
     rv = 0
 
+    # Uninstall the KRA prior to shutting the services down so it
+    # can un-register with the CA.
+    kra.uninstall()
+
     print("Shutting down all IPA services")
     try:
         services.knownservices.ipa.stop()
@@ -1188,8 +1194,6 @@ def uninstall(installer):
             pass
 
     createntp.uninstall_server(fstore, sstore)
-
-    kra.uninstall()
 
     ca.uninstall()
 
