@@ -3,13 +3,14 @@
 import os
 import pytest
 
+from ipatests.test_xmlrpc.xmlrpc_test import XMLRPC_test
 from ipatests.test_ipaserver.httptest import Unauthorized_HTTP_test
 from ipatests.util import assert_equal, assert_not_equal
 from ipaplatform.paths import paths
 
 
 @pytest.mark.tier1
-class test_jsplugins(Unauthorized_HTTP_test):
+class test_jsplugins(XMLRPC_test, Unauthorized_HTTP_test):
     app_uri = '/ipa/ui/js/freeipa/plugins.js'
     jsplugins = (('foo', 'foo.js'), ('bar', ''))
     content_type = 'application/javascript'
