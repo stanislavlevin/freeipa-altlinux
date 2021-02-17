@@ -140,6 +140,7 @@ BuildRequires: python3-module-lxml
 BuildRequires: python3-module-netaddr
 BuildRequires: python3-module-netifaces
 BuildRequires: python3-module-paste
+BuildRequires: python3-module-pexpect
 BuildRequires: python3-module-pki-base >= %pki_version
 BuildRequires: python3-module-polib
 BuildRequires: python3-module-psutil
