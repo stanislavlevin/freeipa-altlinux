@@ -3,6 +3,7 @@
 #
 
 import os
+import dateutil.tz
 
 from ipaserver.dnssec._odsbase import AbstractODSDBConnection
 from ipaserver.dnssec._odsbase import AbstractODSSignerConn
@@ -31,25 +32,28 @@ class ODSDBConnection(AbstractODSDBConnection):
     def get_keys_for_zone(self, zone_id):
         cur = self._db.execute(
             "SELECT hsmk.locator, hsmk.inception, hsmk.algorithm, "
-            "hsmk.keyType, hsmk.state "
+            "hsmk.role, hsmk.state "
             "FROM hsmKey AS hsmk "
             "JOIN keyData AS kd ON hsmk.id = kd.hsmKeyId "
             "WHERE kd.zoneId = ?", (zone_id,))
         for row in cur:
             key = dict()
             key['HSMkey_id'] = row['locator']
+            # The date is stored in UTC format but OpenDNSSEC 1.4 was
+            # returning a local tz format
+            tz = dateutil.tz.tzlocal()
             key['generate'] = ipautil.datetime_from_utctimestamp(
                 row['inception'],
-                units=1).replace(tzinfo=None).isoformat(
+                units=1).astimezone(tz).replace(tzinfo=None).isoformat(
                     sep=' ', timespec='seconds')
             key['algorithm'] = row['algorithm']
             key['publish'] = key['generate']
             key['active'] = None
             key['retire'] = None
             key['dead'] = None
-            if row['keyType'] == 2:
+            if row['role'] == 2:
                 key['keytype'] = 256
-            elif row['keyType'] == 1:
+            elif row['role'] == 1:
                 key['keytype'] = 257
             key['state'] = row['state']
             yield key

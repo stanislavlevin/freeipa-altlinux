@@ -2085,9 +2085,11 @@ def purge_host_keytab(realm):
             '-k', paths.KRB5_KEYTAB, '-r', realm
         ])
     except CalledProcessError as e:
-        if e.returncode not in (3, 5):
+        if e.returncode not in (3, 5, 7):
             # 3 - Unable to open keytab
             # 5 - Principal name or realm not found in keytab
+            # 7 - Failed to set cursor, typically when errcode
+            #     would be issued in past
             logger.error(
                 "Error trying to clean keytab: "
                 "/usr/sbin/ipa-rmkeytab returned %s", e.returncode)
@@ -2110,7 +2112,7 @@ def install_check(options):
     global client_domain
     global cli_basedn
 
-    print("This program will set up FreeIPA client.")
+    print("This program will set up IPA client.")
     print("Version {}".format(version.VERSION))
     print("")
 

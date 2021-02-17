@@ -306,7 +306,12 @@ def get_config(dirsrv):
     return deduplicate(ordered_list)
 
 
-def get_config_from_file():
+def get_config_from_file(rval):
+    """
+    Get the list of configured services from the cached file.
+
+    :param rval: The return value for any exception that is raised.
+    """
 
     svc_list = []
 
@@ -316,7 +321,8 @@ def get_config_from_file():
     except Exception as e:
         raise IpactlError(
             "Unknown error when retrieving list of services from file: %s"
-            % str(e)
+            % str(e),
+            4
         )
 
     # the framework can start/stop a number of related services we are not
@@ -427,7 +433,7 @@ def ipa_start(options):
 def ipa_stop(options):
     dirsrv = services.knownservices.dirsrv
     try:
-        svc_list = get_config_from_file()
+        svc_list = get_config_from_file(rval=4)
     except Exception as e:
         # Issue reading the file ? Let's try to get data from LDAP as a
         # fallback
@@ -509,7 +515,7 @@ def ipa_restart(options):
 
     old_svc_list = []
     try:
-        old_svc_list = get_config_from_file()
+        old_svc_list = get_config_from_file(rval=4)
     except Exception as e:
         emit_err("Failed to get service list from file: " + str(e))
         # fallback to what's in LDAP
@@ -613,13 +619,30 @@ def ipa_restart(options):
 
 
 def ipa_status(options):
+    """Report status of IPA-owned processes
+
+       The LSB defines the possible status values as:
+
+       0 program is running or service is OK
+       1 program is dead and /var/run pid file exists
+       2 program is dead and /var/lock lock file exists
+       3 program is not running
+       4 program or service status is unknown
+       5-99 reserved for future LSB use
+       100-149 reserved for distribution use
+       150-199 reserved for application use
+       200-254 reserved
+
+       We only really care about 0, 3 and 4.
+    """
+    socket_activated = ('ipa-ods-exporter', 'ipa-otpd',)
 
     try:
         dirsrv = services.knownservices.dirsrv
         if dirsrv.is_running():
             svc_list = get_config(dirsrv)
         else:
-            svc_list = get_config_from_file()
+            svc_list = get_config_from_file(rval=1)
     except IpactlError as e:
         if os.path.exists(tasks.get_svc_list_file()):
             raise e
@@ -627,27 +650,29 @@ def ipa_status(options):
             svc_list = []
     except Exception as e:
         raise IpactlError(
-            "Failed to get list of services to probe status: " + str(e)
+            "Failed to get list of services to probe status: " + str(e),
+            4
         )
 
+    stopped = 0
     dirsrv = services.knownservices.dirsrv
     try:
         if dirsrv.is_running():
             print("Directory Service: RUNNING")
         else:
             print("Directory Service: STOPPED")
-            if len(svc_list) == 0:
-                print(
-                    (
-                        "Directory Service must be running in order to "
-                        "obtain status of other services"
-                    )
-                )
+            stopped = 1
     except Exception as e:
-        raise IpactlError("Failed to get Directory Service status")
+        raise IpactlError("Failed to get Directory Service status", 4)
 
     if len(svc_list) == 0:
-        return
+        raise IpactlError(
+            (
+                "Directory Service must be running in order to "
+                "obtain status of other services"
+            ),
+            3,
+        )
 
     for svc in svc_list:
         svchandle = services.service(svc, api=api)
@@ -656,8 +681,13 @@ def ipa_status(options):
                 print("%s Service: RUNNING" % svc)
             else:
                 print("%s Service: STOPPED" % svc)
+                if svc not in socket_activated:
+                    stopped += 1
         except Exception:
             emit_err("Failed to get %s Service status" % svc)
+
+    if stopped > 0:
+        raise IpactlError("%d service(s) are not running" % stopped, 3)
 
 
 def main():

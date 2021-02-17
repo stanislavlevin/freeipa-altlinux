@@ -194,11 +194,16 @@ Source1:        https://releases.pagure.org/freeipa/freeipa-%{version}%{?rc_vers
 # RHEL spec file only: END: Change branding to IPA and Identity Management
 
 # RHEL spec file only: START
-%if 0%{?rhel} == 8 && %{NON_DEVELOPER_BUILD}
+%if %{NON_DEVELOPER_BUILD}
+%if 0%{?rhel} == 8
 Patch0001:      0001_util_Fix_client-only_build-upstream_5273.patch
 Patch1001:      1001-Change-branding-to-IPA-and-Identity-Management.patch
 Patch1002:      1002-4.8.0-Remove-csrgen.patch
 Patch1003:      1003-Revert-WebUI-use-python3-rjsmin-to-minify-JavaScript.patch
+%endif
+%if 0%{?rhel} == 9
+Patch1001:      1001-Change-branding-to-IPA-and-Identity-Management.patch
+%endif
 %endif
 # RHEL spec file only: END
 
@@ -331,6 +336,7 @@ BuildRequires:  python3-lxml
 BuildRequires:  python3-netaddr >= %{python_netaddr_version}
 BuildRequires:  python3-netifaces
 BuildRequires:  python3-paste
+BuildRequires:  python3-pexpect
 BuildRequires:  python3-pki >= %{pki_version}
 BuildRequires:  python3-polib
 BuildRequires:  python3-pyasn1
@@ -845,10 +851,13 @@ Requires: python3-ipaserver = %{version}-%{release}
 Requires: iptables
 Requires: python3-coverage
 Requires: python3-cryptography >= 1.6
+Requires: python3-pexpect
 %if 0%{?fedora}
 # These packages do not exist on RHEL and for ipatests use
 # they are installed on the controller through other means
 Requires: ldns-utils
+# update-crypto-policies
+Requires: crypto-policies-scripts
 Requires: python3-polib
 Requires: python3-pytest >= 3.9.1
 Requires: python3-pytest-multihost >= 0.5
@@ -1580,17 +1589,6 @@ fi
 %dir %{python3_sitelib}/ipaclient/remote_plugins/2_*
 %{python3_sitelib}/ipaclient/remote_plugins/2_*/*.py
 %{python3_sitelib}/ipaclient/remote_plugins/2_*/__pycache__/*.py*
-%if 0%{?rhel}
-# RHEL spec file only: DELETED: Remove csrgen
-%else
-%dir %{python3_sitelib}/ipaclient/csrgen
-%dir %{python3_sitelib}/ipaclient/csrgen/profiles
-%{python3_sitelib}/ipaclient/csrgen/profiles/*.json
-%dir %{python3_sitelib}/ipaclient/csrgen/rules
-%{python3_sitelib}/ipaclient/csrgen/rules/*.json
-%dir %{python3_sitelib}/ipaclient/csrgen/templates
-%{python3_sitelib}/ipaclient/csrgen/templates/*.tmpl
-%endif
 %{python3_sitelib}/ipaclient-*.egg-info
 
 
