@@ -36,8 +36,17 @@ Passphrase: {passphrase}
 """)
 
 
+def systemd_booted():
+    # https://www.freedesktop.org/software/systemd/man/sd_booted.html
+    systemd_rundir = "/run/systemd/system"
+    return not os.path.islink(systemd_rundir) and os.path.isdir(systemd_rundir)
+
+
 @pytest.fixture
 def gpgkey(request, tempdir):
+    if not systemd_booted():
+        pytest.skip("Requires systemd init system")
+
     passphrase = "Secret123"
     gnupghome = os.path.join(tempdir, "gnupg")
     os.makedirs(gnupghome, 0o700)
