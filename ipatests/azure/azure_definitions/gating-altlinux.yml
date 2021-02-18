@@ -92,6 +92,9 @@ vms:
   - container_job: commands
     tests:
     - test_integration/test_commands.py
+    containers:
+      replicas: 1
+      clients: 1
 
 - vm_jobs:
   - container_job: ServerReplicaCALessToCAFull
