@@ -8,6 +8,7 @@ steps:
         --define '_allow_undefined_macros 1' \
         --define "_srcrpmdir $(pwd)" \
         --with "wheels" \
+        --with "docs" \
       && rpm -qp freeipa-*.src.rpm --requires | \
         grep -v '^rpmlib(' | \
         tr -d [[:blank:]] | \
