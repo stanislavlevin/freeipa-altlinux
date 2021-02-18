@@ -43,7 +43,7 @@
 %define openldap_version 2.4.47-alt2
 
 Name: freeipa
-Version: 4.8.9
+Version: 4.9.2
 Release: alt1
 
 Summary: The Identity, Policy and Audit system
@@ -1069,6 +1069,9 @@ fi
 %python3_sitelibdir/ipaplatform-*.egg-info/
 
 %changelog
+* Tue Feb 16 2021 Stanislav Levin <slev@altlinux.org> 4.9.2-alt1
+- 4.8.9 -> 4.9.2.
+
 * Fri Aug 21 2020 Stanislav Levin <slev@altlinux.org> 4.8.9-alt1
 - 4.8.8 -> 4.8.9.
 - Made SELinux optional (closes: #38788).

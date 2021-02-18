@@ -1,0 +1,22 @@
+object 34600a0ecac3ad3fbe7b7b5767c3a4c1a455dc45
+type commit
+tag release-4-9-2
+tagger Alexander Bokovoy <abokovoy@redhat.com> 1613414369 +0200
+
+Tag FreeIPA 4.9.2
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAABCgAdFiEEhAodHH8+xLL+UwQ1RxniuKu/YhoFAmAqv+EACgkQRxniuKu/
+YhoULg//Y3WByESFdYFc68UC/LmFrf+g/eHfRvxH6sjHUxy3uh1sGQVy11/3OQTn
+J/gvPysXIbRSX6iY9IMfi2WoPtyDKYlMmfBkb4IHO6vC0yw2LfuQugK8rJ0S5h+H
++9LHJRNLPPthj9MpReQi6P5701/ZIc+Xg/RxlQJnkXuTxBBxBhwBqySvrhQksou9
+74IDx3nQg1/vQx9vpoOem1a3PlcWF5h+dUAczSDQPUmDP6jGX6h0+vx8OWTclddL
+ahKFOv8TNOCqjbouN1PwWhSuMa1ZGNYCNm6mBie7i76Px23/bMwjfvO59H7tMgLI
+O/R+dBOrhzQe7FJOYUrEiLl7edEPtB8QNboC57jJRJaJr6BpjNEOWmlJzMsLkZma
+/C3064X2VDsqODA26xgYMi5Rf7r6bATSpBDuM96FwNttD2nmUrpwLugDzKtUX8+1
+vf+AGQNjG1RiW63WHoPzAmmGH/ndF/0EhgK9kIS7gw0BwSWMVqxDzvK5wv/WgXzo
+qg1NyQdFdnMdci0SclI31LZ6++H2/xGX2C/MsyZ3a/fybySJ0l8fGp81magCR4v1
+5nLT5nrNFYD6JGWMABya5f8bmOleKulFbxamBR9R7pO5qoC3lfmPyFhcvZARqvwT
+IE072b758nlVKEKk2kUn+g6PxJmcBcjdpdjYxLVeJFmqQZBD1BI=
+=kLEL
+-----END PGP SIGNATURE-----
