@@ -114,6 +114,11 @@ BuildRequires: python3(twine)
 BuildRequires: python3(wheel)
 %endif
 
+%if_with docs
+BuildRequires: python3(sphinx)
+BuildRequires: python3(m2r)
+%endif
+
 #
 # Build dependencies for lint and fastcheck
 #
