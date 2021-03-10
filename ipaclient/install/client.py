@@ -1132,14 +1132,23 @@ def configure_ssh_config(fstore, options):
 
 
 def modify_ssh_config(options):
+    enableproxy = bool(
+        options.sssd and os.path.isfile(paths.SSS_SSH_KNOWNHOSTSPROXY)
+    )
+
     changes = {'PubkeyAuthentication': 'yes'}
 
-    if options.sssd and os.path.isfile(paths.SSS_SSH_KNOWNHOSTSPROXY):
-        changes[
-            'ProxyCommand'] = '%s -p %%p %%h' % paths.SSS_SSH_KNOWNHOSTSPROXY
+    if enableproxy:
         changes['GlobalKnownHostsFile'] = paths.SSSD_PUBCONF_KNOWN_HOSTS
+
     if options.trust_sshfp:
         changes['VerifyHostKeyDNS'] = 'yes'
+
+    if enableproxy:
+        changes['Match'] = 'exec true'
+        changes['ProxyCommand'] = (
+            '%s -p %%p %%h' % paths.SSS_SSH_KNOWNHOSTSPROXY
+        )
 
     change_ssh_config(paths.SSH_CONFIG, changes, ['Host', 'Match'])
 
