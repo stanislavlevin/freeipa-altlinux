@@ -71,13 +71,13 @@ jobs:
         set -e
         echo "Running make target 'lint'"
         make V=0 lint
-        echo "Building documentation"
-        make -C doc/ html
-      displayName: Lint sources and documentation
-    - template: templates/save-test-artifacts.yml
+      displayName: Lint sources
+    - template: templates/${{ variables.BUILD_DOCS_TEMPLATE }}
+    - template: templates/publish-build.yml
       parameters:
-        logsPath: doc/_build/html
-        logsArtifact: docs-$(System.JobIdentifier)-$(Build.BuildId)-$(System.StageAttempt)-$(System.PhaseAttempt)-$(System.JobPositionInPhase)
+        artifactName: 'docs-$(Build.BuildId)-$(Agent.OS)-$(Agent.OSArchitecture)'
+        targetPath: doc/_build/html
+        displayName: Publish docs
 
 - job: Tox
   pool:
