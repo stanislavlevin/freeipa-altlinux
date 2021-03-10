@@ -1,0 +1,7 @@
+steps:
+- script: |
+    set -e
+    echo "Building documentation"
+    export SPHINXBUILD=/usr/bin/sphinx-build-3
+    make -C doc/ html
+  displayName: Build documentation
