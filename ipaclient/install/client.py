@@ -1151,7 +1151,7 @@ def create_ssh_ipa_config(options):
     )
 
     ipautil.copy_template_file(
-        os.path.join(paths.SSH_IPA_CONFIG_TEMPLATE),
+        paths.SSH_IPA_CONFIG_TEMPLATE,
         paths.SSH_IPA_CONFIG,
         dict(
             ENABLEPROXY='' if enableproxy else '#',
@@ -1254,7 +1254,7 @@ def create_sshd_ipa_config(options):
         """).format(paths.SSS_SSH_AUTHORIZEDKEYS)
 
     ipautil.copy_template_file(
-        os.path.join(paths.SSHD_IPA_CONFIG_TEMPLATE),
+        paths.SSHD_IPA_CONFIG_TEMPLATE,
         paths.SSHD_IPA_CONFIG,
         dict(
             SSSD_SSHD_OPTIONS=sssd_sshd_options,
