@@ -2511,19 +2511,22 @@ def get_healthcheck_version(host):
     """
     platform = get_platform(host)
     if platform in ("rhel", "fedora"):
-        cmd = host.run_command(
-            ["rpm", "-qa", "--qf", "%{VERSION}", "*ipa-healthcheck"]
-        )
-        healthcheck_version = cmd.stdout_text
-        if not healthcheck_version:
-            raise ValueError(
-                "get_healthcheck_version: "
-                "ipa-healthcheck package is not installed"
-            )
+        cmd = ["rpm", "-qa", "--qf", "%{VERSION}", "*ipa-healthcheck"]
+    elif platform in ("altlinux",):
+        cmd = ["rpm", "-q", "--qf", "%{VERSION}", "freeipa-healthcheck"]
     else:
         raise ValueError(
             "get_healthcheck_version: unknown platform %s" % platform
         )
+
+    cmd_res = host.run_command(cmd)
+    healthcheck_version = cmd_res.stdout_text
+    if not healthcheck_version:
+        raise ValueError(
+            "get_healthcheck_version: "
+            "ipa-healthcheck package is not installed"
+        )
+
     return healthcheck_version
 
 
