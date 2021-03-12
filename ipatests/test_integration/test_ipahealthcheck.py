@@ -313,6 +313,9 @@ class TestIpaHealthCheck(IntegrationTest):
         Run ipa-healthcheck after ipa-certupdate to ensure that
         no problems are discovered.
         """
+        if not_enough_disk_space(self.master, "/"):
+            pytest.skip("requires at least 20% of free space for '/'")
+
         self.master.run_command([paths.IPA_CERTUPDATE])
         returncode, _data = run_healthcheck(self.master)
         assert returncode == 0
