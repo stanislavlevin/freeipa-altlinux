@@ -822,18 +822,7 @@ def setup_named_debugging(host):
         ],
     )
     host.run_command(["cat", paths.NAMED_LOGGING_OPTIONS_CONF])
-    result = host.run_command(
-        [
-            "python3",
-            "-c",
-            (
-                "from ipaplatform.services import knownservices; "
-                "print(knownservices.named.systemd_name)"
-            ),
-        ]
-    )
-    service_name = result.stdout_text.strip()
-    host.run_command(["systemctl", "restart", service_name])
+    host.systemctl.restart("named")
 
 
 @contextmanager
