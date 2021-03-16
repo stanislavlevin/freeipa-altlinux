@@ -91,9 +91,7 @@ class TestUninstallBase(IntegrationTest):
             # be marked as uninstalled so server cert will still be
             # tracked and the instances may remain. This can cause
             # subsequent installations to fail so be thorough.
-            dashed_domain = self.master.domain.realm.replace(".", '-')
-            dirsrv_service = "dirsrv@%s.service" % dashed_domain
-            self.master.run_command(['systemctl', 'stop', dirsrv_service])
+            self.master.systemctl.stop("dirsrv")
 
             # Moving it back should allow the uninstall to finish
             # successfully.

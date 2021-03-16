@@ -33,7 +33,6 @@ from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.env_config import get_global_config
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.test_integration.test_caless import CALessBase, ipa_certs_cleanup
-from ipaplatform import services
 from ipaserver.install import krainstance
 
 config = get_global_config()
@@ -665,24 +664,28 @@ class TestADTrustInstallWithDNS_KRA_ADTrust(ADTrustInstallTestBase):
 
 
 def get_pki_tomcatd_pid(host):
-    pid = ''
-    cmd = host.run_command(['systemctl', 'status', 'pki-tomcatd@pki-tomcat'])
-    for line in cmd.stdout_text.split('\n'):
-        if "Main PID" in line:
-            pid = line.split()[2]
-            break
-    return(pid)
+    result = host.systemctl.run(
+        ["-p", "MainPID", "--value", "show"], unit="pki_tomcatd"
+    )
+    return int(result.stdout_text.strip())
 
 def get_ipa_services_pids(host):
     ipa_services_name = [
-        "krb5kdc", "kadmin", "named", "httpd", "ipa-custodia",
-        "pki_tomcatd", "ipa-dnskeysyncd"
+        "krb5kdc",
+        "kadmin",
+        "named",
+        "httpd",
+        "ipa-custodia",
+        "pki_tomcatd",
+        "ipa-dnskeysyncd",
     ]
     pids_of_ipa_services = {}
     for name in ipa_services_name:
-        service_name = services.knownservices[name].systemd_name
-        result = host.run_command(
-            ["systemctl", "-p", "MainPID", "--value", "show", service_name]
+        service_name = host.ipaplatform.knownservices[name].systemd_name
+        result = host.systemctl.run(
+            ["-p", "MainPID", "--value", "show"],
+            unit=service_name,
+            resolve=False,
         )
         pids_of_ipa_services[service_name] = int(result.stdout_text.strip())
     return pids_of_ipa_services
@@ -780,8 +783,7 @@ class TestInstallMaster(IntegrationTest):
         # stopping few services
         service_stop = ["krb5kdc", "kadmin", "httpd"]
         for service in service_stop:
-            service_name = services.knownservices[service].systemd_name
-            self.master.run_command(['systemctl', 'stop', service_name])
+            self.master.systemctl.stop(service)
 
         # checking service status
         service_start = [
@@ -1484,7 +1486,7 @@ class TestKRAinstallAfterCertRenew(IntegrationTest):
         cert_expiry = certs[0].not_valid_after
 
         # move date to grace period so that certs get renewed
-        self.master.run_command(['systemctl', 'stop', 'chronyd'])
+        self.master.systemctl.stop("chronyd")
         grace_date = cert_expiry - timedelta(days=10)
         grace_date = datetime.strftime(grace_date, "%Y-%m-%d %H:%M:%S")
         self.master.run_command(['date', '-s', grace_date])
@@ -1514,7 +1516,7 @@ class TestKRAinstallAfterCertRenew(IntegrationTest):
         passwd = "{passwd}\n{passwd}\n{passwd}".format(passwd=admin_pass)
         self.master.run_command(['kinit', 'admin'], stdin_text=passwd)
         cmd = self.master.run_command(['ipa-kra-install', '-p', dm_pass, '-U'])
-        self.master.run_command(['systemctl', 'start', 'chronyd'])
+        self.master.systemctl.start("chronyd")
 
 
 class TestMaskInstall(IntegrationTest):
@@ -1666,7 +1668,7 @@ class TestInstallReplicaAgainstSpecificServer(IntegrationTest):
         and exit code 4"""
 
         # stop custodia service on replica1
-        self.replicas[0].run_command('systemctl stop ipa-custodia.service')
+        self.replicas[0].systemctl.stop("ipa-custodia")
 
         # check if custodia service is stopped
         cmd = self.replicas[0].run_command('ipactl status', raiseonerr=False)

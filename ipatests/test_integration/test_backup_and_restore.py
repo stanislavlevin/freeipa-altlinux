@@ -588,19 +588,12 @@ class TestBackupAndRestoreWithReplica(IntegrationTest):
             tasks.uninstall_master(self.master, clean=False)
 
             logger.info("Stopping and disabling oddjobd service")
-            self.master.run_command([
-                "systemctl", "stop", "oddjobd"
-            ])
-            self.master.run_command([
-                "systemctl", "disable", "oddjobd"
-            ])
+            self.master.systemctl.stop("oddjobd")
+            self.master.systemctl.disable("oddjobd")
 
             self.master.run_command(['ipa-restore', '-U', backup_path])
 
-        status = self.master.run_command([
-            "systemctl", "status", "oddjobd"
-        ])
-        assert "active (running)" in status.stdout_text
+        assert self.master.systemctl.is_active("oddjobd")
 
         # replication should not work after restoration
         # create users to force master and replica to try to replicate

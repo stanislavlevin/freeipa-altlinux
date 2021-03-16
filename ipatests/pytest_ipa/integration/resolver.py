@@ -175,8 +175,16 @@ class ResolvedResolver(Resolver):
         # StartLimitIntervalSec. In that case restart fails, but we can simply
         # continue trying until it succeeds
         tasks.run_repeatedly(
-            self.host, ['systemctl', 'restart', 'systemd-resolved.service'],
-            timeout=15)
+            self.host,
+            [
+                self.host.ipaplatform.paths.SYSTEMCTL,
+                "restart",
+                self.host.ipaplatform.knownservices[
+                    "systemd-resolved"
+                ].systemd_name,
+            ],
+            timeout=15,
+        )
 
     def _make_state_from_args(self, nameservers, searchdomains):
         return {
@@ -293,8 +301,16 @@ class NetworkManagerResolver(Resolver):
         # StartLimitIntervalSec. In that case restart fails, but we can simply
         # continue trying until it succeeds
         tasks.run_repeatedly(
-            self.host, ['systemctl', 'restart', 'NetworkManager.service'],
-            timeout=15)
+            self.host,
+            [
+                self.host.ipaplatform.paths.SYSTEMCTL,
+                "restart",
+                self.host.ipaplatform.knownservices[
+                    "NetworkManager"
+                ].systemd_name,
+            ],
+            timeout=15,
+        )
 
     def _make_state_from_args(self, nameservers, searchdomains):
         return {'nm_config': self.NM_CONF.format(

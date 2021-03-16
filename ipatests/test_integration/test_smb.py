@@ -98,14 +98,14 @@ class TestSMB(IntegrationTest):
                 browsable=yes
             '''.format(name=share_name, path=share_path))
             smbserver.put_file_contents(paths.SMB_CONF, smb_conf)
-            smbserver.run_command(['systemctl', 'restart', 'smb'])
+            smbserver.systemctl.restart("smb")
             wait_smbd_functional(smbserver)
             yield {
                 'name': share_name,
                 'server_path': share_path,
                 'unc': '//{}/{}'.format(smbserver.hostname, share_name)
             }
-        smbserver.run_command(['systemctl', 'restart', 'smb'])
+        smbserver.systemctl.restart("smb")
         wait_smbd_functional(smbserver)
         smbserver.run_command(['rmdir', share_path])
 
@@ -224,16 +224,13 @@ class TestSMB(IntegrationTest):
             ['ipa-client-samba', '-U'])
         # smb and winbind are expected to be not running
         for service in ['smb', 'winbind']:
-            result = self.smbserver.run_command(
-                ['systemctl', 'status', service], raiseonerr=False)
-            assert result.returncode == 3
-        self.smbserver.run_command([
-            'systemctl', 'enable', '--now', 'smb', 'winbind'
-        ])
+            assert not self.smbserver.systemctl.is_active(service)
+        self.smbserver.systemctl.enable("smb", now=True)
+        self.smbserver.systemctl.enable("winbind", now=True)
         wait_smbd_functional(self.smbserver)
         # check that smb and winbind started successfully
         for service in ['smb', 'winbind']:
-            self.smbserver.run_command(['systemctl', 'status', service])
+            self.smbserver.systemctl.status(service)
         # print status for debugging purposes
         self.smbserver.run_command(['smbstatus'])
         # checks postponed till the end of method to be sure services are
@@ -440,12 +437,8 @@ class TestSMB(IntegrationTest):
 
     def test_uninstall_samba(self):
         self.smbserver.run_command(['ipa-client-samba', '--uninstall', '-U'])
-        res = self.smbserver.run_command(
-            ['systemctl', 'status', 'winbind'], raiseonerr=False)
-        assert res.returncode == 3
-        res = self.smbserver.run_command(
-            ['systemctl', 'status', 'smb'], raiseonerr=False)
-        assert res.returncode == 3
+        assert not self.smbserver.systemctl.is_active("winbind")
+        assert not self.smbserver.systemctl.is_active("smb")
 
     def test_repeated_uninstall_samba(self):
         """Test samba uninstallation after successful uninstallation.

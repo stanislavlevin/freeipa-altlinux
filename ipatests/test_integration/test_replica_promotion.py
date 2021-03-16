@@ -701,7 +701,7 @@ class TestReplicaInstallCustodia(IntegrationTest):
         # Install Replica1 without CA and stop ipa-custodia
         tasks.install_replica(master, replica1, setup_ca=False)
         replica1.run_command(['ipactl', 'status'])
-        replica1.run_command(['systemctl', 'stop', 'ipa-custodia'])
+        replica1.systemctl.stop("ipa-custodia")
         replica1.run_command(['ipactl', 'status'], raiseonerr=False)
 
         # Install Replica2 with CA with source as Replica1.

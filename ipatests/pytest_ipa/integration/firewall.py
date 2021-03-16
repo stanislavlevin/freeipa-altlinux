@@ -114,11 +114,11 @@ class FirewallD(FirewallBase):
 
     def run(self):
         # Unmask firewalld service
-        self.host.run_command(["systemctl", "unmask", "firewalld"])
+        self.host.systemctl.unmask("firewalld")
         # Enable firewalld service
-        self.host.run_command(["systemctl", "enable", "firewalld"])
+        self.host.systemctl.enable("firewalld")
         # Start firewalld service
-        self.host.run_command(["systemctl", "start", "firewalld"])
+        self.host.systemctl.start("firewalld")
 
     def _rp_action(self, args):
         """Run-time and permanant firewall action"""

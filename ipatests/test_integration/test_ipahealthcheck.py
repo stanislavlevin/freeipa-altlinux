@@ -17,7 +17,6 @@ import pytest
 
 from ipalib import x509
 from ipapython.dn import DN
-from ipapython.ipaldap import realm_to_serverid
 from ipapython.certdb import NSS_SQL_FILES
 from ipatests.pytest_ipa.integration import tasks
 from ipaplatform.paths import paths
@@ -111,9 +110,9 @@ metaservices_checks = [
     "dirsrv",
     "gssproxy",
     "httpd",
-    "ipa_custodia",
-    "ipa_dnskeysyncd",
-    "ipa_otpd",
+    "ipa-custodia",
+    "ipa-dnskeysyncd",
+    "ipa-otpd",
     "kadmin",
     "krb5kdc",
     "named",
@@ -200,31 +199,19 @@ def restart_service():
     service = dict()
 
     def _stop_service(host, service_name):
-        service_name = service_name.replace('_', '-')
-        if service_name == 'pki-tomcatd':
-            service_name = 'pki-tomcatd@pki-tomcat'
-        elif service_name == 'dirsrv':
-            serverid = (realm_to_serverid(host.domain.realm)).upper()
-            service_name = 'dirsrv@%s.service' % serverid
-        elif service_name == 'named':
-            # The service name may differ depending on the host OS
-            script = ("from ipaplatform.services import knownservices; "
-                      "print(knownservices.named.systemd_name)")
-            result = host.run_command(['python3', '-c', script])
-            service_name = result.stdout_text.strip()
         if 'host' not in service:
             service['host'] = host
             service['name'] = [service_name]
         else:
             service['name'].append(service_name)
-        host.run_command(["systemctl", "stop", service_name])
+        host.systemctl.stop(service_name)
 
     yield _stop_service
 
     if service.get('name'):
         service.get('name', []).reverse()
         for name in service.get('name', []):
-            service.get('host').run_command(["systemctl", "start", name])
+            service.get('host').systemctl.start(name)
 
 
 class TestIpaHealthCheck(IntegrationTest):
@@ -375,11 +362,15 @@ class TestIpaHealthCheck(IntegrationTest):
         ipahealthcheck.meta.services when service is stopped and started
         respectively
         """
-        svc_list = ('certmonger', 'gssproxy', 'httpd', 'ipa_custodia',
-                    'ipa_dnskeysyncd', 'kadmin', 'krb5kdc',
+        svc_list = ('certmonger', 'gssproxy', 'httpd', 'ipa-custodia',
+                    'ipa-dnskeysyncd', 'kadmin', 'krb5kdc',
                     'named', 'pki_tomcatd', 'sssd', 'dirsrv')
 
-        for service in svc_list:
+        for knownservice in svc_list:
+            # ipahealthcheck compares plugin.__class__.__name__ with the check.
+            # In the meantime, all the classnames of IPAServiceCheck are
+            # underscored. So, ipahealthcheck doesn't support hyphen services.
+            service = knownservice.replace("-", "_")
             returncode, data = run_healthcheck(
                 self.master,
                 "ipahealthcheck.meta.services",
@@ -390,8 +381,10 @@ class TestIpaHealthCheck(IntegrationTest):
             assert data[0]["result"] == "SUCCESS"
             assert data[0]["kw"]["status"] is True
 
-        for service in svc_list:
-            restart_service(self.master, service)
+        for knownservice in svc_list:
+            restart_service(self.master, knownservice)
+            # see the comment above
+            service = knownservice.replace("-", "_")
             returncode, data = run_healthcheck(
                 self.master,
                 "ipahealthcheck.meta.services",
@@ -402,10 +395,8 @@ class TestIpaHealthCheck(IntegrationTest):
             for check in data:
                 if check["check"] != service:
                     continue
-                if service != 'pki_tomcatd':
-                    service = service.replace('_', '-')
                 assert check["result"] == "ERROR"
-                assert check["kw"]["msg"] == "%s: not running" % service
+                assert check["kw"]["msg"] == "%s: not running" % knownservice
                 assert check["kw"]["status"] is False
                 service_found = True
             assert service_found
@@ -441,13 +432,9 @@ class TestIpaHealthCheck(IntegrationTest):
     @pytest.fixture
     def restart_tomcat(self):
         """Fixture to Stop and then start tomcat instance during test"""
-        self.master.run_command(
-            ["systemctl", "stop", "pki-tomcatd@pki-tomcat"]
-        )
+        self.master.systemctl.stop("pki_tomcatd")
         yield
-        self.master.run_command(
-            ["systemctl", "start", "pki-tomcatd@pki-tomcat"]
-        )
+        self.master.systemctl.start("pki_tomcatd")
 
     def test_ipahealthcheck_dogtag_ca_connectivity_check(self, restart_tomcat):
         """
@@ -1021,13 +1008,14 @@ class TestIpaHealthCheck(IntegrationTest):
     @pytest.fixture
     def rename_ldif(self):
         """Fixture to rename dse.ldif file and revert after test"""
-        instance = realm_to_serverid(self.master.domain.realm)
         self.master.run_command(
             [
                 "mv", "-v",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance
+                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid
                 + "/dse.ldif",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance
+                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid
                 + "/dse.ldif.renamed",
             ]
         )
@@ -1035,9 +1023,11 @@ class TestIpaHealthCheck(IntegrationTest):
         self.master.run_command(
             [
                 "mv", "-v",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance
+                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid
                 + "/dse.ldif.renamed",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance
+                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid
                 + "/dse.ldif",
             ]
         )
@@ -1063,8 +1053,6 @@ class TestIpaHealthCheck(IntegrationTest):
         Fixture to modify DS tls version to TLS1.0 using dsconf tool and
         revert back to the default TLS1.2
         """
-        instance = realm_to_serverid(self.master.domain.realm)
-        cmd = ["systemctl", "restart", "dirsrv@{}".format(instance)]
         # The crypto policy must be set to LEGACY otherwise 389ds
         # combines crypto policy amd minSSLVersion and removes
         # TLS1.0 on fedora>=33 as the DEFAULT policy forbids TLS1.0
@@ -1072,25 +1060,25 @@ class TestIpaHealthCheck(IntegrationTest):
         self.master.run_command(
             [
                 "dsconf",
-                "slapd-{}".format(instance),
+                f"slapd-{self.master.ds_serverid}",
                 "security",
                 "set",
                 "--tls-protocol-min=TLS1.0",
             ]
         )
-        self.master.run_command(cmd)
+        self.master.systemctl.restart("dirsrv")
         yield
         self.master.run_command(['update-crypto-policies', '--set', 'DEFAULT'])
         self.master.run_command(
             [
                 "dsconf",
-                "slapd-{}".format(instance),
+                f"slapd-{self.master.ds_serverid}",
                 "security",
                 "set",
                 "--tls-protocol-min=TLS1.2",
             ]
         )
-        self.master.run_command(cmd)
+        self.master.systemctl.restart("dirsrv")
 
     def test_ipahealthcheck_ds_encryption(self, modify_tls):
         """
@@ -1370,9 +1358,7 @@ class TestIpaHealthCheck(IntegrationTest):
 
         # Stop pki_tomcatd so certs are not renewable. Don't restart
         # it because by the time the test is done the server is gone.
-        self.master.run_command(
-            ["systemctl", "stop", "pki-tomcatd@pki-tomcat"]
-        )
+        self.master.systemctl.stop("pki_tomcatd")
 
         try:
             # move date to the grace period
@@ -2058,7 +2044,6 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
         This testcase ensures that FSCheck displays CRITICAL
         status when permission of pin.txt is modified.
         """
-        instance = realm_to_serverid(self.master.domain.realm)
         error_msg = (
             "does not have the expected permissions (400).  "
             "The\nsecurity database pin/password files should only "
@@ -2066,7 +2051,8 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
         )
         modify_permissions(
             self.master,
-            path=paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance
+            path=paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+            % self.master.ds_serverid
             + "/pin.txt",
             mode="0000",
         )
@@ -2466,18 +2452,19 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         """
         Fixture to remove Server cert and revert the change.
         """
-        instance = realm_to_serverid(self.master.domain.realm)
         self.master.run_command(
             [
                 "certutil",
                 "-L",
                 "-d",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance,
+                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid,
                 "-n",
                 "Server-Cert",
                 "-a",
                 "-o",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance
+                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid
                 + "/Server-Cert.pem",
             ]
         )
@@ -2485,7 +2472,8 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
             [
                 "certutil",
                 "-d",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance,
+                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid,
                 "-D",
                 "-n",
                 "Server-Cert",
@@ -2496,10 +2484,12 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
             [
                 "certutil",
                 "-d",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance,
+                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid,
                 "-A",
                 "-i",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance
+                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid,
                 + "/Server-Cert.pem",
                 "-t",
                 "u,u,u",
@@ -2532,18 +2522,20 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         """
         Fixture to modify trust in the dirsrv NSS database
         """
-        instance = realm_to_serverid(self.master.domain.realm)
         for nickname in ('CN={}'.format(ISSUER_CN),
                          '%s IPA CA' % self.master.domain.realm):
             cmd = [
                 paths.CERTUTIL,
                 "-M",
-                "-d", paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance,
+                "-d",
+                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid,
                 "-n", nickname,
                 "-t", ",,",
                 "-f",
-                "%s/pwdfile.txt" %
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance,
+                "%s/pwdfile.txt"
+                % paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid,
             ]
             self.master.run_command(cmd)
         yield
@@ -2552,12 +2544,15 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
             cmd = [
                 paths.CERTUTIL,
                 "-M",
-                "-d", paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance,
+                "-d",
+                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid,
                 "-n", nickname,
                 "-t", "CT,C,C",
                 "-f",
-                "%s/pwdfile.txt" %
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance,
+                "%s/pwdfile.txt"
+                % paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid,
             ]
             self.master.run_command(cmd)
 
@@ -2567,8 +2562,9 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         Test for IPANSSChainValidation when external CA is not trusted
         """
         version = tasks.get_healthcheck_version(self.master)
-        instance = realm_to_serverid(self.master.domain.realm)
-        instance_dir = paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % instance
+        instance_dir = (
+            paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % self.master.ds_serverid
+        )
         error_msg = "Validation of {nickname} in {dbdir} failed: {reason}"
         error_msg_40_txt = (
             "certificate is invalid: Peer's certificate issuer "

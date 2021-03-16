@@ -49,13 +49,13 @@ def check_status(host, cert_count, state, timeout=600):
     return count
 
 
-def move_date(host, chrony_state, date_str):
+def move_date(host: Host, chrony_state: str, date_str: str) -> None:
     """Helper method to move the date on given host
     :param host: The host on which date is to be moved
     :param chrony_state: State to which chrony service to be moved
     :param date_str: date string to move the date i.e 2years1month1days
     """
-    host.run_command(['systemctl', chrony_state, 'chronyd'])
+    host.systemctl.run([chrony_state], unit="chronyd")
     host.run_command(['date', '-s', date_str])
 
 

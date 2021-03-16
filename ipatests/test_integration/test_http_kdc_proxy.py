@@ -120,10 +120,10 @@ class TestHttpKdcProxy(IntegrationTest):
         )
 
         self.client.put_file_contents(paths.KRB5_CONF, krb5conf)
-        self.client.run_command(['systemctl', 'restart', 'sssd.service'])
+        self.client.systemctl.restart("sssd")
         yield
         krb5conf_backup.restore()
-        self.client.run_command(['systemctl', 'restart', 'sssd.service'])
+        self.client.systemctl.restart("sssd")
 
     @contextmanager
     def configure_kdc_proxy_for_ad_trust(self, use_tcp):

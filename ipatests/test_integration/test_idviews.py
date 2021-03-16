@@ -50,7 +50,7 @@ class TestCertsInIDOverrides(IntegrationTest):
                 pass
             sssd_config.activate_service('ifp')
 
-        master.run_command(['systemctl', 'restart', 'sssd.service'])
+        master.systemctl.restart("sssd")
         # End of setup for test_dbus_user_lookup
 
         # AD-related stuff
@@ -318,7 +318,7 @@ class TestIDViews(IntegrationTest):
             '--hosts', client.hostname
         ])
         # finally restart SSSD to materialize idviews
-        client.run_command(['systemctl', 'restart', 'sssd.service'])
+        client.systemctl.restart("sssd")
 
     def test_useroverride(self):
         result = self.clients[0].run_command(['id', self.user1])

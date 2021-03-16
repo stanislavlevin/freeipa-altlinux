@@ -37,7 +37,6 @@ from ipaplatform.tasks import tasks as platform_tasks
 from ipatests.create_external_ca import ExternalCA
 from ipatests.test_ipalib.test_x509 import good_pkcs7, badcert
 from ipapython.ipautil import realm_to_suffix, ipa_generate_password
-from ipaserver.install.installutils import realm_to_serverid
 
 logger = logging.getLogger(__name__)
 
@@ -930,7 +929,7 @@ class TestIPACommand(IntegrationTest):
         test_user = "testuser" + str(random.randint(200000, 9999999))
         password = "Secret123"
         try:
-            self.master.run_command(['systemctl', 'restart', 'sssd.service'])
+            self.master.systemctl.restart("sssd")
 
             # kinit admin
             tasks.kinit_admin(self.master)
@@ -952,7 +951,7 @@ class TestIPACommand(IntegrationTest):
 
         finally:
             sssd_conf_backup.restore()
-            self.master.run_command(['systemctl', 'restart', 'sssd.service'])
+            self.master.systemctl.restart("sssd")
 
     def test_user_mod_change_capitalization_issue5879(self):
         """
@@ -1231,16 +1230,11 @@ class TestIPACommand(IntegrationTest):
         cmd = ["journalctl", "-u", "sshd", f"--since={since}"]
         tasks.run_repeatedly(self.master, command=cmd, test=test_cb)
 
-    def get_dirsrv_id(self):
-        serverid = realm_to_serverid(self.master.domain.realm)
-        return("dirsrv@%s.service" % serverid)
-
     def test_ipa_nis_manage_enable(self):
         """
         This testcase checks if ipa-nis-manage enable
         command enables plugin on an IPA master
         """
-        dirsrv_service = self.get_dirsrv_id()
         console_msg = (
             "Enabling plugin\n"
             "This setting will not take effect until "
@@ -1261,8 +1255,8 @@ class TestIPACommand(IntegrationTest):
         nispluginstring = entry.get('nsslapd-pluginEnabled')
         assert 'on' in nispluginstring
         # restart for changes to take effect
-        self.master.run_command(["systemctl", "restart", dirsrv_service])
-        self.master.run_command(["systemctl", "restart", "rpcbind"])
+        self.master.systemctl.restart("dirsrv")
+        self.master.systemctl.restart("rpcbind")
         time.sleep(DIRSRV_SLEEP)
         # check status msg on the console
         result = self.master.run_command(
@@ -1276,7 +1270,6 @@ class TestIPACommand(IntegrationTest):
         This testcase checks if ipa-nis-manage disable
         command disable plugin on an IPA Master
         """
-        dirsrv_service = self.get_dirsrv_id()
         msg = (
             "This setting will not take effect "
             "until you restart Directory Server."
@@ -1295,7 +1288,7 @@ class TestIPACommand(IntegrationTest):
         nispluginstring = entry.get('nsslapd-pluginEnabled')
         assert 'off' in nispluginstring
         # restart dirsrv for changes to take effect
-        self.master.run_command(["systemctl", "restart", dirsrv_service])
+        self.master.systemctl.restart("dirsrv")
         time.sleep(DIRSRV_SLEEP)
         # check status msg on the console
         result = self.master.run_command(

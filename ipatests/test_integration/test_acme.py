@@ -42,7 +42,7 @@ def move_date(host, chrony_cmd, date_str):
                        chrony service, for instance 'start', 'stop'
     :param date_str: date string to change the date i.e '3years2months1day1'
     """
-    host.run_command(['systemctl', chrony_cmd, 'chronyd'])
+    host.systemctl.run([chrony_cmd], "chronyd")
     host.run_command(['date', '-s', date_str])
 
 
@@ -134,7 +134,7 @@ def certbot_standalone_cert(host, acme_server):
     """method to issue a certbot's certonly standalone cert"""
     # Get a cert from ACME service using HTTP challenge and Certbot's
     # standalone HTTP server mode
-    host.run_command(['systemctl', 'stop', 'httpd'])
+    host.systemctl.stop("httpd")
     host.run_command(
         [
             'certbot',
@@ -350,7 +350,7 @@ class TestACME(CALessBase):
         # If the thing we are inspecting changes, the test will break.
         # So I prefer a conservative sleep.
         #
-        self.clients[0].run_command(['systemctl', 'restart', 'httpd'])
+        self.clients[0].systemctl.restart("httpd")
         time.sleep(15)
 
         # We expect mod_md has acquired the certificate by now.
@@ -359,7 +359,7 @@ class TestACME(CALessBase):
         # certificates /without/ the second restart, then both
         # of these sleeps can be replaced by "loop until good".)
         #
-        self.clients[0].run_command(['systemctl', 'reload', 'httpd'])
+        self.clients[0].systemctl.reload("httpd")
         time.sleep(3)
 
         # HTTPS request from server to client (should succeed)

@@ -145,13 +145,13 @@ def configure_postfix(host, realm):
     # listen on all active interfaces
     postconf(host, "inet_interfaces = all")
 
-    host.run_command(["systemctl", "restart", "saslauthd"])
+    host.systemctl.restart("saslauthd", resolve=False)
 
     result = host.run_command(["postconf", "mydestination"])
     mydestination = result.stdout_text.strip() + ", " + host.domain.name
     postconf(host, mydestination)
 
-    host.run_command(["systemctl", "restart", "postfix"])
+    host.systemctl.restart("postfix", resolve=False)
 
 
 def configure_starttls(host):
@@ -181,7 +181,7 @@ def configure_starttls(host):
     # announce STARTTLS support to remote SMTP clients, not require
     postconf(host, 'smtpd_tls_security_level = may')
 
-    host.run_command(["systemctl", "restart", "postfix"])
+    host.systemctl.restart("postfix", resolve=False)
 
 
 def configure_ssl_client_cert(host):
@@ -208,7 +208,7 @@ def configure_ssl_client_cert(host):
     # CA certificates of root CAs trusted to sign remote SMTP client cert
     postconf(host, f"smtpd_tls_CAfile = {paths.IPA_CA_CRT}")
 
-    host.run_command(["systemctl", "restart", "postfix"])
+    host.systemctl.restart("postfix", resolve=False)
 
 
 def configure_ssl(host):
@@ -222,7 +222,7 @@ def configure_ssl(host):
     conf += '  -o smtpd_sasl_auth_enable=yes\n'
     host.put_file_contents('/etc/postfix/master.cf', conf)
 
-    host.run_command(["systemctl", "restart", "postfix"])
+    host.systemctl.restart("postfix", resolve=False)
 
 
 def decode_header(header):
@@ -365,12 +365,12 @@ class TestEPN(IntegrationTest):
         """Test EPN behavior when the configured SMTP is down
         """
 
-        self.master.run_command(["systemctl", "stop", "postfix"])
+        self.master.systemctl.stop("postfix", resolve=False)
         (unused, stderr_text, rc) = self._check_epn_output(
             self.master, mailtest=True,
             raiseonerr=False, validatejson=False
         )
-        self.master.run_command(["systemctl", "start", "postfix"])
+        self.master.systemctl.start("postfix", resolve=False)
         assert "IPA-EPN: Could not connect to the configured SMTP server" in \
             stderr_text
         assert rc > 0

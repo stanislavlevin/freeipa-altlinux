@@ -1520,19 +1520,19 @@ class TestCertInstall(CALessBase):
         self.prepare_cacert('ca2', filename=self.ca2_crt)
         self.copy_cert(self.master, self.ca2_crt)
 
-        result = self.master.run_command(['ipa-cacert-manage', 'install',
-                                          os.path.join(test_dir, self.ca2_crt)]
-                                         )
-        assert result.returncode == 0
-        result = self.master.run_command(['ipa-certupdate'])
-        assert result.returncode == 0
+        self.master.run_command(
+            [
+                'ipa-cacert-manage',
+                'install',
+                os.path.join(test_dir, self.ca2_crt),
+            ]
+        )
+        self.master.run_command(['ipa-certupdate'])
         result = self.certinstall('k', 'ca2/server-kdc',
                                   filename=self.ca2_kdc_crt)
         assert result.returncode == 0
-        result = self.master.run_command(['systemctl', 'restart', 'krb5kdc'])
-        assert result.returncode == 0
-        result = self.master.run_command(['kinit', '-n'])
-        assert result.returncode == 0
+        self.master.systemctl.restart("krb5kdc")
+        self.master.run_command(['kinit', '-n'])
 
 
 def verify_kdc_cert_perms(host):

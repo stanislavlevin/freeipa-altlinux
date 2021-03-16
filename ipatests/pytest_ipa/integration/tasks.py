@@ -139,7 +139,7 @@ def rpcbind_kadmin_workaround(host):
         result = host.run_command(cmd)
         if 'rpcbind' in result.stdout_text:
             logger.error("rpcbind blocks 749, restarting")
-            host.run_command(['systemctl', 'restart', 'rpcbind.service'])
+            host.systemctl.restart("rpcbind")
             time.sleep(2)
         else:
             break
@@ -157,7 +157,7 @@ def disable_systemd_resolved_cache(host):
     ''')
     host.run_command(['mkdir', '-p', os.path.dirname(resolved_conf_file)])
     host.put_file_contents(resolved_conf_file, resolved_conf)
-    host.run_command(['systemctl', 'restart', 'systemd-resolved'])
+    host.systemctl.restart("systemd-resolved")
 
 
 def apply_common_fixes(host):
@@ -221,18 +221,11 @@ def fix_hostname(host):
     host.run_command('hostname > %s' % ipautil.shell_quote(backupname))
 
 
-def host_service_active(host, service):
-    res = host.run_command(['systemctl', 'is-active', '--quiet', service],
-                           raiseonerr=False)
-
-    return res.returncode == 0
-
-
 def fix_apache_semaphores(master):
     systemd_available = master.transport.file_exists(paths.SYSTEMCTL)
 
     if systemd_available:
-        master.run_command(['systemctl', 'stop', 'httpd'], raiseonerr=False)
+        master.systemctl.stop("httpd")
     else:
         master.run_command([paths.SBIN_SERVICE, 'httpd', 'stop'],
                            raiseonerr=False)
@@ -590,8 +583,7 @@ def install_adtrust(host):
 
     # Restart named because it lost connection to dirsrv
     # (Directory server restarts during the ipa-adtrust-install)
-    host.run_command(['systemctl', 'restart',
-                      knownservices.named.systemd_name])
+    host.systemctl.restart("named")
 
     # Check that named is running and has loaded the information from LDAP
     dig_command = ['dig', 'SRV', '+short', '@localhost',
@@ -717,7 +709,7 @@ def establish_trust_with_ad(master, ad_domain, ad_admin=None, extra_args=(),
     extra_args = list(extra_args)
     master.run_command(['kinit', '-kt', paths.HTTP_KEYTAB,
                         'HTTP/%s' % master.hostname])
-    master.run_command(['systemctl', 'restart', 'krb5kdc.service'])
+    master.systemctl.restart("krb5kdc")
     master.run_command(['kdestroy', '-A'])
 
     kinit_admin(master)
@@ -737,7 +729,7 @@ def establish_trust_with_ad(master, ad_domain, ad_admin=None, extra_args=(),
         stdin_text=stdin_text)
     master.run_command(['smbcontrol', 'all', 'debug', '1'])
     clear_sssd_cache(master)
-    master.run_command(['systemctl', 'restart', 'krb5kdc.service'])
+    master.systemctl.restart("krb5kdc")
     time.sleep(60)
 
 
@@ -788,7 +780,7 @@ def configure_auth_to_local_rule(master, ad):
     krb5_conf_new_content = '\n'.join(krb5_lines)
     master.put_file_contents(paths.KRB5_CONF, krb5_conf_new_content)
 
-    master.run_command(['systemctl', 'restart', 'sssd'])
+    master.systemctl.restart("sssd")
 
 
 def setup_sssd_conf(host):
@@ -966,7 +958,7 @@ def clear_sssd_cache(host):
     systemd_available = host.transport.file_exists(paths.SYSTEMCTL)
 
     if systemd_available:
-        host.run_command(['systemctl', 'stop', 'sssd'])
+        host.systemctl.stop("sssd")
     else:
         host.run_command([paths.SBIN_SERVICE, 'sssd', 'stop'])
 
@@ -977,7 +969,7 @@ def clear_sssd_cache(host):
     host.run_command(['rm', '-fv', paths.SSSD_MC_INITGROUPS])
 
     if systemd_available:
-        host.run_command(['systemctl', 'start', 'sssd'])
+        host.systemctl.start("sssd")
     else:
         host.run_command([paths.SBIN_SERVICE, 'sssd', 'start'])
 
@@ -991,7 +983,7 @@ def sync_time(host, server):
     leaves chronyd stopped.
     """
 
-    host.run_command(['systemctl', 'stop', 'chronyd'])
+    host.systemctl.stop("chronyd")
     host.run_command(['chronyd', '-q',
                       "server {srv} iburst maxdelay 1000".format(
                           srv=server.hostname),
@@ -1823,8 +1815,7 @@ def assert_error(result, pattern, returncode=None):
 def restart_named(*args):
     time.sleep(20)  # give a time to DNSSEC daemons to provide keys for named
     for host in args:
-        host.run_command(['systemctl', 'restart',
-                          knownservices.named.systemd_name])
+        host.systemctl.restart("named")
     time.sleep(20)  # give a time to named to be ready (zone loading)
 
 
