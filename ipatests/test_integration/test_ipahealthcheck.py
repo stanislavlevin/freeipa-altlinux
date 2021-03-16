@@ -19,7 +19,6 @@ from ipalib import x509
 from ipapython.dn import DN
 from ipapython.certdb import NSS_SQL_FILES
 from ipatests.pytest_ipa.integration import tasks
-from ipaplatform.paths import paths
 from ipaplatform.osinfo import osinfo
 from ipaserver.install.installutils import resolve_ip_addresses_nss
 from ipatests.test_integration.base import IntegrationTest
@@ -146,12 +145,6 @@ DEFAULT_PKI_KRA_CERTS = [
     "storageCert cert-pki-kra",
     "auditSigningCert cert-pki-kra",
 ]
-
-TOMCAT_CONFIG_FILES = (
-    paths.PKI_TOMCAT_PASSWORD_CONF,
-    paths.PKI_TOMCAT_SERVER_XML,
-    paths.CA_CS_CFG_PATH,
-)
 
 
 def run_healthcheck(host, source=None, check=None, output_type="json",
@@ -303,7 +296,7 @@ class TestIpaHealthCheck(IntegrationTest):
         Run ipa-healthcheck after ipa-certupdate to ensure that
         no problems are discovered.
         """
-        self.master.run_command([paths.IPA_CERTUPDATE])
+        self.master.run_command([self.master.ipaplatform.paths.IPA_CERTUPDATE])
         returncode, _data = run_healthcheck(self.master)
         assert returncode == 0
 
@@ -414,10 +407,17 @@ class TestIpaHealthCheck(IntegrationTest):
         assert returncode == 0
         for check in data:
             assert check["result"] == "SUCCESS"
-            assert check["kw"]["configfile"] == paths.CA_CS_CFG_PATH
+            assert check["kw"]["configfile"] == (
+                self.master.ipaplatform.paths.CA_CS_CFG_PATH
+            )
             assert check["kw"]["key"] in DEFAULT_PKI_CA_CERTS
-        self.master.run_command(["mv", paths.CA_CS_CFG_PATH,
-                                 "%s.old" % paths.CA_CS_CFG_PATH])
+        self.master.run_command(
+            [
+                "mv",
+                self.master.ipaplatform.paths.CA_CS_CFG_PATH,
+                "%s.old" % self.master.ipaplatform.paths.CA_CS_CFG_PATH,
+            ]
+        )
         returncode, data = run_healthcheck(
             self.master,
             "ipahealthcheck.dogtag.ca",
@@ -425,8 +425,13 @@ class TestIpaHealthCheck(IntegrationTest):
         )
         assert returncode == 1
         assert data[0]["result"] == "CRITICAL"
-        self.master.run_command(["mv", "%s.old" % paths.CA_CS_CFG_PATH,
-                                 paths.CA_CS_CFG_PATH])
+        self.master.run_command(
+            [
+                "mv",
+                "%s.old" % self.master.ipaplatform.paths.CA_CS_CFG_PATH,
+                self.master.ipaplatform.paths.CA_CS_CFG_PATH,
+            ]
+        )
         self.master.run_command(["ipactl", "restart"])
 
     @pytest.fixture
@@ -742,12 +747,19 @@ class TestIpaHealthCheck(IntegrationTest):
         )
 
         result = self.master.run_command(
-            ["getcert", "list", "-f", paths.HTTPD_CERT_FILE]
+            [
+                "getcert",
+                "list",
+                "-f",
+                self.master.ipaplatform.paths.HTTPD_CERT_FILE,
+            ]
         )
         request_id = get_certmonger_fs_id(result.stdout_text)
 
         # Revoke the web cert
-        certfile = self.master.get_file_contents(paths.HTTPD_CERT_FILE)
+        certfile = self.master.get_file_contents(
+            self.master.ipaplatform.paths.HTTPD_CERT_FILE
+        )
         cert = x509.load_certificate_list(certfile)
         serial = cert[0].serial_number
         self.master.run_command(["ipa", "cert-revoke", str(serial)])
@@ -868,11 +880,19 @@ class TestIpaHealthCheck(IntegrationTest):
         Fixture to move ipa_ca_crt and revert
         """
         self.master.run_command(
-            ["mv", paths.IPA_CA_CRT, "%s.old" % paths.CA_CRT]
+            [
+                "mv",
+                self.master.ipaplatform.paths.IPA_CA_CRT,
+                "%s.old" % self.master.ipaplatform.paths.CA_CRT,
+            ]
         )
         yield
         self.master.run_command(
-            ["mv", "%s.old" % paths.CA_CRT, paths.IPA_CA_CRT]
+            [
+                "mv",
+                "%s.old" % self.master.ipaplatform.paths.CA_CRT,
+                self.master.ipaplatform.paths.IPA_CA_CRT,
+            ]
         )
 
     def test_chainexpiration_check_without_cert(self, move_ipa_ca_crt):
@@ -883,14 +903,14 @@ class TestIpaHealthCheck(IntegrationTest):
         version = tasks.get_healthcheck_version(self.master)
         error_text = (
             "[Errno 2] No such file or directory: '{}'"
-            .format(paths.IPA_CA_CRT)
+            .format(self.master.ipaplatform.paths.IPA_CA_CRT)
         )
         msg_text = (
             "Error opening IPA CA chain at {key}: {error}"
         )
         error_4_0_text = (
             "[Errno 2] No such file or directory: '{}'"
-            .format(paths.IPA_CA_CRT)
+            .format(self.master.ipaplatform.paths.IPA_CA_CRT)
         )
         returncode, data = run_healthcheck(
             self.master,
@@ -900,7 +920,9 @@ class TestIpaHealthCheck(IntegrationTest):
         assert returncode == 1
         for check in data:
             assert check["result"] == "ERROR"
-            assert check["kw"]["key"] == paths.IPA_CA_CRT
+            assert check["kw"]["key"] == (
+                self.master.ipaplatform.paths.IPA_CA_CRT
+            )
             if parse_version(version) >= parse_version("0.6"):
                 assert check["kw"]["error"] == error_text
                 assert check["kw"]["msg"] == msg_text
@@ -917,10 +939,12 @@ class TestIpaHealthCheck(IntegrationTest):
             [
                 "certutil",
                 "-M",
-                "-d", paths.PKI_TOMCAT_ALIAS_DIR,
+                "-d",
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
                 "-n", "Server-Cert cert-pki-ca",
                 "-t", "CTu,u,u",
-                "-f", paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
+                "-f",
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
             ]
         )
         yield
@@ -928,10 +952,12 @@ class TestIpaHealthCheck(IntegrationTest):
             [
                 "certutil",
                 "-M",
-                "-d", paths.PKI_TOMCAT_ALIAS_DIR,
+                "-d",
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
                 "-n", "Server-Cert cert-pki-ca",
                 "-t", "u,u,u",
-                "-f", paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
+                "-f",
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
             ]
         )
 
@@ -958,7 +984,9 @@ class TestIpaHealthCheck(IntegrationTest):
                 assert check["result"] == "ERROR"
                 assert check["kw"]["expected"] == "u,u,u"
                 assert check["kw"]["got"] == "CTu,u,u"
-                assert check["kw"]["dbdir"] == paths.PKI_TOMCAT_ALIAS_DIR
+                assert check["kw"]["dbdir"] == (
+                    self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR
+                )
                 if (parse_version(version) >= parse_version('0.6')):
                     assert check["kw"]["msg"] == error_msg
                 else:
@@ -1008,27 +1036,23 @@ class TestIpaHealthCheck(IntegrationTest):
     @pytest.fixture
     def rename_ldif(self):
         """Fixture to rename dse.ldif file and revert after test"""
+        etc_ds_instance = (
+            self.master.ipaplatform.paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+            % self.master.ds_serverid
+        )
         self.master.run_command(
             [
                 "mv", "-v",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid
-                + "/dse.ldif",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid
-                + "/dse.ldif.renamed",
+                os.path.join(etc_ds_instance, "dse.ldif"),
+                os.path.join(etc_ds_instance, "dse.ldif.renamed"),
             ]
         )
         yield
         self.master.run_command(
             [
                 "mv", "-v",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid
-                + "/dse.ldif.renamed",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid
-                + "/dse.ldif",
+                os.path.join(etc_ds_instance, "dse.ldif.renamed"),
+                os.path.join(etc_ds_instance, "dse.ldif"),
             ]
         )
 
@@ -1330,8 +1354,18 @@ class TestIpaHealthCheck(IntegrationTest):
                     assert check["result"] == "WARNING"
                     if check["kw"]["days"] == 21:
                         # the httpd, 389-ds and KDC renewal dates are later
-                        certs = (paths.HTTPD_CERT_FILE, paths.KDC_CERT,
-                                 '/etc/dirsrv/slapd-',)
+                        httpd_cert = (
+                            self.master.ipaplatform.paths.HTTPD_CERT_FILE
+                        )
+                        kdc_cert = (
+                            self.master.ipaplatform.paths.KDC_CERT
+                        )
+                        master_paths = self.master.ipaplatform.paths
+                        etc_ds_instance = (
+                            master_paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                            % self.master.ds_serverid
+                        )
+                        certs = [httpd_cert, kdc_cert, etc_ds_instance]
                         request = self.master.run_command(
                             ["getcert", "list", "-i", check["kw"]["key"]]
                         )
@@ -1349,7 +1383,9 @@ class TestIpaHealthCheck(IntegrationTest):
         now_str = datetime.strftime(now, "%Y-%m-%d %H:%M:%S Z")
 
         # Pick a cert to find the upcoming expiration
-        certfile = self.master.get_file_contents(paths.RA_AGENT_PEM)
+        certfile = self.master.get_file_contents(
+            self.master.ipaplatform.paths.RA_AGENT_PEM
+        )
         cert = x509.load_certificate_list(certfile)
         cert_expiry = cert[0].not_valid_after
 
@@ -1718,16 +1754,19 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
 
     num_replicas = 1
 
-    nssdb_testfiles = []
-    for filename in NSS_SQL_FILES:
-        testfile = os.path.join(paths.PKI_TOMCAT_ALIAS_DIR, filename)
-        nssdb_testfiles.append(testfile)
-
     @classmethod
     def install(cls, mh):
         tasks.install_master(cls.master, setup_dns=True)
         tasks.install_replica(cls.master, cls.replicas[0], setup_dns=True)
         tasks.install_packages(cls.master, HEALTHCHECK_PKG)
+
+        cls.master_nssdb_testfiles = []
+        for filename in NSS_SQL_FILES:
+            testfile = os.path.join(
+                cls.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR, filename,
+            )
+            cls.master_nssdb_testfiles.append(testfile)
+
 
     def test_ipa_filecheck_bad_owner(self, modify_permissions):
         version = tasks.get_healthcheck_version(self.master)
@@ -1740,13 +1779,17 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
             expected_owner = 'root,systemd-resolve'
             expected_msg = ("Ownership of %s is admin "
                             "and should be one of root,systemd-resolve"
-                            % paths.RESOLV_CONF)
+                            % self.master.ipaplatform.paths.RESOLV_CONF)
         else:
             expected_owner = 'root'
             expected_msg = ("Ownership of %s is admin and should be root"
-                            % paths.RESOLV_CONF)
+                            % self.master.ipaplatform.paths.RESOLV_CONF)
 
-        modify_permissions(self.master, path=paths.RESOLV_CONF, owner="admin")
+        modify_permissions(
+            self.master,
+            path=self.master.ipaplatform.paths.RESOLV_CONF,
+            owner="admin",
+        )
         returncode, data = run_healthcheck(
             self.master,
             "ipahealthcheck.ipa.files",
@@ -1773,13 +1816,17 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
             expected_group = 'root,systemd-resolve'
             expected_msg = ("Group of %s is admins and should be one of "
                             "root,systemd-resolve"
-                            % paths.RESOLV_CONF)
+                            % self.master.ipaplatform.paths.RESOLV_CONF)
         else:
             expected_group = 'root'
             expected_msg = ("Group of %s is admins and should be root"
-                            % paths.RESOLV_CONF)
+                            % self.master.ipaplatform.paths.RESOLV_CONF)
 
-        modify_permissions(self.master, path=paths.RESOLV_CONF, group="admins")
+        modify_permissions(
+            self.master,
+            path=self.master.ipaplatform.paths.RESOLV_CONF,
+            group="admins",
+        )
         returncode, data = run_healthcheck(
             self.master,
             "ipahealthcheck.ipa.files",
@@ -1799,7 +1846,11 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
         version = tasks.get_healthcheck_version(self.master)
         if parse_version(version) < parse_version("0.6"):
             pytest.skip("Skipping test for 0.4 healthcheck version")
-        modify_permissions(self.master, path=paths.RESOLV_CONF, mode="0400")
+        modify_permissions(
+            self.master,
+            path=self.master.ipaplatform.paths.RESOLV_CONF,
+            mode="0400",
+        )
         returncode, data = run_healthcheck(
             self.master,
             "ipahealthcheck.ipa.files",
@@ -1816,14 +1867,19 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
             assert (
                 check["kw"]["msg"]
                 == "Permissions of %s are too restrictive: "
-                "0400 and should be 0644" % paths.RESOLV_CONF
+                "0400 and should be 0644"
+                % self.master.ipaplatform.paths.RESOLV_CONF
             )
 
     def test_ipa_filecheck_too_permissive(self, modify_permissions):
         version = tasks.get_healthcheck_version(self.master)
         if parse_version(version) < parse_version("0.6"):
             pytest.skip("Skipping test for 0.4 healthcheck version")
-        modify_permissions(self.master, path=paths.RESOLV_CONF, mode="0666")
+        modify_permissions(
+            self.master,
+            path=self.master.ipaplatform.paths.RESOLV_CONF,
+            mode="0666",
+        )
         returncode, data = run_healthcheck(
             self.master,
             "ipahealthcheck.ipa.files",
@@ -1840,11 +1896,12 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
             assert (
                 check["kw"]["msg"]
                 == "Permissions of %s are too permissive: "
-                "0666 and should be 0644" % paths.RESOLV_CONF
+                "0666 and should be 0644"
+                % self.master.ipaplatform.paths.RESOLV_CONF
             )
 
     def test_nssdb_filecheck_bad_owner(self, modify_permissions):
-        for testfile in self.nssdb_testfiles:
+        for testfile in self.master_nssdb_testfiles:
             modify_permissions(self.master, path=testfile, owner='root')
         returncode, data = run_healthcheck(
             self.master,
@@ -1855,7 +1912,7 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
         assert returncode == 1
         for check in data:
             assert check["result"] == "WARNING"
-            assert check["kw"]["path"] in self.nssdb_testfiles
+            assert check["kw"]["path"] in self.master_nssdb_testfiles
             assert check["kw"]["type"] == 'owner'
             assert check["kw"]["expected"] == 'pkiuser'
             assert check["kw"]["got"] == 'root'
@@ -1866,7 +1923,7 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
             )
 
     def test_nssdb_filecheck_bad_group(self, modify_permissions):
-        for testfile in self.nssdb_testfiles:
+        for testfile in self.master_nssdb_testfiles:
             modify_permissions(self.master, testfile, group='root')
 
         returncode, data = run_healthcheck(
@@ -1878,7 +1935,7 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
         assert returncode == 1
         for check in data:
             assert check["result"] == "WARNING"
-            assert check["kw"]["path"] in self.nssdb_testfiles
+            assert check["kw"]["path"] in self.master_nssdb_testfiles
             assert check["kw"]["type"] == 'group'
             assert check["kw"]["expected"] == 'pkiuser'
             assert check["kw"]["got"] == 'root'
@@ -1889,7 +1946,7 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
             )
 
     def test_nssdb_filecheck_too_restrictive(self, modify_permissions):
-        for testfile in self.nssdb_testfiles:
+        for testfile in self.master_nssdb_testfiles:
             modify_permissions(self.master, path=testfile, mode="0400")
 
         returncode, data = run_healthcheck(
@@ -1901,7 +1958,7 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
         assert returncode == 1
         for check in data:
             assert check["result"] == "ERROR"
-            assert check["kw"]["path"] in self.nssdb_testfiles
+            assert check["kw"]["path"] in self.master_nssdb_testfiles
             assert check["kw"]["type"] == 'mode'
             assert check["kw"]["expected"] == '0600'
             assert check["kw"]["got"] == '0400'
@@ -1913,7 +1970,7 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
             )
 
     def test_nssdb_filecheck_too_permissive(self, modify_permissions):
-        for testfile in self.nssdb_testfiles:
+        for testfile in self.master_nssdb_testfiles:
             modify_permissions(self.master, path=testfile, mode="0640")
 
         returncode, data = run_healthcheck(
@@ -1925,7 +1982,7 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
         assert returncode == 1
         for check in data:
             assert check["result"] == "WARNING"
-            assert check["kw"]["path"] in self.nssdb_testfiles
+            assert check["kw"]["path"] in self.master_nssdb_testfiles
             assert check["kw"]["type"] == 'mode'
             assert check["kw"]["expected"] == '0600'
             assert check["kw"]["got"] == '0640'
@@ -1937,8 +1994,11 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
             )
 
     def test_tomcat_filecheck_bad_owner(self, modify_permissions):
-        modify_permissions(self.master, path=paths.CA_CS_CFG_PATH,
-                           owner='root')
+        modify_permissions(
+            self.master,
+            path=self.master.ipaplatform.paths.CA_CS_CFG_PATH,
+            owner="root"
+        )
         returncode, data = run_healthcheck(
             self.master,
             "ipahealthcheck.ipa.files",
@@ -1960,8 +2020,11 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
             )
 
     def test_tomcat_filecheck_bad_group(self, modify_permissions):
-        modify_permissions(self.master, path=paths.CA_CS_CFG_PATH,
-                           group='root')
+        modify_permissions(
+            self.master,
+            path=self.master.ipaplatform.paths.CA_CS_CFG_PATH,
+            group="root",
+        )
         returncode, data = run_healthcheck(
             self.master,
             "ipahealthcheck.ipa.files",
@@ -1983,8 +2046,11 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
             )
 
     def test_tomcat_filecheck_too_restrictive(self, modify_permissions):
-        modify_permissions(self.master, path=paths.CA_CS_CFG_PATH,
-                           mode="0600")
+        modify_permissions(
+            self.master,
+            path=self.master.ipaplatform.paths.CA_CS_CFG_PATH,
+            mode="0600",
+        )
         returncode, data = run_healthcheck(
             self.master,
             "ipahealthcheck.ipa.files",
@@ -2008,8 +2074,11 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
 
     def test_tomcat_filecheck_too_permissive(self, modify_permissions):
         version = tasks.get_healthcheck_version(self.master)
-        modify_permissions(self.master, path=paths.CA_CS_CFG_PATH,
-                           mode="0666")
+        modify_permissions(
+            self.master,
+            path=self.master.ipaplatform.paths.CA_CS_CFG_PATH,
+            mode="0666",
+        )
         returncode, data = run_healthcheck(
             self.master,
             "ipahealthcheck.ipa.files",
@@ -2049,11 +2118,14 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
             "The\nsecurity database pin/password files should only "
             "be readable by Directory Server user."
         )
+        master_paths = self.master.ipaplatform.paths
         modify_permissions(
             self.master,
-            path=paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-            % self.master.ds_serverid
-            + "/pin.txt",
+            path=os.path.join(
+                master_paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+                % self.master.ds_serverid,
+                "pin.txt"
+            ),
             mode="0000",
         )
         returncode, data = run_healthcheck(
@@ -2222,8 +2294,14 @@ class TestIpaHealthCLI(IntegrationTest):
         assert 'No such file or directory' in result.stdout_text
 
         # Invalid input file
-        cmd = ["ipa-healthcheck", "--input-file", paths.IPA_CA_CRT]
-        result = self.master.run_command(cmd, raiseonerr=False)
+        result = self.master.run_command(
+            [
+                "ipa-healthcheck",
+                "--input-file",
+                self.master.ipaplatform.paths.IPA_CA_CRT,
+            ],
+            raiseonerr=False,
+        )
         assert result.returncode == 1
         assert 'Expecting value' in result.stdout_text
 
@@ -2290,7 +2368,10 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         result = install_server_external_ca_step1(cls.master)
         assert result.returncode == 0
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
-            cls.master, paths.ROOT_IPA_CSR, ROOT_CA, IPA_CA
+            cls.master,
+            cls.master.ipaplatform.paths.ROOT_IPA_CSR,
+            ROOT_CA,
+            IPA_CA,
         )
 
         install_server_external_ca_step2(
@@ -2340,7 +2421,7 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
                 "-c",
                 "dogtag-ipa-ca-renew-agent",
                 "-e",
-                paths.DOGTAG_IPA_CA_RENEW_AGENT_SUBMIT,
+                self.master.ipaplatform.paths.DOGTAG_IPA_CA_RENEW_AGENT_SUBMIT,
             ]
         )
 
@@ -2373,18 +2454,28 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         Fixture to rename http cert and revert the change.
         """
         self.master.run_command(
-            ["mv", paths.HTTPD_CERT_FILE, "%s.old" % paths.HTTPD_CERT_FILE]
+            [
+                "mv",
+                self.master.ipaplatform.paths.HTTPD_CERT_FILE,
+                "%s.old" % self.master.ipaplatform.paths.HTTPD_CERT_FILE,
+            ]
         )
         yield
         self.master.run_command(
-            ["mv", "%s.old" % paths.HTTPD_CERT_FILE, paths.HTTPD_CERT_FILE]
+            [
+                "mv",
+                "%s.old" % self.master.ipaplatform.paths.HTTPD_CERT_FILE,
+                self.master.ipaplatform.paths.HTTPD_CERT_FILE,
+            ]
         )
 
     def test_ipahealthcheck_ipaopensslchainvalidation(self, rename_httpd_cert):
         """
         Test for IPAOpenSSLChainValidation when httpd cert is moved.
         """
-        error_msg = "Can't open {} for reading".format(paths.HTTPD_CERT_FILE)
+        error_msg = "Can't open {} for reading".format(
+            self.master.ipaplatform.paths.HTTPD_CERT_FILE
+        )
         returncode, data = run_healthcheck(
             self.master,
             "ipahealthcheck.ipa.certs",
@@ -2392,7 +2483,9 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         )
         assert returncode == 1
         for check in data:
-            if check["kw"]["key"] == paths.HTTPD_CERT_FILE:
+            if check["kw"]["key"] == (
+                self.master.ipaplatform.paths.HTTPD_CERT_FILE
+            ):
                 assert check["result"] == "ERROR"
                 assert error_msg in check["kw"]["reason"]
 
@@ -2402,19 +2495,29 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         Fixture to drop the external CA from the IPA chain
         """
         self.master.run_command(
-            ["cp", paths.IPA_CA_CRT, "%s.old" % paths.IPA_CA_CRT]
+            [
+                "cp",
+                self.master.ipaplatform.paths.IPA_CA_CRT,
+                "%s.old" % self.master.ipaplatform.paths.IPA_CA_CRT,
+            ]
         )
         self.master.run_command(
-            [paths.CERTUTIL,
-             "-d", paths.PKI_TOMCAT_ALIAS_DIR,
-             "-L",
-             "-a",
-             "-n", "caSigningCert cert-pki-ca",
-             "-o", paths.IPA_CA_CRT]
+            [
+                self.master.ipaplatform.paths.CERTUTIL,
+                "-d", self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
+                "-L",
+                "-a",
+                "-n", "caSigningCert cert-pki-ca",
+                "-o", self.master.ipaplatform.paths.IPA_CA_CRT,
+            ]
         )
         yield
         self.master.run_command(
-            ["mv", "%s.old" % paths.IPA_CA_CRT, paths.IPA_CA_CRT]
+            [
+                "mv",
+                "%s.old" % self.master.ipaplatform.paths.IPA_CA_CRT,
+                self.master.ipaplatform.paths.IPA_CA_CRT,
+            ]
         )
 
     def test_opensslchainvalidation_ipa_ca_cert(self, replace_ipa_chain):
@@ -2437,10 +2540,14 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         for check in data:
             assert check["result"] == "ERROR"
             if parse_version(version) >= parse_version("0.6"):
-                if check["kw"]["key"] == paths.HTTPD_CERT_FILE:
+                if check["kw"]["key"] == (
+                    self.master.ipaplatform.paths.HTTPD_CERT_FILE
+                ):
                     assert error_msg in check["kw"]["msg"]
                     assert error_reason in check["kw"]["reason"]
-                elif check["kw"]["key"] == paths.RA_AGENT_PEM:
+                elif check["kw"]["key"] == (
+                    self.master.ipaplatform.paths.RA_AGENT_PEM
+                ):
                     assert error_msg in check["kw"]["msg"]
                     assert error_reason in check["kw"]["reason"]
             else:
@@ -2452,28 +2559,28 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         """
         Fixture to remove Server cert and revert the change.
         """
+        etc_ds_instance = (
+            self.master.ipaplatform.paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+            % self.master.ds_serverid
+        )
         self.master.run_command(
             [
                 "certutil",
                 "-L",
                 "-d",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid,
+                etc_ds_instance,
                 "-n",
                 "Server-Cert",
                 "-a",
                 "-o",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid
-                + "/Server-Cert.pem",
+                os.path.join(etc_ds_instance, "Server-Cert.pem"),
             ]
         )
         self.master.run_command(
             [
                 "certutil",
                 "-d",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid,
+                etc_ds_instance,
                 "-D",
                 "-n",
                 "Server-Cert",
@@ -2484,17 +2591,14 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
             [
                 "certutil",
                 "-d",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid,
+                etc_ds_instance,
                 "-A",
                 "-i",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid,
-                + "/Server-Cert.pem",
+                os.path.join(etc_ds_instance, "Server-Cert.pem"),
                 "-t",
                 "u,u,u",
                 "-f",
-                paths.IPA_NSSDB_PWDFILE_TXT,
+                self.master.ipaplatform.paths.IPA_NSSDB_PWDFILE_TXT,
                 "-n",
                 "Server-Cert",
             ]
@@ -2522,39 +2626,39 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         """
         Fixture to modify trust in the dirsrv NSS database
         """
+        etc_ds_instance = (
+            self.master.ipaplatform.paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+            % self.master.ds_serverid
+        )
         for nickname in ('CN={}'.format(ISSUER_CN),
                          '%s IPA CA' % self.master.domain.realm):
-            cmd = [
-                paths.CERTUTIL,
-                "-M",
-                "-d",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid,
-                "-n", nickname,
-                "-t", ",,",
-                "-f",
-                "%s/pwdfile.txt"
-                % paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid,
-            ]
-            self.master.run_command(cmd)
+            self.master.run_command(
+                [
+                    self.master.ipaplatform.paths.CERTUTIL,
+                    "-M",
+                    "-d",
+                    etc_ds_instance,
+                    "-n", nickname,
+                    "-t", ",,",
+                    "-f",
+                    os.path.join(etc_ds_instance, "pwdfile.txt"),
+                ]
+            )
         yield
         for nickname in ('CN={}'.format(ISSUER_CN),
                          '%s IPA CA' % self.master.domain.realm):
-            cmd = [
-                paths.CERTUTIL,
-                "-M",
-                "-d",
-                paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid,
-                "-n", nickname,
-                "-t", "CT,C,C",
-                "-f",
-                "%s/pwdfile.txt"
-                % paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
-                % self.master.ds_serverid,
-            ]
-            self.master.run_command(cmd)
+            self.master.run_command(
+                [
+                    self.master.ipaplatform.paths.CERTUTIL,
+                    "-M",
+                    "-d",
+                    etc_ds_instance,
+                    "-n", nickname,
+                    "-t", "CT,C,C",
+                    "-f",
+                    os.path.join(etc_ds_instance, "pwdfile.txt"),
+                ]
+            )
 
     def test_nsschainvalidation_ipa_invalid_chain(self,
                                                   modify_nssdb_chain_trust):
@@ -2563,7 +2667,8 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         """
         version = tasks.get_healthcheck_version(self.master)
         instance_dir = (
-            paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE % self.master.ds_serverid
+            self.master.ipaplatform.paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+            % self.master.ds_serverid
         )
         error_msg = "Validation of {nickname} in {dbdir} failed: {reason}"
         error_msg_40_txt = (
@@ -2595,11 +2700,19 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         Fixture to rename IPA RA CRT and revert
         """
         self.master.run_command(
-            ["mv", paths.RA_AGENT_PEM, "%s.old" % paths.RA_AGENT_PEM]
+            [
+                "mv",
+                self.master.ipaplatform.paths.RA_AGENT_PEM,
+                "%s.old" % self.master.ipaplatform.paths.RA_AGENT_PEM,
+            ]
         )
         yield
         self.master.run_command(
-            ["mv", "%s.old" % paths.RA_AGENT_PEM, paths.RA_AGENT_PEM]
+            [
+                "mv",
+                "%s.old" % self.master.ipaplatform.paths.RA_AGENT_PEM,
+                self.master.ipaplatform.paths.RA_AGENT_PEM,
+            ]
         )
 
     def test_ipahealthcheck_iparaagent(self, rename_raagent_cert):
@@ -2610,11 +2723,13 @@ class TestIpaHealthCheckWithExternalCA(IntegrationTest):
         version = tasks.get_healthcheck_version(self.master)
         error_msg = (
             "[Errno 2] No such file or directory: '{}'"
-            .format(paths.RA_AGENT_PEM)
+            .format(self.master.ipaplatform.paths.RA_AGENT_PEM)
         )
         error_msg_40_txt = (
             "Unable to load RA cert: [Errno 2] "
-            "No such file or directory: '{}'".format(paths.RA_AGENT_PEM)
+            "No such file or directory: '{}'".format(
+                self.master.ipaplatform.paths.RA_AGENT_PEM
+            )
         )
         returncode, data = run_healthcheck(
             self.master, "ipahealthcheck.ipa.certs", "IPARAAgent"

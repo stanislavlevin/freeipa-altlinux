@@ -11,7 +11,6 @@ from SSSDConfig import ServiceAlreadyExists
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration.env_config import get_global_config
-from ipaplatform.paths import paths
 config = get_global_config()
 
 
@@ -42,7 +41,10 @@ class TestCertsInIDOverrides(IntegrationTest):
         master.run_command(['dnf', 'install', '-y', 'sssd-dbus'],
                            raiseonerr=False)
         master.run_command(
-            "sed -i 's/= 7/= 0xFFF0/' %s" % paths.SSSD_CONF, raiseonerr=False)
+            "sed -i 's/= 7/= 0xFFF0/' %s"
+            % master.ipaplatform.paths.SSSD_CONF,
+            raiseonerr=False,
+        )
         with tasks.remote_sssd_config(master) as sssd_config:
             try:
                 sssd_config.new_service('ifp')

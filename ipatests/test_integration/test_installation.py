@@ -201,18 +201,22 @@ class TestInstallWithCA1(InstallTestBase1):
         Test a client install with a non standard ldap.config
         https://pagure.io/freeipa/issue/7418
         """
-        ldap_conf = paths.OPENLDAP_LDAP_CONF
         base_dn = self.master.domain.basedn
         client = self.replicas[0]
         tasks.uninstall_master(client)
         expected_msg1 = "contains deprecated and unsupported " \
                         "entries: HOST, PORT"
-        file_backup = client.get_file_contents(ldap_conf, encoding='utf-8')
-        constants = "URI ldaps://{}\nBASE {}\nHOST {}\nPORT 636".format(
+        file_backup = client.get_file_contents(
+            client.ipaplatform.paths.OPENLDAP_LDAP_CONF,
+            encoding="utf-8",
+        )
+        ldaps_uri_info = "URI ldaps://{}\nBASE {}\nHOST {}\nPORT 636".format(
             self.master.hostname, base_dn,
             self.master.hostname)
-        modifications = "{}\n{}".format(file_backup, constants)
-        client.put_file_contents(paths.OPENLDAP_LDAP_CONF, modifications)
+        modifications = "{}\n{}".format(file_backup, ldaps_uri_info)
+        client.put_file_contents(
+            client.ipaplatform.paths.OPENLDAP_LDAP_CONF, modifications
+        )
         result = client.run_command(['ipa-client-install', '-U',
                                      '--domain', client.domain.name,
                                      '--realm', client.domain.realm,
@@ -221,7 +225,10 @@ class TestInstallWithCA1(InstallTestBase1):
                                      '--server', self.master.hostname],
                                     raiseonerr=False)
         assert expected_msg1 in result.stderr_text
-        client.put_file_contents(ldap_conf, file_backup)
+        client.put_file_contents(
+            client.ipaplatform.paths.OPENLDAP_LDAP_CONF,
+            file_backup,
+        )
 
 
 class TestInstallWithCA2(InstallTestBase2):
@@ -252,11 +259,16 @@ class TestInstallCA(IntegrationTest):
     @classmethod
     def install(cls, mh):
         cls.master.put_file_contents(
-            os.path.join(paths.IPA_CCACHES, 'foo'),
+            os.path.join(cls.master.ipaplatform.paths.IPA_CCACHES, 'foo'),
             'somerandomstring'
         )
         cls.master.run_command(
-            ['mkdir', os.path.join(paths.IPA_CCACHES, 'bar')]
+            [
+                "mkdir",
+                os.path.join(
+                    cls.master.ipaplatform.paths.IPA_CCACHES, "bar"
+                ),
+            ]
         )
         tasks.install_master(cls.master, setup_dns=False)
 
@@ -265,8 +277,18 @@ class TestInstallCA(IntegrationTest):
         The IPA ccaches directory is cleaned up on install. Verify
         that the file we created is now gone.
         """
-        assert os.path.exists(os.path.join(paths.IPA_CCACHES, 'foo')) is False
-        assert os.path.exists(os.path.join(paths.IPA_CCACHES, 'bar')) is False
+        for ccache in ["foo", "bar"]:
+            result = self.master.run_command(
+                [
+                    "test",
+                    "-e",
+                    os.path.join(
+                        self.master.ipaplatform.paths.IPA_CCACHES, ccache
+                    ),
+                ],
+                raiseonerr=False,
+            )
+            assert result.returncode == 1
 
     def test_replica_ca_install_with_no_host_dns(self):
         """
@@ -304,11 +326,21 @@ class TestInstallCA(IntegrationTest):
         self.master.run_command(['ipa', 'service-add', test_service])
 
         # create a csr
-        cmd_args = ['certutil', '-d', paths.NSS_DB_DIR, '-R', '-a',
-                    '-o', '/root/ipa.csr',
-                    '-s', "CN=%s" % self.master.hostname,
-                    '-z', noisefile]
-        self.master.run_command(cmd_args)
+        self.master.run_command(
+            [
+                "certutil",
+                "-d",
+                self.master.ipaplatform.paths.NSS_DB_DIR,
+                "-R",
+                "-a",
+                "-o",
+                "/root/ipa.csr",
+                "-s",
+                "CN=%s" % self.master.hostname,
+                "-z",
+                noisefile,
+            ]
+        )
 
         # request certificate
         cmd_args = ['ipa', 'cert-request', '--principal', test_service,
@@ -316,19 +348,50 @@ class TestInstallCA(IntegrationTest):
         self.master.run_command(cmd_args)
 
         # adding trust flag
-        cmd_args = ['certutil', '-A', '-d', paths.NSS_DB_DIR, '-n',
-                    'test', '-a', '-i', '/root/test.pem', '-t', 'u,u,u']
-        self.master.run_command(cmd_args)
+        self.master.run_command(
+            [
+                "certutil",
+                "-A",
+                "-d",
+                self.master.ipaplatform.paths.NSS_DB_DIR,
+                "-n",
+                "test",
+                "-a",
+                "-i",
+                "/root/test.pem",
+                "-t",
+                "u,u,u",
+            ]
+        )
 
         # export pkcs12 file
-        cmd_args = ['pk12util', '-o', '/root/test.p12',
-                    '-d', paths.NSS_DB_DIR, '-n', 'test', '-W', pkcs_passwd]
-        self.master.run_command(cmd_args)
+        self.master.run_command(
+            [
+                "pk12util",
+                "-o",
+                "/root/test.p12",
+                "-d",
+                self.master.ipaplatform.paths.NSS_DB_DIR,
+                "-n",
+                "test",
+                "-W",
+                pkcs_passwd,
+            ]
+        )
 
         # add softhsm lib
-        cmd_args = ['modutil', '-dbdir', paths.NSS_DB_DIR, '-add',
-                    'softhsm', '-libfile', '/usr/lib64/softhsm/libsofthsm.so']
-        self.master.run_command(cmd_args, stdin_text="\n\n")
+        self.master.run_command(
+            [
+                "modutil",
+                "-dbdir",
+                self.master.ipaplatform.paths.NSS_DB_DIR,
+                "-add",
+                "softhsm",
+                "-libfile",
+                "/usr/lib64/softhsm/libsofthsm.so",
+            ],
+            stdin_text="\n\n",
+        )
 
         # create a token
         cmd_args = ['softhsm2-util', '--init-token', '--label', 'test',
@@ -337,30 +400,87 @@ class TestInstallCA(IntegrationTest):
 
         self.master.run_command(['softhsm2-util', '--show-slots'])
 
-        cmd_args = ['certutil', '-F', '-d', paths.NSS_DB_DIR, '-n', 'test']
-        self.master.run_command(cmd_args)
+        self.master.run_command(
+            [
+                "certutil",
+                "-F",
+                "-d",
+                self.master.ipaplatform.paths.NSS_DB_DIR,
+                "-n",
+                "test",
+            ]
+        )
 
-        cmd_args = ['pk12util', '-i', '/root/test.p12',
-                    '-d', paths.NSS_DB_DIR, '-h', 'test',
-                    '-W', pkcs_passwd, '-K', pin]
-        self.master.run_command(cmd_args)
+        self.master.run_command(
+            [
+                "pk12util",
+                "-i",
+                "/root/test.p12",
+                "-d",
+                self.master.ipaplatform.paths.NSS_DB_DIR,
+                "-h",
+                "test",
+                "-W",
+                pkcs_passwd,
+                "-K",
+                pin,
+            ]
+        )
 
-        cmd_args = ['certutil', '-A', '-d', paths.NSS_DB_DIR, '-n', 'IPA CA',
-                    '-t', 'CT,,', '-a', '-i', paths.IPA_CA_CRT]
-        self.master.run_command(cmd_args)
+        self.master.run_command(
+            [
+                "certutil",
+                "-A",
+                "-d",
+                self.master.ipaplatform.paths.NSS_DB_DIR,
+                "-n",
+                "IPA CA",
+                "-t",
+                "CT,,",
+                "-a",
+                "-i",
+                self.master.ipaplatform.paths.IPA_CA_CRT,
+            ]
+        )
 
         # validate the certificate
         self.master.put_file_contents('/root/pinfile', pin)
-        cmd_args = ['certutil', '-V', '-u', 'V', '-e', '-d', paths.NSS_DB_DIR,
-                    '-h', 'test', '-n', 'test:test', '-f', '/root/pinfile']
-        result = self.master.run_command(cmd_args)
+        result = self.master.run_command(
+            [
+                "certutil",
+                "-V",
+                "-u",
+                "V",
+                "-e",
+                "-d",
+                self.master.ipaplatform.paths.NSS_DB_DIR,
+                "-h",
+                "test",
+                "-n",
+                "test:test",
+                "-f",
+                "/root/pinfile",
+            ]
+        )
         assert 'certificate is valid' in result.stdout_text
 
         # add certificate tracking to certmonger
-        cmd_args = ['ipa-getcert', 'start-tracking', '-d', paths.NSS_DB_DIR,
-                    '-n', 'test', '-t', 'test', '-P', pin,
-                    '-K', test_service]
-        result = self.master.run_command(cmd_args)
+        result = self.master.run_command(
+            [
+                "ipa-getcert",
+                "start-tracking",
+                "-d",
+                self.master.ipaplatform.paths.NSS_DB_DIR,
+                "-n",
+                "test",
+                "-t",
+                "test",
+                "-P",
+                pin,
+                "-K",
+                test_service,
+            ]
+        )
         request_id = re.findall(r'\d+', result.stdout_text)
 
         # check if certificate is tracked by certmonger
@@ -377,7 +497,12 @@ class TestInstallCA(IntegrationTest):
     def test_ipa_ca_crt_permissions(self):
         """Verify that /etc/ipa/ca.cert is mode 0644 root:root"""
         result = self.master.run_command(
-            ["/usr/bin/stat", "-c", "%U:%G:%a", paths.IPA_CA_CRT]
+            [
+                "/usr/bin/stat",
+                "-c",
+                "%U:%G:%a",
+                self.master.ipaplatform.paths.IPA_CA_CRT,
+            ]
         )
         out = str(result.stdout_text.strip())
         (owner, group, mode) = out.split(':')
@@ -394,11 +519,17 @@ class TestInstallCA(IntegrationTest):
         certs are issued by IPA. Exercise that path by replacing the
         web cert with itself.
         """
-        self.master.run_command(['cp', '-p', paths.HTTPD_CERT_FILE, '/tmp'])
-        self.master.run_command(['cp', '-p', paths.HTTPD_KEY_FILE, '/tmp'])
+        self.master.run_command(
+            ["cp", "-p", self.master.ipaplatform.paths.HTTPD_CERT_FILE, "/tmp"]
+        )
+        self.master.run_command(
+            ["cp", "-p", self.master.ipaplatform.paths.HTTPD_KEY_FILE, "/tmp"]
+        )
 
         passwd = self.master.get_file_contents(
-            paths.HTTPD_PASSWD_FILE_FMT.format(host=self.master.hostname)
+            self.master.ipaplatform.paths.HTTPD_PASSWD_FILE_FMT.format(
+                host=self.master.hostname
+            )
         )
         self.master.run_command([
             'ipa-server-certinstall',
@@ -424,10 +555,12 @@ class TestInstallCA(IntegrationTest):
             host.run_command(
                 ['python3', '-c',
                  'from ipalib.install import sysrestore; '
-                 'from ipaplatform.paths import paths;'
-                 'sstore = sysrestore.StateFile(paths.SYSRESTORE); '
+                 'sstore = sysrestore.StateFile("{sysrestore}"); '
                  'sstore.backup_state("installation", "complete", '
-                 '{state})'.format(state=state)])
+                 '{state})'.format(
+                     sysrestore=host.ipaplatform.paths.SYSRESTORE, state=state
+                 )]
+            )
 
         def get_installation_state(host):
             """
@@ -436,9 +569,11 @@ class TestInstallCA(IntegrationTest):
             result = host.run_command(
                 ['python3', '-c',
                  'from ipalib.install import sysrestore; '
-                 'from ipaplatform.paths import paths;'
-                 'sstore = sysrestore.StateFile(paths.SYSRESTORE); '
-                 'print(sstore.get_state("installation", "complete"))'])
+                 'sstore = sysrestore.StateFile("{sysrestore}"); '
+                 'print(sstore.get_state("installation", "complete"))'.format(
+                     sysrestore=host.ipaplatform.paths.SYSRESTORE
+                 )]
+            )
             return result.stdout_text.strip()  # a string
 
         # This comes from freeipa.spec and is used to determine whether
@@ -462,7 +597,11 @@ class TestInstallCA(IntegrationTest):
         # Tweak sysrestore.state to drop installation section
         self.master.run_command(
             ['sed','-i', r's/\[installation\]/\[badinstallation\]/',
-             os.path.join(paths.SYSRESTORE, SYSRESTORE_STATEFILE)])
+             os.path.join(
+                 self.master.ipaplatform.paths.SYSRESTORE,
+                 SYSRESTORE_STATEFILE,
+             )]
+        )
 
         # Re-run installation check and it should fall back to old method
         # and be successful.
@@ -472,7 +611,10 @@ class TestInstallCA(IntegrationTest):
         # Restore installation section.
         self.master.run_command(
             ['sed','-i', r's/\[badinstallation\]/\[installation\]/',
-             os.path.join(paths.SYSRESTORE, SYSRESTORE_STATEFILE)])
+             os.path.join(
+                 self.master.ipaplatform.paths.SYSRESTORE, SYSRESTORE_STATEFILE
+             )]
+        )
 
         # Uninstall and confirm that the old method reports correctly
         # on uninstalled servers. It will exercise the old method since
@@ -480,14 +622,24 @@ class TestInstallCA(IntegrationTest):
         tasks.uninstall_master(self.master)
 
         # ensure there is no stale state
-        result = self.master.run_command(r'test -f {}'.format(
-            os.path.join(paths.SYSRESTORE, SYSRESTORE_STATEFILE)),
-            raiseonerr=False
+        result = self.master.run_command(
+            r"test -f {}".format(
+                os.path.join(
+                    self.master.ipaplatform.paths.SYSRESTORE,
+                    SYSRESTORE_STATEFILE,
+                )
+            ),
+            raiseonerr=False,
         )
         assert result.returncode == 1
-        result = self.master.run_command(r'test -f {}'.format(
-            os.path.join(paths.SYSRESTORE, SYSRESTORE_INDEXFILE)),
-            raiseonerr=False
+        result = self.master.run_command(
+            r"test -f {}".format(
+                os.path.join(
+                    self.master.ipaplatform.paths.SYSRESTORE,
+                    SYSRESTORE_INDEXFILE,
+                )
+            ),
+            raiseonerr=False,
         )
         assert result.returncode == 1
 
@@ -837,8 +989,13 @@ class TestInstallMaster(IntegrationTest):
         related ticket : https://pagure.io/freeipa/issue/7587
         """
         # check process count in httpd conf file i.e expected string
-        exp = b'WSGIDaemonProcess ipa processes=%d' % constants.WSGI_PROCESSES
-        httpd_conf = self.master.get_file_contents(paths.HTTPD_IPA_CONF)
+        exp = (
+            b'WSGIDaemonProcess ipa processes=%d'
+            % self.master.ipaplatform.constants.WSGI_PROCESSES
+        )
+        httpd_conf = self.master.get_file_contents(
+            self.master.ipaplatform.paths.HTTPD_IPA_CONF
+        )
         assert exp in httpd_conf
 
         # check the process count
@@ -867,8 +1024,8 @@ class TestInstallMaster(IntegrationTest):
     def test_pki_certs(self):
         certs, keys = tasks.certutil_certs_keys(
             self.master,
-            paths.PKI_TOMCAT_ALIAS_DIR,
-            paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT
+            self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
+            self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
         )
 
         expected_certs = {
@@ -890,8 +1047,8 @@ class TestInstallMaster(IntegrationTest):
         for nickname in sorted(certs):
             cert = tasks.certutil_fetch_cert(
                 self.master,
-                paths.PKI_TOMCAT_ALIAS_DIR,
-                paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
                 nickname
             )
             key_size = cert.public_key().key_size
@@ -907,7 +1064,9 @@ class TestInstallMaster(IntegrationTest):
         DNS name.
 
         """
-        data = self.master.get_file_contents(paths.HTTPD_CERT_FILE)
+        data = self.master.get_file_contents(
+            self.master.ipaplatform.paths.HTTPD_CERT_FILE
+        )
         cert = x509.load_pem_x509_certificate(data)
         name = f'ipa-ca.{self.master.domain.name}'
         assert crypto_x509.DNSName(name) in cert.san_general_names
@@ -923,9 +1082,14 @@ class TestInstallMaster(IntegrationTest):
 
     def test_p11_kit_softhsm2(self):
         # check that p11-kit-proxy does not inject SoftHSM2
-        result = self.master.run_command([
-            "modutil", "-dbdir", paths.PKI_TOMCAT_ALIAS_DIR, "-list"
-        ])
+        result = self.master.run_command(
+            [
+                "modutil",
+                "-dbdir",
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
+                "-list",
+            ]
+        )
         assert "softhsm" not in result.stdout_text.lower()
         assert "opendnssec" not in result.stdout_text.lower()
 
@@ -1051,7 +1215,10 @@ class TestInstallMaster(IntegrationTest):
     def test_ipa_custodia_check(self):
         # check local key retrieval
         self.master.run_command(
-            [paths.IPA_CUSTODIA_CHECK, self.master.hostname]
+            [
+                self.master.ipaplatform.paths.IPA_CUSTODIA_CHECK,
+                self.master.hostname,
+            ]
         )
 
     @pytest.mark.skipif(
@@ -1061,7 +1228,7 @@ class TestInstallMaster(IntegrationTest):
         # check that freeipa-selinux's policy module is loaded and
         # not disabled
         result = self.master.run_command(
-            [paths.SEMODULE, "-lfull"]
+            [self.master.ipaplatform.paths.SEMODULE, "-lfull"]
         )
         # prio module pp [disabled]
         # 100: default priority
@@ -1092,8 +1259,13 @@ class TestInstallMaster(IntegrationTest):
                 assert expected_stderr in result.stderr_text
 
         # CRL publishing on start-up is disabled so drop a file there
-        crlfile = os.path.join(paths.PKI_CA_PUBLISH_DIR, 'MasterCRL.bin')
-        self.master.put_file_contents(crlfile, 'secret')
+        self.master.put_file_contents(
+            os.path.join(
+                self.master.ipaplatform.paths.PKI_CA_PUBLISH_DIR,
+                "MasterCRL.bin",
+            ),
+            "secret",
+        )
 
         hosts = (
             f'{IPA_CA_RECORD}.{self.master.domain.name}',
@@ -1143,9 +1315,13 @@ class TestInstallMaster(IntegrationTest):
         # is looking for it for resolution. Without it, an installation
         # fails with `Unable to resolve host name, check /etc/hosts or DNS
         # name resolution`.
-        hosts = self.master.get_file_contents(paths.HOSTS, encoding='utf-8')
+        hosts = self.master.get_file_contents(
+            self.master.ipaplatform.paths.HOSTS, encoding="utf-8"
+        )
         new_hosts = hosts.replace(original_hostname, new_hostname)
-        self.master.put_file_contents(paths.HOSTS, new_hosts)
+        self.master.put_file_contents(
+            self.master.ipaplatform.paths.HOSTS, new_hosts
+        )
         try:
             cmd = ['ipa-server-install', '--hostname', new_hostname]
             with self.master.spawn_expect(cmd) as e:
@@ -1181,7 +1357,9 @@ class TestInstallMaster(IntegrationTest):
         finally:
             # no need to restore the hostname as the installer
             # does it during uninstallation
-            self.master.put_file_contents(paths.HOSTS, hosts)
+            self.master.put_file_contents(
+                self.master.ipaplatform.paths.HOSTS, hosts
+            )
 
     def test_ad_subpackage_dependency(self, server_cleanup):
         """
@@ -1211,22 +1389,35 @@ class TestInstallMaster(IntegrationTest):
 
         https://pagure.io/freeipa/issue/4166
         """
-        bcp_location = paths.CA_CS_CFG_PATH + '.ipabkp'
+        bcp_location = self.master.ipaplatform.paths.CA_CS_CFG_PATH + ".ipabkp"
         original_cfg_content = None
-        if self.master.transport.file_exists(paths.CA_CS_CFG_PATH):
+        if self.master.transport.file_exists(
+            self.master.ipaplatform.paths.CA_CS_CFG_PATH
+        ):
             original_cfg_content = self.master.get_file_contents(
-                paths.CA_CS_CFG_PATH, encoding='utf-8')
+                self.master.ipaplatform.paths.CA_CS_CFG_PATH, encoding="utf-8"
+            )
 
         time_before_install = int(self.master.run_command(
             ['date', '+%s']).stdout_text.strip())
         tasks.install_master(self.master)
         ipaserver_install_log = self.master.get_file_contents(
-            paths.IPASERVER_INSTALL_LOG, encoding='utf-8')
+            self.master.ipaplatform.paths.IPASERVER_INSTALL_LOG,
+            encoding="utf-8",
+        )
         assert 'backing up CS.cfg' in ipaserver_install_log
         assert self.master.transport.file_exists(bcp_location)
 
-        cfg_mod_time = int(self.master.run_command(
-            ['stat', '-c', '%Y', paths.CA_CS_CFG_PATH]).stdout_text.strip())
+        cfg_mod_time = int(
+            self.master.run_command(
+                [
+                    "stat",
+                    "-c",
+                    "%Y",
+                    self.master.ipaplatform.paths.CA_CS_CFG_PATH,
+                ],
+            ).stdout_text.strip()
+        )
         bcp_mod_time = int(self.master.run_command(
             ['stat', '-c', '%Y', bcp_location]).stdout_text.strip())
 
@@ -1234,7 +1425,9 @@ class TestInstallMaster(IntegrationTest):
         # and before the original file was modified
         assert time_before_install <= bcp_mod_time <= cfg_mod_time
         bcp_cfg_content = self.master.get_file_contents(
-            paths.CA_CS_CFG_PATH + '.ipabkp', encoding='utf-8')
+            self.master.ipaplatform.paths.CA_CS_CFG_PATH + ".ipabkp",
+            encoding="utf-8",
+        )
         if original_cfg_content is not None:
             assert original_cfg_content == bcp_cfg_content
 
@@ -1261,17 +1454,18 @@ class TestInstallMasterKRA(IntegrationTest):
         for nickname in kra.tracking_reqs:
             cert = tasks.certutil_fetch_cert(
                 self.master,
-                paths.PKI_TOMCAT_ALIAS_DIR,
-                paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
                 nickname
             )
             starting_serial = int(cert.serial_number)
-            cmd_arg = [
-                'ipa-getcert', 'resubmit', '-v', '-w',
-                '-d', paths.PKI_TOMCAT_ALIAS_DIR,
-                '-n', nickname,
-            ]
-            result = self.master.run_command(cmd_arg)
+            result = self.master.run_command(
+                [
+                    "ipa-getcert", "resubmit", "-v", "-w",
+                    "-d", self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
+                    "-n", nickname,
+                ]
+            )
             request_id = re.findall(r'\d+', result.stdout_text)
 
             status = tasks.wait_for_request(self.master, request_id[0], 120)
@@ -1279,8 +1473,8 @@ class TestInstallMasterKRA(IntegrationTest):
 
             cert = tasks.certutil_fetch_cert(
                 self.master,
-                paths.PKI_TOMCAT_ALIAS_DIR,
-                paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
                 nickname
             )
             assert starting_serial != int(cert.serial_number)
@@ -1320,17 +1514,23 @@ class TestInstallMasterDNS(IntegrationTest):
         related : https://pagure.io/freeipa/issue/8079
         """
         # check of /etc/named/ipa-ext.conf exist
-        assert self.master.transport.file_exists(paths.NAMED_CUSTOM_CONF)
+        assert self.master.transport.file_exists(
+            self.master.ipaplatform.paths.NAMED_CUSTOM_CONF
+        )
 
         # check if /etc/named.conf does not contain 'allow-recursion { any; };'
         string_to_check = 'allow-recursion { any; };'
-        named_contents = self.master.get_file_contents(paths.NAMED_CONF,
-                                                       encoding='utf-8')
+        named_contents = self.master.get_file_contents(
+            self.master.ipaplatform.paths.NAMED_CONF,
+            encoding="utf-8",
+        )
         assert string_to_check not in named_contents
 
         # check if ipa-backup command backups the /etc/named/ipa-ext.conf
         result = self.master.run_command(['ipa-backup', '-v'])
-        assert paths.NAMED_CUSTOM_CONF in result.stderr_text
+        assert self.master.ipaplatform.paths.NAMED_CUSTOM_CONF in (
+            result.stderr_text
+        )
 
     def test_install_kra(self):
         tasks.install_kra(self.master, first_instance=True)
@@ -1475,10 +1675,17 @@ class TestKRAinstallAfterCertRenew(IntegrationTest):
         # get ca-agent cert and load as pem
         dm_pass = self.master.config.dirman_password
         admin_pass = self.master.config.admin_password
-        args = [paths.OPENSSL, "pkcs12", "-in",
-                paths.DOGTAG_ADMIN_P12, "-nodes",
-                "-passin", "pass:{}".format(dm_pass)]
-        cmd = self.master.run_command(args)
+        cmd = self.master.run_command(
+            [
+                self.master.ipaplatform.paths.OPENSSL,
+                "pkcs12",
+                "-in",
+                self.master.ipaplatform.paths.DOGTAG_ADMIN_P12,
+                "-nodes",
+                "-passin",
+                "pass:{}".format(dm_pass),
+            ]
+        )
 
         certs = x509.load_certificate_list(cmd.stdout_text.encode('utf-8'))
 

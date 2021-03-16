@@ -28,7 +28,6 @@ import re
 import pytest
 
 from ipaplatform.constants import constants as platformconstants
-from ipaplatform.paths import paths
 
 from ipatests.pytest_ipa.integration import tasks
 
@@ -43,12 +42,6 @@ class BaseTestLegacyClient:
     """
 
     advice_id = None
-    backup_files = ['/etc/sysconfig/authconfig',
-                    '/etc/pam.d',
-                    '/etc/openldap/cacerts',
-                    '/etc/openldap/ldap.conf',
-                    '/etc/nsswitch.conf',
-                    paths.SSSD_CONF]
 
     homedir_template = "/home/{domain}/{username}"
     default_shell = platformconstants.DEFAULT_SHELL
@@ -83,7 +76,13 @@ class BaseTestLegacyClient:
                                                  advice_path])
 
         # Restart SSHD to load new PAM configuration
-        self.legacy_client.run_command([paths.SBIN_SERVICE, 'sshd', 'restart'])
+        self.legacy_client.run_command(
+            [
+                self.legacy_client.ipaplatform.paths.SBIN_SERVICE,
+                "sshd",
+                "restart",
+            ]
+        )
 
     def clear_sssd_caches(self):
         tasks.clear_sssd_cache(self.master)
@@ -458,7 +457,14 @@ class BaseTestLegacyClient:
 
         tasks.apply_common_fixes(cls.legacy_client)
 
-        for f in cls.backup_files:
+        for f in [
+            "/etc/sysconfig/authconfig",
+            "/etc/pam.d",
+            "/etc/openldap/cacerts",
+            "/etc/openldap/ldap.conf",
+            "/etc/nsswitch.conf",
+            cls.legacy_client.ipaplatform.paths.SSSD_CONF,
+        ]:
             tasks.backup_file(cls.legacy_client, f)
 
     @classmethod

@@ -13,7 +13,6 @@ from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.test_caless import CALessBase, ipa_certs_cleanup
 from ipaplatform.osinfo import osinfo
-from ipaplatform.paths import paths
 from ipatests.test_integration.test_external_ca import (
     install_server_external_ca_step1,
     install_server_external_ca_step2,
@@ -409,11 +408,13 @@ class TestACME(CALessBase):
         # Re-install the existing Apache certificate that has a SAN to
         # verify that it will be accepted.
         pin = self.master.get_file_contents(
-            paths.HTTPD_PASSWD_FILE_FMT.format(host=self.master.hostname)
+            self.master.ipaplatform.paths.HTTPD_PASSWD_FILE_FMT.format(
+                host=self.master.hostname
+            )
         )
         result = self.certinstall(
-            certfile=paths.HTTPD_CERT_FILE,
-            keyfile=paths.HTTPD_KEY_FILE,
+            certfile=self.master.ipaplatform.paths.HTTPD_CERT_FILE,
+            keyfile=self.master.ipaplatform.paths.HTTPD_KEY_FILE,
             pin=pin
         )
         assert result.returncode == 0
@@ -550,7 +551,10 @@ class TestACMEwithExternalCA(TestACME):
         result = install_server_external_ca_step1(cls.master)
         assert result.returncode == 0
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
-            cls.master, paths.ROOT_IPA_CSR, ROOT_CA, IPA_CA
+            cls.master,
+            cls.master.ipaplatform.paths.ROOT_IPA_CSR,
+            ROOT_CA,
+            IPA_CA,
         )
 
         install_server_external_ca_step2(

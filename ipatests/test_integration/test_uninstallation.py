@@ -16,11 +16,6 @@ import os
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
-from ipaplatform.paths import paths
-from ipapython.ipaldap import realm_to_serverid
-
-# from ipaserver.install.dsinstance
-DS_INSTANCE_PREFIX = 'slapd-'
 
 
 class TestUninstallBase(IntegrationTest):
@@ -42,12 +37,14 @@ class TestUninstallBase(IntegrationTest):
 
         client.run_command(['ipa-client-install', '--uninstall', '-U'])
         client_uninstall_log = client.get_file_contents(
-            paths.IPACLIENT_UNINSTALL_LOG, encoding='utf-8'
+            client.ipaplatform.paths.IPACLIENT_UNINSTALL_LOG,
+            encoding="utf-8",
         )
         assert "exception: ScriptError:" not in client_uninstall_log
 
-        restore_state_path = os.path.join(paths.IPA_CLIENT_SYSRESTORE,
-                                          'sysrestore.state')
+        restore_state_path = os.path.join(
+            client.ipaplatform.paths.IPA_CLIENT_SYSRESTORE, "sysrestore.state"
+        )
         result = client.run_command(
             ['ls', restore_state_path], raiseonerr=False)
         assert 'No such file or directory' in result.stderr_text
@@ -61,24 +58,30 @@ class TestUninstallBase(IntegrationTest):
                               extra_args=['--force-join'], nameservers=None)
         tasks.uninstall_replica(self.master, self.replicas[0])
         errline = b'Include /etc/httpd/conf.d/ipa-rewrite.conf'
-        ssl_conf = self.replicas[0].get_file_contents(paths.HTTPD_SSL_CONF)
+        ssl_conf = self.replicas[0].get_file_contents(
+            self.replicas[0].ipaplatform.paths.HTTPD_SSL_CONF
+        )
         assert errline not in ssl_conf
 
     def test_failed_uninstall(self):
         self.master.run_command(['ipactl', 'stop'])
 
-        serverid = realm_to_serverid(self.master.domain.realm)
-        instance_name = ''.join([DS_INSTANCE_PREFIX, serverid])
+        instance_name = (
+            self.master.ipaplatform.paths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE
+            % self.master.ds_serverid
+        )
 
         try:
             # Moving the DS instance out of the way will cause the
             # uninstaller to raise an exception and return with a
             # non-zero return code.
-            self.master.run_command([
-                '/bin/mv',
-                '%s/%s' % (paths.ETC_DIRSRV, instance_name),
-                '%s/%s.test' % (paths.ETC_DIRSRV, instance_name)
-            ])
+            self.master.run_command(
+                [
+                    "/bin/mv",
+                    instance_name,
+                    f"{instance_name}.test",
+                ]
+            )
 
             cmd = self.master.run_command([
                 'ipa-server-install',
@@ -95,29 +98,34 @@ class TestUninstallBase(IntegrationTest):
 
             # Moving it back should allow the uninstall to finish
             # successfully.
-            self.master.run_command([
-                '/bin/mv',
-                '%s/%s.test' % (paths.ETC_DIRSRV, instance_name),
-                '%s/%s' % (paths.ETC_DIRSRV, instance_name)
-            ])
-
-            cmd = self.master.run_command([
-                'ipa-server-install',
-                '--uninstall', '-U'],
-                raiseonerr=False
+            self.master.run_command(
+                [
+                    "/bin/mv",
+                    f"{instance_name}.test",
+                    instance_name,
+                ]
             )
-            assert cmd.returncode == 0
+
+            self.master.run_command(
+                ["ipa-server-install", "--uninstall", "-U"]
+            )
 
             self.master.run_command([
-                paths.IPA_GETCERT,
+                self.master.ipaplatform.paths.IPA_GETCERT,
                 'stop-tracking',
-                '-d', '%s/%s' % (paths.ETC_DIRSRV, instance_name),
+                '-d',
+                instance_name,
                 '-n', 'Server-Cert',
             ])
 
-            self.master.run_command([
-                paths.DSCTL, serverid, 'remove', '--do-it'
-            ])
+            self.master.run_command(
+                [
+                    self.master.ipaplatform.paths.DSCTL,
+                    self.master.ds_serverid,
+                    "remove",
+                    "--do-it",
+                ]
+            )
 
 
 class TestUninstallWithoutDNS(IntegrationTest):

@@ -53,7 +53,6 @@ from ipapython import certdb
 from ipapython import ipautil
 from ipapython.dnsutil import DNSResolver
 from ipaplatform.paths import paths
-from ipaplatform.services import knownservices
 from ipapython.dn import DN
 from ipalib import errors
 from ipalib.util import get_reverse_zone_default
@@ -213,8 +212,10 @@ def backup_file(host, filename):
 
 
 def fix_hostname(host):
-    backup_file(host, paths.ETC_HOSTNAME)
-    host.put_file_contents(paths.ETC_HOSTNAME, host.hostname + '\n')
+    backup_file(host, host.ipaplatform.paths.ETC_HOSTNAME)
+    host.put_file_contents(
+        host.ipaplatform.paths.ETC_HOSTNAME, host.hostname + "\n"
+    )
     host.run_command(['hostname', host.hostname])
 
     backupname = os.path.join(host.config.test_dir, 'backup_hostname')
@@ -222,13 +223,17 @@ def fix_hostname(host):
 
 
 def fix_apache_semaphores(master):
-    systemd_available = master.transport.file_exists(paths.SYSTEMCTL)
+    systemd_available = master.transport.file_exists(
+        master.ipaplatform.paths.SYSTEMCTL
+    )
 
     if systemd_available:
         master.systemctl.stop("httpd")
     else:
-        master.run_command([paths.SBIN_SERVICE, 'httpd', 'stop'],
-                           raiseonerr=False)
+        master.run_command(
+            [master.ipaplatform.paths.SBIN_SERVICE, 'httpd', 'stop'],
+            raiseonerr=False,
+        )
 
     master.run_command(
         'for line in `ipcs -s | grep apache ''| cut -d " " -f 2`; '
@@ -598,11 +603,15 @@ def disable_dnssec_validation(host):
     """
     Edits ipa-options-ext.conf snippet in order to disable dnssec validation
     """
-    backup_file(host, paths.NAMED_CUSTOM_OPTIONS_CONF)
-    named_conf = host.get_file_contents(paths.NAMED_CUSTOM_OPTIONS_CONF)
+    backup_file(host, host.ipaplatform.paths.NAMED_CUSTOM_OPTIONS_CONF)
+    named_conf = host.get_file_contents(
+        host.ipaplatform.paths.NAMED_CUSTOM_OPTIONS_CONF
+    )
     named_conf = re.sub(br'dnssec-validation\s*yes;', b'dnssec-validation no;',
                         named_conf)
-    host.put_file_contents(paths.NAMED_CUSTOM_OPTIONS_CONF, named_conf)
+    host.put_file_contents(
+        host.ipaplatform.paths.NAMED_CUSTOM_OPTIONS_CONF, named_conf
+    )
     restart_named(host)
 
 
@@ -707,7 +716,7 @@ def establish_trust_with_ad(master, ad_domain, ad_admin=None, extra_args=(),
 
     # Force KDC to reload MS-PAC info by trying to get TGT for HTTP
     extra_args = list(extra_args)
-    master.run_command(['kinit', '-kt', paths.HTTP_KEYTAB,
+    master.run_command(['kinit', '-kt', master.ipaplatform.paths.HTTP_KEYTAB,
                         'HTTP/%s' % master.hostname])
     master.systemctl.restart("krb5kdc")
     master.run_command(['kdestroy', '-A'])
@@ -770,7 +779,9 @@ def configure_auth_to_local_rule(master, ad):
              % (ad.domain.realm, ad.domain.realm, ad.domain.name))
     line2 = "  auth_to_local = DEFAULT"
 
-    krb5_conf_content = master.get_file_contents(paths.KRB5_CONF)
+    krb5_conf_content = master.get_file_contents(
+        master.ipaplatform.paths.KRB5_CONF
+    )
     krb5_lines = [line.rstrip() for line in krb5_conf_content.split('\n')]
     realm_section_index = krb5_lines.index(section_identifier)
 
@@ -778,7 +789,9 @@ def configure_auth_to_local_rule(master, ad):
     krb5_lines.insert(realm_section_index + 2, line2)
 
     krb5_conf_new_content = '\n'.join(krb5_lines)
-    master.put_file_contents(paths.KRB5_CONF, krb5_conf_new_content)
+    master.put_file_contents(
+        master.ipaplatform.paths.KRB5_CONF, krb5_conf_new_content
+    )
 
     master.systemctl.restart("sssd")
 
@@ -818,10 +831,12 @@ def setup_named_debugging(host):
             "sed",
             "-i",
             "s/severity info;/severity debug;/",
-            paths.NAMED_LOGGING_OPTIONS_CONF,
+            host.ipaplatform.paths.NAMED_LOGGING_OPTIONS_CONF,
         ],
     )
-    host.run_command(["cat", paths.NAMED_LOGGING_OPTIONS_CONF])
+    host.run_command(
+        ["cat", host.ipaplatform.paths.NAMED_LOGGING_OPTIONS_CONF]
+    )
     host.systemctl.restart("named")
 
 
@@ -896,7 +911,9 @@ def remote_sssd_config(host):
     fd, temp_config_file = tempfile.mkstemp()
     os.close(fd)
     try:
-        current_config = host.transport.get_file_contents(paths.SSSD_CONF)
+        current_config = host.transport.get_file_contents(
+            host.ipaplatform.paths.SSSD_CONF
+        )
 
         with open(temp_config_file, 'wb') as f:
             f.write(current_config)
@@ -930,7 +947,9 @@ def remote_sssd_config(host):
         yield sssd_config
 
         new_config = sssd_config.dump(sssd_config.opts).encode('utf-8')
-        host.transport.put_file_contents(paths.SSSD_CONF, new_config)
+        host.transport.put_file_contents(
+            host.ipaplatform.paths.SSSD_CONF, new_config
+        )
     finally:
         try:
             os.remove(temp_config_file)
@@ -944,23 +963,27 @@ def clear_sssd_cache(host):
     Clears SSSD cache by removing the cache files. Restarts SSSD.
     """
 
-    systemd_available = host.transport.file_exists(paths.SYSTEMCTL)
+    systemd_available = host.transport.file_exists(
+        host.ipaplatform.paths.SYSTEMCTL
+    )
 
     if systemd_available:
         host.systemctl.stop("sssd")
     else:
-        host.run_command([paths.SBIN_SERVICE, 'sssd', 'stop'])
+        host.run_command([host.ipaplatform.paths.SBIN_SERVICE, 'sssd', 'stop'])
 
     host.run_command("find /var/lib/sss/db -name '*.ldb' | "
                      "xargs rm -fv")
-    host.run_command(['rm', '-fv', paths.SSSD_MC_GROUP])
-    host.run_command(['rm', '-fv', paths.SSSD_MC_PASSWD])
-    host.run_command(['rm', '-fv', paths.SSSD_MC_INITGROUPS])
+    host.run_command(['rm', '-fv', host.ipaplatform.paths.SSSD_MC_GROUP])
+    host.run_command(['rm', '-fv', host.ipaplatform.paths.SSSD_MC_PASSWD])
+    host.run_command(['rm', '-fv', host.ipaplatform.paths.SSSD_MC_INITGROUPS])
 
     if systemd_available:
         host.systemctl.start("sssd")
     else:
-        host.run_command([paths.SBIN_SERVICE, 'sssd', 'start'])
+        host.run_command(
+            [host.ipaplatform.paths.SBIN_SERVICE, 'sssd', 'start']
+        )
 
     # To avoid false negatives due to SSSD not responding yet
     time.sleep(10)
@@ -1049,9 +1072,9 @@ def uninstall_master(host, ignore_topology_disconnect=True,
 
     # Check that IPA certs have been deleted after uninstall
     # Related: https://pagure.io/freeipa/issue/8614
-    assert host.run_command(['test', '-f', paths.IPA_CA_CRT],
+    assert host.run_command(['test', '-f', host.ipaplatform.paths.IPA_CA_CRT],
                             raiseonerr=False).returncode == 1
-    assert host.run_command(['test', '-f', paths.IPA_P11_KIT],
+    assert host.run_command(['test', '-f', host.ipaplatform.paths.IPA_P11_KIT],
                             raiseonerr=False).returncode == 1
     assert "IPA CA" not in host.run_command(
         ["trust", "list"], log_stdout=False
@@ -1063,17 +1086,25 @@ def uninstall_master(host, ignore_topology_disconnect=True,
 
     host.run_command(['pkidestroy', '-s', 'CA', '-i', 'pki-tomcat'],
                      raiseonerr=False)
-    host.run_command(['rm', '-rf',
-                      paths.TOMCAT_TOPLEVEL_DIR,
-                      paths.SYSCONFIG_PKI_TOMCAT,
-                      paths.SYSCONFIG_PKI_TOMCAT_PKI_TOMCAT_DIR,
-                      paths.VAR_LIB_PKI_TOMCAT_DIR,
-                      paths.PKI_TOMCAT,
-                      paths.IPA_RENEWAL_LOCK,
-                      paths.REPLICA_INFO_GPG_TEMPLATE % host.hostname],
-                     raiseonerr=False)
-    host.run_command("find %s -name '*.keytab' | "
-                     "xargs rm -fv" % paths.SSSD_KEYTABS_DIR, raiseonerr=False)
+    host.run_command(
+        [
+            "rm",
+            "-rf",
+            host.ipaplatform.paths.TOMCAT_TOPLEVEL_DIR,
+            host.ipaplatform.paths.SYSCONFIG_PKI_TOMCAT,
+            host.ipaplatform.paths.SYSCONFIG_PKI_TOMCAT_PKI_TOMCAT_DIR,
+            host.ipaplatform.paths.VAR_LIB_PKI_TOMCAT_DIR,
+            host.ipaplatform.paths.PKI_TOMCAT,
+            host.ipaplatform.paths.IPA_RENEWAL_LOCK,
+            host.ipaplatform.paths.REPLICA_INFO_GPG_TEMPLATE % host.hostname,
+        ],
+        raiseonerr=False,
+    )
+    host.run_command(
+        "find %s -name '*.keytab' | xargs rm -fv"
+        % host.ipaplatform.paths.SSSD_KEYTABS_DIR,
+        raiseonerr=False,
+    )
     host.run_command("find /run/ipa -name 'krb5*' | xargs rm -fv",
                      raiseonerr=False)
     while host.resolver.has_backups():
@@ -1577,7 +1608,9 @@ def ipa_backup(host, disable_role_check=False, raiseonerr=True):
 
     # Test for ticket 7632: check that services are restarted
     # before the backup is compressed
-    pattern = r'.*{}.*Starting IPA service.*'.format(paths.GZIP)
+    pattern = r'.*{}.*Starting IPA service.*'.format(
+        host.ipaplatform.paths.GZIP
+    )
     if (re.match(pattern, result.stderr_text, re.DOTALL)):
         raise AssertionError('IPA Services are started after compression')
 
@@ -1719,7 +1752,7 @@ def run_server_del(host, server_to_delete, force=False,
 def run_certutil(host, args, reqdir, dbtype=None,
                  stdin=None, raiseonerr=True):
     dbdir = reqdir if dbtype is None else '{}:{}'.format(dbtype, reqdir)
-    new_args = [paths.CERTUTIL, '-d', dbdir]
+    new_args = [host.ipaplatform.paths.CERTUTIL, '-d', dbdir]
     new_args.extend(args)
     return host.run_command(new_args, raiseonerr=raiseonerr,
                             stdin_text=stdin)
@@ -1873,12 +1906,13 @@ def ldappasswd_user_change(user, oldpw, newpw, master, use_dirman=False,
     master_ldap_uri = "ldap://{}".format(master.hostname)
 
     if use_dirman:
-        args = [paths.LDAPPASSWD, '-D',
+        args = [master.ipaplatform.paths.LDAPPASSWD, '-D',
                 str(master.config.dirman_dn),  # pylint: disable=no-member
                 '-w', master.config.dirman_password,
                 '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri, userdn]
     else:
-        args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
+        args = [master.ipaplatform.paths.LDAPPASSWD, '-D',
+                userdn, '-w', oldpw, '-a', oldpw,
                 '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
     return master.run_command(args, raiseonerr=raiseonerr)
 
@@ -1891,14 +1925,15 @@ def ldappasswd_sysaccount_change(user, oldpw, newpw, master, use_dirman=False):
     master_ldap_uri = "ldap://{}".format(master.hostname)
 
     if use_dirman:
-        args = [paths.LDAPPASSWD, '-D',
+        args = [master.ipaplatform.paths.LDAPPASSWD, '-D',
                 str(master.config.dirman_dn),  # pylint: disable=no-member
                 '-w', master.config.dirman_password,
                 '-a', oldpw,
                 '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri,
                 userdn]
     else:
-        args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
+        args = [master.ipaplatform.paths.LDAPPASSWD, '-D',
+                userdn, '-w', oldpw, '-a', oldpw,
                 '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
     master.run_command(args)
 
@@ -2241,7 +2276,9 @@ class KerberosKeyCopier:
             princ = self.host_princ_template.format(master=self.host.hostname,
                                                     realm=self.realm)
         result = self.host.run_command(
-            [paths.KLIST, "-eK", "-k", keytab], log_stdout=False)
+            [self.host.ipaplatform.paths.KLIST, "-eK", "-k", keytab],
+            log_stdout=False,
+        )
 
         keys_to_sync = []
         for l in result.stdout_text.splitlines():
@@ -2269,8 +2306,11 @@ class KerberosKeyCopier:
 
         mtime_before = get_keytab_mtime()
 
-        with self.host.spawn_expect(paths.KTUTIL, default_timeout=5,
-                                    extra_ssh_options=['-t']) as e:
+        with self.host.spawn_expect(
+            self.host.ipaplatform.paths.KTUTIL,
+            default_timeout=5,
+            extra_ssh_options=['-t'],
+        ) as e:
             e.expect_exact('ktutil:')
             e.sendline('rkt {}'.format(keytab))
             e.expect_exact('ktutil:')
@@ -2290,8 +2330,11 @@ class KerberosKeyCopier:
             e.sendline('q')
 
         if mtime_before == get_keytab_mtime():
-            raise Exception('{} did not update keytab file "{}"'.format(
-                paths.KTUTIL, keytab))
+            raise Exception(
+                '{} did not update keytab file "{}"'.format(
+                    self.host.ipaplatform.paths.KTUTIL, keytab
+                )
+            )
 
     def copy_keys(self, origin, destination, principal=None, replacement=None):
         def sync_keys(origkeys, destkeys):
@@ -2539,7 +2582,12 @@ def check_if_sssd_is_online(host):
     """
     pattern = re.compile(r'Online status: (?P<state>.*)\n')
     result = host.run_command(
-        [paths.SSSCTL, "domain-status", host.domain.name, "-o"]
+        [
+            host.ipaplatform.paths.SSSCTL,
+            "domain-status",
+            host.domain.name,
+            "-o",
+        ]
     )
     match = pattern.search(result.stdout_text)
     state = match.group('state')

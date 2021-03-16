@@ -10,7 +10,6 @@ import functools
 import pytest
 
 from ipaplatform.constants import constants as platformconstants
-from ipaplatform.paths import paths
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
@@ -204,16 +203,18 @@ class TestTrust(BaseTestTrust):
         user_and_password = ('user=%s&password=%s' %
                              (ad_admin, self.master.config.ad_admin_password))
         host = self.master.hostname
-        cmd_args = [
-            paths.BIN_CURL,
-            '-v',
-            '-H', 'referer:https://{}/ipa'.format(host),
-            '-H', 'Content-Type:application/x-www-form-urlencoded',
-            '-H', 'Accept:text/plain',
-            '--cacert', paths.IPA_CA_CRT,
-            '--data', user_and_password,
-            'https://{}/ipa/session/login_password'.format(host)]
-        result = self.master.run_command(cmd_args)
+        result = self.master.run_command(
+            [
+                self.master.ipaplatform.paths.BIN_CURL,
+                "-v",
+                "-H", "referer:https://{}/ipa".format(host),
+                "-H", "Content-Type:application/x-www-form-urlencoded",
+                "-H", "Accept:text/plain",
+                "--cacert", self.master.ipaplatform.paths.IPA_CA_CRT,
+                "--data", user_and_password,
+                "https://{}/ipa/session/login_password".format(host),
+            ]
+        )
         assert "Set-Cookie: ipa_session=MagBearerToken" in result.stderr_text
         tasks.kinit_admin(self.master)
 
@@ -298,7 +299,9 @@ class TestTrust(BaseTestTrust):
         # expired entries in SSSD cache in order to avoid waiting at least
         # 30 seconds before SSSD updates SUDO rules and undertermined time
         # that takes to refresh the rules.
-        sssd_conf_backup = tasks.FileBackup(self.master, paths.SSSD_CONF)
+        sssd_conf_backup = tasks.FileBackup(
+            self.master, self.master.ipaplatform.paths.SSSD_CONF
+        )
         try:
             with tasks.remote_sssd_config(self.master) as sssd_conf:
                 sssd_conf.edit_domain(
@@ -527,9 +530,11 @@ class TestTrust(BaseTestTrust):
         should be correct and do not report in logs like,
         'get_subdomain_homedir_of_user failed: * [Home directory is NULL]'
         """
-        tasks.backup_file(self.master, paths.SSSD_CONF)
-        log_file = '{0}/sssd_{1}.log' .format(paths.VAR_LOG_SSSD_DIR,
-                                              self.master.domain.name)
+        tasks.backup_file(self.master, self.master.ipaplatform.paths.SSSD_CONF)
+        log_file = '{0}/sssd_{1}.log'.format(
+            self.master.ipaplatform.paths.VAR_LOG_SSSD_DIR,
+            self.master.domain.name,
+        )
 
         logsize = len(self.master.get_file_contents(log_file))
 
@@ -570,9 +575,11 @@ class TestTrust(BaseTestTrust):
         )
 
         client = self.clients[0]
-        tasks.backup_file(self.master, paths.SSSD_CONF)
-        log_file = '{0}/sssd_{1}.log'.format(paths.VAR_LOG_SSSD_DIR,
-                                             client.domain.name)
+        tasks.backup_file(self.master, self.master.ipaplatform.paths.SSSD_CONF)
+        log_file = '{0}/sssd_{1}.log'.format(
+            client.ipaplatform.paths.VAR_LOG_SSSD_DIR,
+            client.domain.name,
+        )
         logsize = len(client.get_file_contents(log_file))
         res = self.master.run_command(['pidof', 'sssd_be'])
         pid = res.stdout_text.strip()
@@ -906,7 +913,9 @@ class TestTrust(BaseTestTrust):
         """
         # To simulate Windows Server advertising unreachable hosts in SRV
         # records we create specially crafted zone file for BIND DNS server
-        tasks.backup_file(self.master, paths.NAMED_CONF)
+        tasks.backup_file(
+            self.master, self.master.ipaplatform.paths.NAMED_CONF
+        )
         ad_zone = textwrap.dedent('''
             $ORIGIN {ad_dom}.
             $TTL 86400
@@ -938,18 +947,33 @@ class TestTrust(BaseTestTrust):
         ad_zone_file = tasks.create_temp_file(self.master, directory='/etc')
         self.master.put_file_contents(ad_zone_file, ad_zone)
         self.master.run_command(
-            ['chmod', '--reference', paths.NAMED_CONF, ad_zone_file])
+            [
+                "chmod",
+                "--reference",
+                self.master.ipaplatform.paths.NAMED_CONF,
+                ad_zone_file,
+            ]
+        )
         self.master.run_command(
-            ['chown', '--reference', paths.NAMED_CONF, ad_zone_file])
-        named_conf = self.master.get_file_contents(paths.NAMED_CONF,
-                                                   encoding='utf-8')
+            [
+                "chown",
+                "--reference",
+                self.master.ipaplatform.paths.NAMED_CONF,
+                ad_zone_file,
+            ]
+        )
+        named_conf = self.master.get_file_contents(
+            self.master.ipaplatform.paths.NAMED_CONF, encoding="utf-8"
+        )
         named_conf += textwrap.dedent('''
             zone "ad.test" {{
                 type master;
                 file "{}";
             }};
         '''.format(ad_zone_file))
-        self.master.put_file_contents(paths.NAMED_CONF, named_conf)
+        self.master.put_file_contents(
+            self.master.ipaplatform.paths.NAMED_CONF, named_conf
+        )
         tasks.restart_named(self.master)
         try:
             # Check that trust can not be established without --server option

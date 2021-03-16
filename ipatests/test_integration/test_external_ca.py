@@ -20,7 +20,6 @@ from __future__ import absolute_import
 import os
 import re
 import time
-import tempfile
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -28,7 +27,6 @@ from cryptography.hazmat.backends import default_backend
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
 from ipalib import x509 as ipa_x509
-from ipaplatform.paths import paths
 from ipapython.dn import DN
 
 from itertools import chain, repeat
@@ -41,12 +39,16 @@ ROOT_CA = 'root_ca.crt'
 PKI_START_STR = 'Started pki_tomcatd'
 
 
-def check_CA_flag(host, nssdb=paths.PKI_TOMCAT_ALIAS_DIR,
-                  cn=ISSUER_CN):
+def check_CA_flag(
+    host, nssdb=None, cn=ISSUER_CN
+):
     """
     Check if external CA (by default 'example.test' in our test env) has
     CA flag in nssdb.
     """
+    if nssdb is None:
+        nssdb = host.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR
+
     result = host.run_command(['certutil', '-L', '-d', nssdb])
     text = result.stdout_text
 
@@ -124,12 +126,18 @@ class TestExternalCA(IntegrationTest):
         assert result.returncode == 0
 
         # check CSR for extension
-        ipa_csr = self.master.get_file_contents(paths.ROOT_IPA_CSR)
+        ipa_csr = self.master.get_file_contents(
+            self.master.ipaplatform.paths.ROOT_IPA_CSR
+        )
         check_mscs_extension(ipa_csr, ipa_x509.MSCSTemplateV1(u'SubCA'))
 
         # Sign CA, transport it to the host and get ipa a root ca paths.
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
-            self.master, paths.ROOT_IPA_CSR, ROOT_CA, IPA_CA)
+            self.master,
+            self.master.ipaplatform.paths.ROOT_IPA_CSR,
+            ROOT_CA,
+            IPA_CA,
+        )
 
         # Step 2 of ipa-server-install.
         result = install_server_external_ca_step2(
@@ -199,7 +207,10 @@ class TestExternalCAConstraints(IntegrationTest):
         )
 
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
-            self.master, paths.ROOT_IPA_CSR, ROOT_CA, IPA_CA,
+            self.master,
+            self.master.ipaplatform.paths.ROOT_IPA_CSR,
+            ROOT_CA,
+            IPA_CA,
             root_ca_extensions=[nameconstraint],
         )
 
@@ -246,31 +257,44 @@ class TestSelfExternalSelf(IntegrationTest):
         assert result.returncode == 0
 
         # Check the content of the ldap entries for the CA
-        remote_cacrt = self.master.get_file_contents(paths.IPA_CA_CRT)
+        remote_cacrt = self.master.get_file_contents(
+            self.master.ipaplatform.paths.IPA_CA_CRT
+        )
         cacrt = ipa_x509.load_pem_x509_certificate(remote_cacrt)
         verify_caentry(self.master, cacrt)
 
     def test_switch_to_external_ca(self):
 
-        result = self.master.run_command([paths.IPA_CACERT_MANAGE, 'renew',
-                                         '--external-ca'])
-        assert result.returncode == 0
+        self.master.run_command(
+            [
+                self.master.ipaplatform.paths.IPA_CACERT_MANAGE,
+                "renew",
+                "--external-ca",
+            ]
+        )
 
         # Sign CA, transport it to the host and get ipa a root ca paths.
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
-            self.master, paths.IPA_CA_CSR, ROOT_CA, IPA_CA)
+            self.master,
+            self.master.ipaplatform.paths.IPA_CA_CSR,
+            ROOT_CA,
+            IPA_CA,
+        )
 
         # renew CA with externally signed one
-        result = self.master.run_command([paths.IPA_CACERT_MANAGE, 'renew',
-                                          '--external-cert-file={}'.
-                                          format(ipa_ca_fname),
-                                          '--external-cert-file={}'.
-                                          format(root_ca_fname)])
-        assert result.returncode == 0
+        self.master.run_command(
+            [
+                self.master.ipaplatform.paths.IPA_CACERT_MANAGE,
+                "renew",
+                "--external-cert-file={}".format(ipa_ca_fname),
+                '--external-cert-file={}'.format(root_ca_fname),
+            ]
+        )
 
         # update IPA certificate databases
-        result = self.master.run_command([paths.IPA_CERTUPDATE])
-        assert result.returncode == 0
+        result = self.master.run_command(
+            [self.master.ipaplatform.paths.IPA_CERTUPDATE]
+        )
 
         # Check if external CA have "C" flag after the switch
         result = check_CA_flag(self.master)
@@ -294,9 +318,13 @@ class TestSelfExternalSelf(IntegrationTest):
         # for journalctl --since
         switch_time = time.strftime('%H:%M:%S')
         # switch back to self-signed CA
-        result = self.master.run_command([paths.IPA_CACERT_MANAGE, 'renew',
-                                          '--self-signed'])
-        assert result.returncode == 0
+        self.master.run_command(
+            [
+                self.master.ipaplatform.paths.IPA_CACERT_MANAGE,
+                "renew",
+                "--self-signed",
+            ]
+        )
 
         # Confirm there is no traceback in the journal
         result = match_in_journal(self.master, since=switch_time,
@@ -310,8 +338,7 @@ class TestSelfExternalSelf(IntegrationTest):
         assert bool(result), ('pki_tomcatd not started after switching back to'
                               'self-signed CA')
 
-        result = self.master.run_command([paths.IPA_CERTUPDATE])
-        assert result.returncode == 0
+        self.master.run_command([self.master.ipaplatform.paths.IPA_CERTUPDATE])
 
     def test_issuerDN_after_renew_to_self_signed(self):
         """ Check if issuer DN is updated after external-ca > self-signed
@@ -345,7 +372,11 @@ class TestExternalCAdirsrvStop(IntegrationTest):
 
         # Sign CA, transport it to the host and get ipa and root ca paths.
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
-            self.master, paths.ROOT_IPA_CSR, ROOT_CA, IPA_CA)
+            self.master,
+            self.master.ipaplatform.paths.ROOT_IPA_CSR,
+            ROOT_CA,
+            IPA_CA,
+        )
 
         # Step 2 of ipa-server-install.
         result = install_server_external_ca_step2(
@@ -367,14 +398,23 @@ class TestExternalCAInvalidCert(IntegrationTest):
 
         # Sign CA, transport it to the host and get ipa a root ca paths.
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
-            self.master, paths.ROOT_IPA_CSR, ROOT_CA, IPA_CA)
+            self.master,
+            self.master.ipaplatform.paths.ROOT_IPA_CSR,
+            ROOT_CA,
+            IPA_CA,
+        )
 
         # Step 2 of ipa-server-install.
         install_server_external_ca_step2(self.master, ipa_ca_fname,
                                          root_ca_fname)
 
-        self.master.run_command([paths.IPA_CACERT_MANAGE, 'renew',
-                                 '--external-ca'])
+        self.master.run_command(
+            [
+                self.master.ipaplatform.paths.IPA_CACERT_MANAGE,
+                "renew",
+                "--external-ca",
+            ]
+        )
         result = self.master.run_command(['grep', '-v', 'CERTIFICATE',
                                           ipa_ca_fname])
         contents = result.stdout_text
@@ -384,24 +424,46 @@ class TestExternalCAInvalidCert(IntegrationTest):
         self.master.put_file_contents(invalid_cert, contents)
         # Sign CA, transport it to the host and get ipa a root ca paths.
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
-            self.master, paths.IPA_CA_CSR, ROOT_CA, IPA_CA)
+            self.master,
+            self.master.ipaplatform.paths.IPA_CA_CSR,
+            ROOT_CA,
+            IPA_CA,
+        )
         # renew CA with invalid cert
-        cmd = [paths.IPA_CACERT_MANAGE, 'renew', '--external-cert-file',
-               invalid_cert, '--external-cert-file', root_ca_fname]
-        result = self.master.run_command(cmd, raiseonerr=False)
+        result = self.master.run_command(
+            [
+                self.master.ipaplatform.paths.IPA_CACERT_MANAGE,
+                "renew",
+                "--external-cert-file",
+                invalid_cert,
+                "--external-cert-file",
+                root_ca_fname,
+            ],
+            raiseonerr=False,
+        )
         assert result.returncode == 1
 
     def test_external_ca_with_too_small_key(self):
         # reuse the existing deployment and renewal CSR
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
-            self.master, paths.IPA_CA_CSR, ROOT_CA, IPA_CA, key_size=1024)
+            self.master,
+            self.master.ipaplatform.paths.IPA_CA_CSR,
+            ROOT_CA,
+            IPA_CA,
+            key_size=1024,
+        )
 
-        cmd = [
-            paths.IPA_CACERT_MANAGE, 'renew',
-            '--external-cert-file', ipa_ca_fname,
-            '--external-cert-file', root_ca_fname,
-        ]
-        result = self.master.run_command(cmd, raiseonerr=False)
+        result = self.master.run_command(
+            [
+                self.master.ipaplatform.paths.IPA_CACERT_MANAGE,
+                "renew",
+                "--external-cert-file",
+                ipa_ca_fname,
+                "--external-cert-file",
+                root_ca_fname,
+            ],
+            raiseonerr=False,
+        )
         assert result.returncode == 1
 
 
@@ -411,8 +473,11 @@ class TestExternalCAInvalidIntermediate(IntegrationTest):
     def test_invalid_intermediate(self):
         install_server_external_ca_step1(self.master)
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
-            self.master, paths.ROOT_IPA_CSR, ROOT_CA, IPA_CA,
-            root_ca_path_length=0
+            self.master,
+            self.master.ipaplatform.paths.ROOT_IPA_CSR,
+            ROOT_CA,
+            IPA_CA,
+            root_ca_path_length=0,
         )
         result = install_server_external_ca_step2(
             self.master, ipa_ca_fname, root_ca_fname, raiseonerr=False
@@ -440,8 +505,13 @@ class TestExternalCAInstall(IntegrationTest):
         self.master.put_file_contents(root_ca_fname, root_ca)
 
         # Install new cert
-        self.master.run_command([paths.IPA_CACERT_MANAGE, 'install',
-                                 root_ca_fname])
+        self.master.run_command(
+            [
+                self.master.ipaplatform.paths.IPA_CACERT_MANAGE,
+                "install",
+                root_ca_fname,
+            ]
+        )
 
 
 class TestMultipleExternalCA(IntegrationTest):
@@ -455,10 +525,26 @@ class TestMultipleExternalCA(IntegrationTest):
     def test_master_install_ca1(self):
         install_server_external_ca_step1(self.master)
         # Sign CA, transport it to the host and get ipa a root ca paths.
-        root_ca_fname1 = tempfile.mkdtemp(suffix='root_ca.crt', dir=paths.TMP)
-        ipa_ca_fname1 = tempfile.mkdtemp(suffix='ipa_ca.crt', dir=paths.TMP)
+        result = self.master.run_command(
+            [
+                "mktemp",
+                f"--tmpdir={self.master.ipaplatform.paths.TMP}",
+                "--suffix=root_ca.crt",
+            ]
+        )
+        root_ca_fname1 = result.stdout_text.rstrip()
+        result = self.master.run_command(
+            [
+                "mktemp",
+                f"--tmpdir={self.master.ipaplatform.paths.TMP}",
+                "--suffix=ipa_ca.crt",
+            ]
+        )
+        ipa_ca_fname1 = result.stdout_text.rstrip()
 
-        ipa_csr = self.master.get_file_contents(paths.ROOT_IPA_CSR)
+        ipa_csr = self.master.get_file_contents(
+            self.master.ipaplatform.paths.ROOT_IPA_CSR
+        )
 
         external_ca = ExternalCA()
         root_ca = external_ca.create_ca(cn='RootCA1')
@@ -470,19 +556,47 @@ class TestMultipleExternalCA(IntegrationTest):
                                          root_ca_fname1)
 
         cert_nick = "caSigningCert cert-pki-ca"
-        result = self.master.run_command([
-            'certutil', '-L', '-d', paths.PKI_TOMCAT_ALIAS_DIR,
-            '-n', cert_nick])
+        result = self.master.run_command(
+            [
+                "certutil",
+                "-L",
+                "-d",
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
+                "-n",
+                cert_nick,
+            ]
+        )
         assert "CN=RootCA1" in result.stdout_text
 
     def test_master_install_ca2(self):
-        root_ca_fname2 = tempfile.mkdtemp(suffix='root_ca.crt', dir=paths.TMP)
-        ipa_ca_fname2 = tempfile.mkdtemp(suffix='ipa_ca.crt', dir=paths.TMP)
+        result = self.master.run_command(
+            [
+                "mktemp",
+                f"--tmpdir={self.master.ipaplatform.paths.TMP}",
+                "--suffix=root_ca.crt",
+            ]
+        )
+        root_ca_fname2 = result.stdout_text.rstrip()
+        result = self.master.run_command(
+            [
+                "mktemp",
+                f"--tmpdir={self.master.ipaplatform.paths.TMP}",
+                "--suffix=ipa_ca.crt",
+            ]
+        )
+        ipa_ca_fname2 = result.stdout_text.rstrip()
 
-        self.master.run_command([
-            paths.IPA_CACERT_MANAGE, 'renew', '--external-ca'])
+        self.master.run_command(
+            [
+                self.master.ipaplatform.paths.IPA_CACERT_MANAGE,
+                "renew",
+                "--external-ca",
+            ]
+        )
 
-        ipa_csr = self.master.get_file_contents(paths.IPA_CA_CSR)
+        ipa_csr = self.master.get_file_contents(
+            self.master.ipaplatform.paths.IPA_CA_CSR
+        )
 
         external_ca = ExternalCA()
         root_ca = external_ca.create_ca(cn='RootCA2')
@@ -490,14 +604,28 @@ class TestMultipleExternalCA(IntegrationTest):
         self.master.put_file_contents(root_ca_fname2, root_ca)
         self.master.put_file_contents(ipa_ca_fname2, ipa_ca)
         # Step 2 of ipa-server-install.
-        self.master.run_command([paths.IPA_CACERT_MANAGE, 'renew',
-                                 '--external-cert-file', ipa_ca_fname2,
-                                 '--external-cert-file', root_ca_fname2])
+        self.master.run_command(
+            [
+                self.master.ipaplatform.paths.IPA_CACERT_MANAGE,
+                "renew",
+                "--external-cert-file",
+                ipa_ca_fname2,
+                "--external-cert-file",
+                root_ca_fname2,
+            ]
+        )
 
         cert_nick = "caSigningCert cert-pki-ca"
-        result = self.master.run_command([
-            'certutil', '-L', '-d', paths.PKI_TOMCAT_ALIAS_DIR,
-            '-n', cert_nick])
+        result = self.master.run_command(
+            [
+                "certutil",
+                "-L",
+                "-d",
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
+                "-n",
+                cert_nick,
+            ]
+        )
         assert "CN=RootCA2" in result.stdout_text
 
 
@@ -518,7 +646,9 @@ def _test_invalid_profile(master, profile):
 def _test_valid_profile(master, profile_cls, profile):
     result = _step1_profile(master, profile)
     assert result.returncode == 0
-    ipa_csr = master.get_file_contents(paths.ROOT_IPA_CSR)
+    ipa_csr = master.get_file_contents(
+        master.ipaplatform.paths.ROOT_IPA_CSR
+    )
     check_mscs_extension(ipa_csr, profile_cls(profile))
 
 

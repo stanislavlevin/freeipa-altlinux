@@ -20,7 +20,6 @@
 import re
 
 from ipalib.constants import IPAAPI_USER
-from ipaplatform.paths import paths
 from ipaplatform.constants import constants
 
 from ipatests.create_external_ca import ExternalCA
@@ -156,7 +155,7 @@ class TestAdvice(IntegrationTest):
         finally:
             self.master.run_command(['rm', '-f', ca_file])
         sssd_conf = self.master.get_file_contents(
-            paths.SSSD_CONF, encoding='utf-8'
+            self.master.ipaplatform.paths.SSSD_CONF, encoding='utf-8'
         )
         assert constants.HTTPD_USER in sssd_conf
         assert IPAAPI_USER in sssd_conf

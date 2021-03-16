@@ -18,7 +18,6 @@ from cryptography.hazmat.primitives.twofactor.hotp import HOTP
 from cryptography.hazmat.primitives.twofactor.totp import TOTP
 
 from ipatests.test_integration.base import IntegrationTest
-from ipaplatform.paths import paths
 from ipatests.pytest_ipa.integration import tasks
 
 
@@ -107,9 +106,13 @@ def ssh_2f(hostname, username, answers_dict, port=22):
 
 
 def set_sssd_conf(host, add_contents):
-    contents = host.get_file_contents(paths.SSSD_CONF, encoding="utf-8")
+    contents = host.get_file_contents(
+        host.ipaplatform.paths.SSSD_CONF, encoding="utf-8"
+    )
     file_contents = contents + add_contents
-    host.put_file_contents(paths.SSSD_CONF, file_contents)
+    host.put_file_contents(
+        host.ipaplatform.paths.SSSD_CONF, file_contents
+    )
     tasks.clear_sssd_cache(host)
 
 
@@ -235,7 +238,9 @@ class TestOTPToken(IntegrationTest):
 
         master = self.master
         USER1 = 'sshuser1'
-        sssd_conf_backup = tasks.FileBackup(master, paths.SSSD_CONF)
+        sssd_conf_backup = tasks.FileBackup(
+            master, master.ipaplatform.paths.SSSD_CONF
+        )
         first_prompt = 'Please enter password + OTP token value:'
         add_contents = textwrap.dedent('''
             [prompting/2fa/sshd]
@@ -280,7 +285,9 @@ class TestOTPToken(IntegrationTest):
 
         master = self.master
         USER2 = 'sshuser2'
-        sssd_conf_backup = tasks.FileBackup(master, paths.SSSD_CONF)
+        sssd_conf_backup = tasks.FileBackup(
+            master, master.ipaplatform.paths.SSSD_CONF
+        )
         first_prompt = 'Enter first factor:'
         second_prompt = 'Enter second factor:'
         add_contents = textwrap.dedent('''

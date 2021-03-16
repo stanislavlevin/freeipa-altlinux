@@ -181,8 +181,10 @@ class TestClientInstallation(IntegrationTest):
                 return False
             return True
 
-        sysrestore_state_file = os.path.join(paths.IPA_CLIENT_SYSRESTORE,
-                                             "sysrestore.state")
+        sysrestore_state_file = os.path.join(
+            self.client.ipaplatform.paths.IPA_CLIENT_SYSRESTORE,
+            "sysrestore.state"
+        )
         content = self.client.get_file_contents(sysrestore_state_file,
                                                 encoding='utf-8')
         lines = [line.rstrip() for line in content.split('\n') if keep(line)]

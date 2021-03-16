@@ -10,7 +10,6 @@ import re
 import time
 
 import logging
-from ipaplatform.paths import paths
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.test_integration.test_caless import CALessBase, ipa_certs_cleanup
@@ -107,8 +106,14 @@ class TestIpaCertFix(IntegrationTest):
         expire_cert_critical(self.master)
         # pki must be stopped in order to edit CS.cfg
         self.master.run_command(['ipactl', 'stop'])
-        self.master.run_command(['sed', '-i', r'/ca\.sslserver\.certreq=/d',
-                                 paths.CA_CS_CFG_PATH])
+        self.master.run_command(
+            [
+                "sed",
+                "-i",
+                r"/ca\.sslserver\.certreq=/d",
+                self.master.ipaplatform.paths.CA_CS_CFG_PATH,
+            ]
+        )
         # dirsrv needs to be up in order to run ipa-cert-fix
         self.master.run_command(['ipactl', 'start',
                                  '--ignore-service-failures'])
@@ -116,9 +121,16 @@ class TestIpaCertFix(IntegrationTest):
         # It's the call to getcert resubmit that creates the CSR in certmonger.
         # In normal operations it would be launched automatically when the
         # expiration date is near but in the test we force the CSR creation.
-        self.master.run_command(['getcert', 'resubmit',
-                                 '-n', 'Server-Cert cert-pki-ca',
-                                 '-d', paths.PKI_TOMCAT_ALIAS_DIR])
+        self.master.run_command(
+            [
+                "getcert",
+                "resubmit",
+                "-n",
+                "Server-Cert cert-pki-ca",
+                "-d",
+                self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_DIR,
+            ]
+        )
         # Wait a few secs
         time.sleep(3)
 

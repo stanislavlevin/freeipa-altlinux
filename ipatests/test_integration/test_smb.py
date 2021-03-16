@@ -18,7 +18,6 @@ import pytest
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipaplatform.osinfo import osinfo
-from ipaplatform.paths import paths
 from ipatests.pytest_ipa.integration import skip_if_fips
 
 
@@ -88,16 +87,19 @@ class TestSMB(IntegrationTest):
         # apply selinux context only if selinux is enabled
         if tasks.is_selinux_enabled(smbserver):
             smbserver.run_command(['chcon', '-t', 'samba_share_t', share_path])
-        with tasks.FileBackup(smbserver, paths.SMB_CONF):
+        with tasks.FileBackup(smbserver, smbserver.ipaplatform.paths.SMB_CONF):
             smb_conf = smbserver.get_file_contents(
-                paths.SMB_CONF, encoding='utf-8')
+                smbserver.ipaplatform.paths.SMB_CONF, encoding="utf-8"
+            )
             smb_conf += textwrap.dedent('''
             [{name}]
                 path = {path}
                 writable = yes
                 browsable=yes
             '''.format(name=share_name, path=share_path))
-            smbserver.put_file_contents(paths.SMB_CONF, smb_conf)
+            smbserver.put_file_contents(
+                smbserver.ipaplatform.paths.SMB_CONF, smb_conf
+            )
             smbserver.systemctl.restart("smb")
             wait_smbd_functional(smbserver)
             yield {
@@ -255,8 +257,12 @@ class TestSMB(IntegrationTest):
         replacement = {principal: alias}
         tmpname = tasks.create_temp_file(self.smbserver, create_file=False)
         try:
-            copier.copy_keys(paths.SAMBA_KEYTAB, tmpname, principal=principal,
-                             replacement=replacement)
+            copier.copy_keys(
+                self.smbserver.ipaplatform.paths.SAMBA_KEYTAB,
+                tmpname,
+                principal=principal,
+                replacement=replacement,
+            )
             self.smbserver.run_command(['kinit', '-kt', tmpname, netbiosname])
         finally:
             self.smbserver.run_command(['rm', '-f', tmpname])
@@ -346,7 +352,10 @@ class TestSMB(IntegrationTest):
         # We can do so because Samba and GSSAPI libraries
         # are present there
         print_pac = self.master.get_file_contents(
-            os.path.join(paths.LIBEXEC_IPA_DIR, "ipa-print-pac"))
+            os.path.join(
+                self.master.ipaplatform.paths.LIBEXEC_IPA_DIR, "ipa-print-pac"
+            )
+        )
         result = self.smbserver.run_command(['mktemp'])
         tmpname = result.stdout_text.strip()
         self.smbserver.put_file_contents(tmpname, print_pac)
