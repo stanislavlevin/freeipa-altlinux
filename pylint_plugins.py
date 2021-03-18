@@ -570,3 +570,121 @@ AstroidBuilder(MANAGER).string_build(
     """
     )
 )
+
+AstroidBuilder(MANAGER).string_build(
+    textwrap.dedent(
+        """\
+    from ipatests.pytest_ipa.integration.host_ipaplatform import (
+        HostPlatformPaths
+    )
+
+    HostPlatformPaths.BIN_CURL=""
+    HostPlatformPaths.CA_CRT=""
+    HostPlatformPaths.CA_CS_CFG_PATH=""
+    HostPlatformPaths.CERTMONGER_REQUESTS_DIR=""
+    HostPlatformPaths.CERTUTIL=""
+    HostPlatformPaths.CHRONY_CONF=""
+    HostPlatformPaths.CRYPTO_POLICY_OPENSSLCNF_FILE=""
+    HostPlatformPaths.DNSSEC_TRUSTED_KEY=""
+    HostPlatformPaths.DOGTAG_ADMIN_P12=""
+    HostPlatformPaths.DOGTAG_IPA_CA_RENEW_AGENT_SUBMIT=""
+    HostPlatformPaths.DSCTL=""
+    HostPlatformPaths.ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE=""
+    HostPlatformPaths.GETENFORCE=""
+    HostPlatformPaths.HOSTS=""
+    HostPlatformPaths.HTTP_KEYTAB=""
+    HostPlatformPaths.HTTPD_CERT_FILE=""
+    HostPlatformPaths.HTTPD_IPA_CONF=""
+    HostPlatformPaths.HTTPD_KEY_FILE=""
+    HostPlatformPaths.HTTPD_PASSWD_FILE_FMT=""
+    HostPlatformPaths.HTTPD_SSL_CONF=""
+    HostPlatformPaths.IPA_CA_CRT=""
+    HostPlatformPaths.IPA_CA_CSR=""
+    HostPlatformPaths.IPA_CACERT_MANAGE=""
+    HostPlatformPaths.IPA_CCACHES=""
+    HostPlatformPaths.IPA_CERTUPDATE=""
+    HostPlatformPaths.IPA_CLIENT_SYSRESTORE=""
+    HostPlatformPaths.IPA_CUSTODIA_CHECK=""
+    HostPlatformPaths.IPA_CUSTODIA_CONF=""
+    HostPlatformPaths.IPA_CUSTODIA_KEYS=""
+    HostPlatformPaths.IPA_GETCERT=""
+    HostPlatformPaths.IPA_NSSDB_PWDFILE_TXT=""
+    HostPlatformPaths.IPA_NSSDB_DIR=""
+    HostPlatformPaths.IPACLIENT_INSTALL_LOG=""
+    HostPlatformPaths.IPACLIENT_UNINSTALL_LOG=""
+    HostPlatformPaths.IPASERVER_INSTALL_LOG=""
+    HostPlatformPaths.KDC_CERT=""
+    HostPlatformPaths.KDCPROXY_CONFIG=""
+    HostPlatformPaths.KRB5_CONF=""
+    HostPlatformPaths.KRB5_KEYTAB=""
+    HostPlatformPaths.LDAPPASSWD=""
+    HostPlatformPaths.LIBEXEC_IPA_DIR=""
+    HostPlatformPaths.NAMED_CONF=""
+    HostPlatformPaths.NAMED_CUSTOM_CONF=""
+    HostPlatformPaths.NAMED_CUSTOM_OPTIONS_CONF=""
+    HostPlatformPaths.NAMED_CRYPTO_POLICY_FILE=""
+    HostPlatformPaths.NAMED_LOGGING_OPTIONS_CONF=""
+    HostPlatformPaths.NSS_DB_DIR=""
+    HostPlatformPaths.OPENLDAP_LDAP_CONF=""
+    HostPlatformPaths.OPENSSL=""
+    HostPlatformPaths.OPENSSL_CERTS_DIR=""
+    HostPlatformPaths.OPENSSL_DIR=""
+    HostPlatformPaths.OPENSSL_PRIVATE_DIR=""
+    HostPlatformPaths.PKI_CA_PUBLISH_DIR=""
+    HostPlatformPaths.PKI_TOMCAT_ALIAS_DIR=""
+    HostPlatformPaths.PKI_TOMCAT_ALIAS_PWDFILE_TXT=""
+    HostPlatformPaths.RA_AGENT_PEM=""
+    HostPlatformPaths.RESOLV_CONF=""
+    HostPlatformPaths.ROOT_IPA_CSR=""
+    HostPlatformPaths.SAMBA_KEYTAB=""
+    HostPlatformPaths.SELINUXENABLED=""
+    HostPlatformPaths.SEMODULE=""
+    HostPlatformPaths.SMB_CONF=""
+    HostPlatformPaths.SSS_SSH_AUTHORIZEDKEYS=""
+    HostPlatformPaths.SSSD_CONF=""
+    HostPlatformPaths.SYSRESTORE=""
+    HostPlatformPaths.TMP=""
+    HostPlatformPaths.VAR_LIB_PKI_TOMCAT_DIR=""
+    HostPlatformPaths.VAR_LIB_SLAPD_INSTANCE_DIR_TEMPLATE=""
+    HostPlatformPaths.VAR_LOG_HTTPD_ERROR=""
+    HostPlatformPaths.VAR_LOG_DIRSRV_INSTANCE_TEMPLATE=""
+    HostPlatformPaths.VAR_LOG_SSSD_DIR=""
+    """
+    )
+)
+
+AstroidBuilder(MANAGER).string_build(
+    textwrap.dedent(
+        """\
+    from ipatests.pytest_ipa.integration.host_ipaplatform import (
+        HostPlatformOSInfo
+    )
+    HostPlatformOSInfo.name = ""
+    HostPlatformOSInfo.platform = ""
+    HostPlatformOSInfo.id = ""
+    HostPlatformOSInfo.id_like = ""
+    HostPlatformOSInfo.version = ""
+    HostPlatformOSInfo.version_number = list()
+    HostPlatformOSInfo.platform_ids = list()
+    HostPlatformOSInfo.container = ""
+    """
+    )
+)
+
+AstroidBuilder(MANAGER).string_build(
+    textwrap.dedent(
+        """\
+    from ipatests.pytest_ipa.integration.host_ipaplatform import (
+        HostPlatformConstants
+    )
+    HostPlatformConstants.HTTPD_USER = ""
+    HostPlatformConstants.IPAAPI_USER = ""
+    HostPlatformConstants.DEFAULT_SHELL = ""
+    HostPlatformConstants.DEFAULT_ADMIN_SHELL = ""
+    HostPlatformConstants.WSGI_PROCESSES = 0
+    HostPlatformConstants.DS_USER = ""
+    HostPlatformConstants.DS_GROUP = ""
+    HostPlatformConstants.SELINUX_USERMAP_ORDER = ""
+    """
+    )
+)
