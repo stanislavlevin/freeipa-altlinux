@@ -80,10 +80,16 @@ class Host(pytest_multihost.host.Host):
         )
         self._fips_mode = None
         self._userspace_fips = False
-        self.resolver = resolver(self)
         self._ipaplatform = None
         self._systemctl = None
         self._ds_serverid = None
+        self._resolver = None
+
+    @property
+    def resolver(self):
+        if self._resolver is None:
+            self._resolver = resolver(self)
+        return self._resolver
 
     @property
     def ipaplatform(self):
