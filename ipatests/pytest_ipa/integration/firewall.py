@@ -230,11 +230,8 @@ class Firewall(FirewallBase):
     """
     def __init__(self, host):
         """Initialize with host where firewall changes should be applied"""
-        # break circular dependency
-        from .tasks import get_platform
-
         self.host = host
-        platform = get_platform(host)
+        platform = host.ipaplatform.osinfo.platform
 
         firewalls = {
             'rhel': FirewallD,

@@ -25,7 +25,6 @@ from ipalib.constants import IPA_CA_RECORD
 from ipalib.sysrestore import SYSRESTORE_STATEFILE, SYSRESTORE_INDEXFILE
 from ipapython.dn import DN
 from ipaplatform.constants import constants
-from ipaplatform.osinfo import osinfo
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks as platformtasks
 from ipapython import ipautil
@@ -1119,7 +1118,7 @@ class TestInstallMaster(IntegrationTest):
             "python3-ipaserver"
         ]
 
-        if osinfo.id == 'fedora':
+        if self.master.ipaplatform.osinfo.id == "fedora":
             args.extend([
                 "freeipa-client",
                 "freeipa-client-common",
@@ -1368,7 +1367,7 @@ class TestInstallMaster(IntegrationTest):
 
         https://pagure.io/freeipa/issue/4011
         """
-        if osinfo.id == 'fedora':
+        if self.master.ipaplatform.osinfo.id == "fedora":
             package_name = 'freeipa-server-trust-ad'
         else:
             package_name = 'ipa-server-trust-ad'

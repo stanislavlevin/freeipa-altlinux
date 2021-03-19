@@ -2447,21 +2447,12 @@ def get_logsize(host, logfile):
     return logsize
 
 
-def get_platform(host):
-    result = host.run_command([
-        'python3', '-c',
-        'from ipaplatform.osinfo import OSInfo; print(OSInfo().platform)'
-    ], raiseonerr=False)
-    assert result.returncode == 0
-    return result.stdout_text.strip()
-
-
 def install_packages(host, pkgs):
     """Install packages on a remote host.
     :param host: the host where the installation takes place
     :param pkgs: packages to install, provided as a list of strings
     """
-    platform = get_platform(host)
+    platform = host.ipaplatform.osinfo.platform
     if platform in ('rhel', 'fedora'):
         install_cmd = ['/usr/bin/dnf', 'install', '-y']
     elif platform in ('ubuntu'):
@@ -2481,7 +2472,7 @@ def download_packages(host, pkgs):
     Returns the temporary directory where the packages are.
     The caller is responsible for cleanup.
     """
-    platform = get_platform(host)
+    platform = host.ipaplatform.osinfo.platform
     tmpdir = os.path.join('/tmp', str(uuid.uuid4()))
     # Only supports RHEL 8+ and Fedora for now
     if platform in ('rhel', 'fedora'):
@@ -2502,7 +2493,7 @@ def uninstall_packages(host, pkgs, nodeps=False):
     :param pkgs: packages to uninstall, provided as a list of strings.
     :param nodeps: ignore dependencies (dangerous!).
     """
-    platform = get_platform(host)
+    platform = host.ipaplatform.osinfo.platform
     if platform not in ('rhel', 'fedora', 'ubuntu'):
         raise ValueError('uninstall_packages: unknown platform %s' % platform)
     if nodeps:
@@ -2634,7 +2625,7 @@ def get_healthcheck_version(host):
     """
     Function to get healthcheck version on fedora and rhel
     """
-    platform = get_platform(host)
+    platform = host.ipaplatform.osinfo.platform
     if platform in ("rhel", "fedora"):
         cmd = host.run_command(
             ["rpm", "-qa", "--qf", "%{VERSION}", "*ipa-healthcheck"]
@@ -2814,7 +2805,7 @@ def run_ssh_cmd(
 
 
 def is_package_installed(host, pkg):
-    platform = get_platform(host)
+    platform = host.ipaplatform.osinfo.platform
     if platform in ('rhel', 'fedora'):
         result = host.run_command(
             ['rpm', '-q', pkg], raiseonerr=False
