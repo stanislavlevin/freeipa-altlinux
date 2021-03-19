@@ -9,8 +9,6 @@ import functools
 
 import pytest
 
-from ipaplatform.constants import constants as platformconstants
-
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration import fips
@@ -47,7 +45,6 @@ class BaseTestTrust(IntegrationTest):
     upn_password = 'Secret123456'
 
     shared_secret = 'qwertyuiopQq!1'
-    default_shell = platformconstants.DEFAULT_SHELL
 
     @classmethod
     def install(cls, mh):
@@ -71,6 +68,7 @@ class BaseTestTrust(IntegrationTest):
         cls.srv_gc_record_name = \
             '_ldap._tcp.Default-First-Site-Name._sites.gc._msdcs'
         cls.srv_gc_record_value = '0 100 389 {}.'.format(cls.master.hostname)
+        cls.default_shell = cls.master.ipaplatform.constants.DEFAULT_SHELL
 
     @classmethod
     def check_sid_generation(cls):

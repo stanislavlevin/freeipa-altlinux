@@ -25,7 +25,6 @@ import re
 import contextlib
 import pytest
 
-from ipaplatform.constants import constants
 from ipaplatform.tasks import tasks as platformtasks
 from ipapython.dn import DN
 from ipapython import ipautil
@@ -725,7 +724,10 @@ class TestUserRootFilesOwnershipPermission(IntegrationTest):
                 "{}/ldif/".format(ds_varlib_instance),
             ]
         )
-        expected = '{}:{}'.format(constants.DS_USER, constants.DS_GROUP)
+        expected = '{}:{}'.format(
+            self.master.ipaplatform.constants.DS_USER,
+            self.master.ipaplatform.constants.DS_GROUP,
+        )
         assert expected in cmd.stdout_text
 
         # also check of access rights are set to 644.

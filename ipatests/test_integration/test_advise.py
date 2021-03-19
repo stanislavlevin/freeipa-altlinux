@@ -19,9 +19,6 @@
 
 import re
 
-from ipalib.constants import IPAAPI_USER
-from ipaplatform.constants import constants
-
 from ipatests.create_external_ca import ExternalCA
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
@@ -157,8 +154,8 @@ class TestAdvice(IntegrationTest):
         sssd_conf = self.master.get_file_contents(
             self.master.ipaplatform.paths.SSSD_CONF, encoding='utf-8'
         )
-        assert constants.HTTPD_USER in sssd_conf
-        assert IPAAPI_USER in sssd_conf
+        assert self.master.ipaplatform.constants.HTTPD_USER in sssd_conf
+        assert self.master.ipaplatform.constants.IPAAPI_USER in sssd_conf
 
     def test_advice_config_client_for_smart_card_auth(self):
         advice_id = 'config_client_for_smart_card_auth'

@@ -24,7 +24,6 @@ from ipalib.constants import DOMAIN_LEVEL_0
 from ipalib.constants import IPA_CA_RECORD
 from ipalib.sysrestore import SYSRESTORE_STATEFILE, SYSRESTORE_INDEXFILE
 from ipapython.dn import DN
-from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks as platformtasks
 from ipapython import ipautil
@@ -1000,7 +999,7 @@ class TestInstallMaster(IntegrationTest):
         # check the process count
         cmd = self.master.run_command('ps -eF')
         wsgi_count = cmd.stdout_text.count('wsgi:ipa')
-        assert constants.WSGI_PROCESSES == wsgi_count
+        assert self.master.ipaplatform.constants.WSGI_PROCESSES == wsgi_count
 
     def test_error_for_yubikey(self):
         """ Test error when yubikey hardware not present

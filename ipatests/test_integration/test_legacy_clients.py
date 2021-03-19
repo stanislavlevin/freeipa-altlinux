@@ -27,8 +27,6 @@ import re
 
 import pytest
 
-from ipaplatform.constants import constants as platformconstants
-
 from ipatests.pytest_ipa.integration import tasks
 
 # importing test_trust under different name to avoid nose executing the test
@@ -44,7 +42,6 @@ class BaseTestLegacyClient:
     advice_id = None
 
     homedir_template = "/home/{domain}/{username}"
-    default_shell = platformconstants.DEFAULT_SHELL
     required_extra_roles = ()
     optional_extra_roles = ()
 
@@ -92,9 +89,12 @@ class BaseTestLegacyClient:
         self.clear_sssd_caches()
         result = self.legacy_client.run_command(['getent', 'passwd', 'admin'])
 
+        default_admin_shell = (
+            self.legacy_client.ipaplatform.constants.DEFAULT_ADMIN_SHELL
+        )
         admin_regex = r"admin:\*:(\d+):(\d+):"\
                       r"Administrator:/home/admin:{}".format(
-                          platformconstants.DEFAULT_ADMIN_SHELL,
+                          default_admin_shell,
                       )
 
         assert re.search(admin_regex, result.stdout_text)
@@ -466,6 +466,10 @@ class BaseTestLegacyClient:
             cls.legacy_client.ipaplatform.paths.SSSD_CONF,
         ]:
             tasks.backup_file(cls.legacy_client, f)
+
+        cls.default_shell = (
+            cls.legacy_client.ipaplatform.constants.DEFAULT_SHELL
+        )
 
     @classmethod
     def uninstall(cls, mh):
