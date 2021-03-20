@@ -378,6 +378,39 @@ def integration_logs(class_integration_logs, request):
     collect_test_logs(request.node, method_logs, request.config)
 
 
+def process_hostmarkers(request):
+    for mark in request.node.iter_markers():
+        if mark.name in ["skip_if_hostplatform", "skip_if_hostcontainer"]:
+            hostattr = mark.kwargs.get("host")
+            if hostattr is None:
+                hostattr = mark.args[0]
+
+            hosts = getattr(request.cls, hostattr)
+            hostindex = mark.kwargs.get("hostindex")
+            if hostindex is not None:
+                host = hosts[int(hostindex)]
+            else:
+                host = hosts
+            reason = mark.kwargs["reason"]
+
+            if mark.name == "skip_if_hostplatform":
+                platform = mark.kwargs["platform"]
+                if platform in host.ipaplatform.osinfo.platform_ids:
+                    pytest.skip(
+                        f"{request.node.nodeid}: Skip test on remote host "
+                        f"'{host.hostname}' running on platform '{platform}': "
+                        f"{reason}"
+                    )
+            if mark.name == "skip_if_hostcontainer":
+                container = mark.kwargs["container"]
+                if container in ["any", host.ipaplatform.osinfo.container]:
+                    pytest.skip(
+                        f"{request.node.nodeid}: Skip test on remote host "
+                        f"'{host.hostname}' running in container '{container}'"
+                        f": {reason}"
+                    )
+
+
 @pytest.fixture(scope='class')
 def mh(request, class_integration_logs):
     """IPA's multihost fixture object
@@ -435,6 +468,11 @@ def mh(request, class_integration_logs):
         for domain in ad_domains:
             mh.ad_treedomains.extend(domain.hosts_by_role('ad_treedomain'))
 
+    add_compat_attrs(cls, mh)
+
+    # handle pytest marks which perform host checks *before* install
+    process_hostmarkers(request)
+
     cls.logs_to_collect = class_integration_logs.class_logs
 
     if logger.isEnabledFor(logging.INFO):
@@ -447,7 +485,6 @@ def mh(request, class_integration_logs):
         logger.info('Preparing host %s', host.hostname)
         tasks.prepare_host(host)
 
-    add_compat_attrs(cls, mh)
 
     def fin():
         del_compat_attrs(cls)

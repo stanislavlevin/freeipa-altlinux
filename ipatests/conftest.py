@@ -53,6 +53,20 @@ MARKERS = [
      '(ID and ID_LIKE)'),
     ('skip_if_container(type, reason): Skip test on container '
      '("any" or specific type)'),
+    (
+        "skip_if_hostplatform(host's attribute name within IntegrationTest "
+        "(for example, 'master', 'clients', 'replicas'), "
+        "index of host within hosts list if required(default: None), "
+        "platform name, reason): "
+        "Skip integration test on remote platform having ID or ID_LIKE"
+    ),
+    (
+        "skip_if_hostcontainer(host's attribute name within IntegrationTest "
+        "(for example, 'master', 'clients', 'replicas'), "
+        "index of host within hosts list if required(default: None), "
+        "container type, reason): "
+        "Skip integration test on remote container ('any' or specific type)"
+    ),
 ]
 
 
@@ -175,6 +189,42 @@ def pytest_runtest_setup(item):
                 if container in ('any', osinfo.container):
                     pytest.skip(
                         f"Skip test on '{container}' container type: {reason}")
+
+
+def pytest_runtest_call(item):
+    # process only own_markers to avoid double checking
+    # all the host markers have been handled in mh fixture before this hook
+    for mark in item.own_markers:
+        if mark.name in ["skip_if_hostplatform", "skip_if_hostcontainer"]:
+            hostattr = mark.kwargs.get("host")
+            if hostattr is None:
+                hostattr = mark.args[0]
+
+            hosts = getattr(item.cls, hostattr)
+            hostindex = mark.kwargs.get("hostindex")
+            if hostindex is not None:
+                host = hosts[int(hostindex)]
+            else:
+                host = hosts
+            reason = mark.kwargs["reason"]
+
+            if mark.name == "skip_if_hostplatform":
+                platform = mark.kwargs["platform"]
+                if platform in host.ipaplatform.osinfo.platform_ids:
+                    pytest.skip(
+                        f"{item.nodeid}: Skip test on remote host "
+                        f"'{host.hostname}' running on platform '{platform}': "
+                        f"{reason}"
+                    )
+
+            if mark.name == "skip_if_hostcontainer":
+                container = mark.kwargs["container"]
+                if container in ["any", host.ipaplatform.osinfo.container]:
+                    pytest.skip(
+                        f"{item.nodeid}: Skip test on remote host "
+                        f"'{host.hostname}' running in container '{container}'"
+                        f": {reason}"
+                    )
 
 
 @pytest.fixture
