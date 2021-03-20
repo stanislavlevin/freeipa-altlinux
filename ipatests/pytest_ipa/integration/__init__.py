@@ -28,14 +28,12 @@ import os
 import tempfile
 import shutil
 import re
-import functools
 
 import pytest
 from pytest_multihost import make_multihost_fixture
 
 from ipapython import ipautil
 from ipaplatform.paths import paths
-from . import fips
 from .config import Config
 from .env_config import get_global_config
 from . import tasks
@@ -380,7 +378,9 @@ def integration_logs(class_integration_logs, request):
 
 def process_hostmarkers(request):
     for mark in request.node.iter_markers():
-        if mark.name in ["skip_if_hostplatform", "skip_if_hostcontainer"]:
+        if mark.name in [
+            "skip_if_hostplatform", "skip_if_hostcontainer", "skip_if_hostfips"
+        ]:
             hostattr = mark.kwargs.get("host")
             if hostattr is None:
                 hostattr = mark.args[0]
@@ -408,6 +408,12 @@ def process_hostmarkers(request):
                         f"{request.node.nodeid}: Skip test on remote host "
                         f"'{host.hostname}' running in container '{container}'"
                         f": {reason}"
+                    )
+            if mark.name == "skip_if_hostfips":
+                if host.is_fips_mode:
+                    pytest.skip(
+                        f"{request.node.nodeid}: Skip test on remote host "
+                        f"'{host.hostname}' running in FIPS mode: {reason}"
                     )
 
 
@@ -538,18 +544,3 @@ def del_compat_attrs(cls):
         del cls.ad_subdomains
         del cls.ad_treedomains
     del cls.ad_domains
-
-
-def skip_if_fips(reason='Not supported in FIPS mode', host='master'):
-    if callable(reason):
-        raise TypeError('Invalid decorator usage, add "()"')
-
-    def decorator(test_method):
-        @functools.wraps(test_method)
-        def wrapper(instance, *args, **kwargs):
-            if fips.is_fips_enabled(getattr(instance, host)):
-                pytest.skip(reason)
-            else:
-                test_method(instance, *args, **kwargs)
-        return wrapper
-    return decorator

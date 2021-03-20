@@ -18,7 +18,6 @@ import pytest
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipaplatform.osinfo import osinfo
-from ipatests.pytest_ipa.integration import skip_if_fips
 
 
 def wait_smbd_functional(host):
@@ -406,7 +405,9 @@ class TestSMB(IntegrationTest):
             self.cleanup_mount(mountpoint)
             self.smbserver.run_command(['rm', '-f', test_file_server_path])
 
-    @skip_if_fips()
+    @pytest.mark.skip_if_hostfips(
+        "master", reason="Not supported in FIPS mode"
+    )
     def test_ntlm_authentication_with_auto_domain(self):
         """Repeatedly try to authenticate with username and password with
         automatic domain discovery.
@@ -422,7 +423,9 @@ class TestSMB(IntegrationTest):
 
         self.check_repeated_smb_mount(mount_options)
 
-    @skip_if_fips()
+    @pytest.mark.skip_if_hostfips(
+        "master", reason="Not supported in FIPS mode"
+    )
     def test_ntlm_authentication_with_upn_with_lowercase_domain(self):
         tasks.kdestroy_all(self.smbclient)
 
@@ -433,7 +436,9 @@ class TestSMB(IntegrationTest):
         )
         self.check_repeated_smb_mount(mount_options)
 
-    @skip_if_fips()
+    @pytest.mark.skip_if_hostfips(
+        "master", reason="Not supported in FIPS mode"
+    )
     def test_ntlm_authentication_with_upn_with_uppercase_domain(self):
         tasks.kdestroy_all(self.smbclient)
 

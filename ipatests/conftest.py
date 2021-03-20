@@ -67,6 +67,12 @@ MARKERS = [
         "container type, reason): "
         "Skip integration test on remote container ('any' or specific type)"
     ),
+    (
+        "skip_if_hostfips(host's attribute name within IntegrationTest "
+        "(for example, 'master', 'clients', 'replicas'), "
+        "index of host within hosts list if required(default: None), "
+        "reason): Skip integration test on remote host in FIPS mode"
+    ),
 ]
 
 
@@ -195,7 +201,9 @@ def pytest_runtest_call(item):
     # process only own_markers to avoid double checking
     # all the host markers have been handled in mh fixture before this hook
     for mark in item.own_markers:
-        if mark.name in ["skip_if_hostplatform", "skip_if_hostcontainer"]:
+        if mark.name in [
+            "skip_if_hostplatform", "skip_if_hostcontainer", "skip_if_hostfips"
+        ]:
             hostattr = mark.kwargs.get("host")
             if hostattr is None:
                 hostattr = mark.args[0]
@@ -224,6 +232,13 @@ def pytest_runtest_call(item):
                         f"{item.nodeid}: Skip test on remote host "
                         f"'{host.hostname}' running in container '{container}'"
                         f": {reason}"
+                    )
+
+            if mark.name == "skip_if_hostfips":
+                if host.is_fips_mode:
+                    pytest.skip(
+                        f"{item.nodeid}: Skip test on remote host "
+                        f"'{host.hostname}' running in FIPS mode: {reason}"
                     )
 
 
