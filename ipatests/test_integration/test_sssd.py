@@ -20,7 +20,6 @@ from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.tasks import clear_sssd_cache
 from ipatests.util import xfail_context
 from ipaplatform.tasks import tasks as platform_tasks
-from ipaplatform.osinfo import osinfo
 from ipapython.dn import DN
 
 
@@ -158,9 +157,6 @@ class TestSSSDWithAdTrust(IntegrationTest):
             sssd_conf_backup.restore()
             tasks.clear_sssd_cache(self.master)
 
-    @pytest.mark.xfail(
-        osinfo.id == 'fedora' and osinfo.version_number <= (29,),
-        reason='https://pagure.io/SSSD/sssd/issue/3978')
     @pytest.mark.parametrize('user', ['ad', 'fakeuser'])
     def test_is_user_filtered(self, user):
         """No lookup in data provider from 'filter_users' config option.
@@ -460,10 +456,6 @@ class TestSSSDWithAdTrust(IntegrationTest):
         # verify the user can be retrieved after re-enabling trustdomain
         self.master.run_command(['id', user])
 
-    @pytest.mark.xfail(
-        osinfo.id == 'fedora' and osinfo.version_number <= (31,),
-        reason='https://pagure.io/SSSD/sssd/issue/3721',
-    )
     def test_subdomain_lookup_with_certmaprule_containing_dn(self):
         """DN names on certmaprules should not break AD Trust lookups.
 

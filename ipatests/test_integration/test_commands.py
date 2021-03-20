@@ -1022,8 +1022,10 @@ class TestIPACommand(IntegrationTest):
         assert 'First name: %s' % (modfirst) in cmd.stdout_text
         assert 'Last name: %s' % (modlast) in cmd.stdout_text
 
-    @pytest.mark.skip_if_platform(
-        "debian", reason="Crypto policy is not supported on Debian"
+    @pytest.mark.skip_if_hostplatform(
+        "master",
+        platform="debian",
+        reason="Crypto policy is not supported on Debian",
     )
     def test_enabled_tls_protocols(self):
         """Check Apache has same TLS versions enabled as crypto policy

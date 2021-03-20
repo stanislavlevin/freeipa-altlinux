@@ -17,7 +17,6 @@ import pytest
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
-from ipaplatform.osinfo import osinfo
 
 
 def wait_smbd_functional(host):
@@ -331,9 +330,6 @@ class TestSMB(IntegrationTest):
         finally:
             self.cleanup_mount(mount_point)
 
-    @pytest.mark.skipif(
-        osinfo.id == 'fedora' and osinfo.version_number <= (31,),
-        reason='Test requires krb 1.18')
     def test_smb_service_s4u2self(self):
         """Test S4U2Self operation by IPA service
            against both AD and IPA users

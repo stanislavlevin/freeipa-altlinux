@@ -6,7 +6,6 @@ from __future__ import absolute_import
 
 import pytest
 
-from ipaplatform.osinfo import osinfo
 from ipaplatform.tasks import tasks as platformtasks
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
@@ -72,9 +71,6 @@ class TestUserPermissions(IntegrationTest):
     @pytest.mark.skipif(
         not platformtasks.is_selinux_enabled(),
         reason="Test needs SELinux enabled")
-    @pytest.mark.xfail(
-        osinfo.id == 'fedora' and osinfo.version_number <= (28,),
-        reason='sssd ticket 3819', strict=True)
     def test_selinux_user_optimized(self):
         """
         Check that SELinux login context is set on first login for the
