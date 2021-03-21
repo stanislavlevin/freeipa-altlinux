@@ -24,7 +24,6 @@ from ipalib.constants import DOMAIN_LEVEL_0
 from ipalib.constants import IPA_CA_RECORD
 from ipalib.sysrestore import SYSRESTORE_STATEFILE, SYSRESTORE_INDEXFILE
 from ipapython.dn import DN
-from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks as platformtasks
 from ipapython import ipautil
 from ipatests.pytest_ipa.integration import tasks
@@ -1219,8 +1218,10 @@ class TestInstallMaster(IntegrationTest):
             ]
         )
 
-    @pytest.mark.skipif(
-        paths.SEMODULE is None, reason="test requires semodule command"
+    @pytest.mark.skip_if_host(
+        "master",
+        condition_cb=lambda host: host.ipaplatform.paths.SEMODULE is None,
+        reason="test requires semodule command",
     )
     def test_ipa_selinux_policy(self):
         # check that freeipa-selinux's policy module is loaded and
