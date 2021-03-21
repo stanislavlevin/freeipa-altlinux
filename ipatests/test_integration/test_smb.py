@@ -83,7 +83,7 @@ class TestSMB(IntegrationTest):
         smbserver.run_command(['mkdir', share_path])
         smbserver.run_command(['chmod', '777', share_path])
         # apply selinux context only if selinux is enabled
-        if tasks.is_selinux_enabled(smbserver):
+        if smbserver.is_selinux_enabled:
             smbserver.run_command(['chcon', '-t', 'samba_share_t', share_path])
         with tasks.FileBackup(smbserver, smbserver.ipaplatform.paths.SMB_CONF):
             smb_conf = smbserver.get_file_contents(

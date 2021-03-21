@@ -50,23 +50,6 @@ def check_acme_status(host, exp_status, timeout=60):
     return status
 
 
-def get_selinux_status(host):
-    """
-    Return the SELinux enforcing status.
-
-    Return True if enabled and enforcing, otherwise False
-    """
-    result = host.run_command(['/usr/sbin/selinuxenabled'], raiseonerr=False)
-    if result.returncode != 0:
-        return False
-
-    result = host.run_command(['/usr/sbin/getenforce'], raiseonerr=False)
-    if 'Enforcing' in result.stdout_text:
-        return True
-
-    return False
-
-
 def server_install_teardown(func):
     def wrapped(*args):
         master = args[0].master
@@ -307,11 +290,15 @@ class TestACME(CALessBase):
     # mod_md tests
     ##############
 
+    # mod_md requires its own SELinux policy to grant perms to
+    # maintaining ACME registration and cert state.
+    @pytest.mark.skip_if_host(
+        "clients",
+        hostindex=0,
+        condition_cb=lambda host: host.is_selinux_enforced,
+        reason="SELinux is enabled, this will fail",
+    )
     def test_mod_md(self):
-        if get_selinux_status(self.clients[0]):
-            # mod_md requires its own SELinux policy to grant perms to
-            # maintaining ACME registration and cert state.
-            raise pytest.skip("SELinux is enabled, this will fail")
         # write config
         self.clients[0].run_command(['mkdir', '-p', '/etc/httpd/conf.d'])
         self.clients[0].run_command(['mkdir', '-p', '/etc/httpd/md'])

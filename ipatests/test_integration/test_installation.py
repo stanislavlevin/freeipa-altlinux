@@ -24,7 +24,6 @@ from ipalib.constants import DOMAIN_LEVEL_0
 from ipalib.constants import IPA_CA_RECORD
 from ipalib.sysrestore import SYSRESTORE_STATEFILE, SYSRESTORE_INDEXFILE
 from ipapython.dn import DN
-from ipaplatform.tasks import tasks as platformtasks
 from ipapython import ipautil
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.env_config import get_global_config
@@ -1090,9 +1089,9 @@ class TestInstallMaster(IntegrationTest):
         assert "softhsm" not in result.stdout_text.lower()
         assert "opendnssec" not in result.stdout_text.lower()
 
-    @pytest.mark.skipif(
-        not platformtasks.is_selinux_enabled(),
-        reason="Test needs SELinux enabled")
+    @pytest.mark.skip_if_not_hostselinux(
+        "master", reason="Test needs SELinux enabled"
+    )
     def test_selinux_avcs(self):
         # Use journalctl instead of ausearch. The ausearch command is not
         # installed by default and journalctl gives us all AVCs.

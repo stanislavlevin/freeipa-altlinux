@@ -233,9 +233,9 @@ class TestBackupAndRestore(IntegrationTest):
             finally:
                 self.master.run_command(['userdel', 'ipatest_user1'])
 
-    @pytest.mark.skipif(
-        not platformtasks.is_selinux_enabled(),
-        reason="Test needs SELinux enabled")
+    @pytest.mark.skip_if_not_hostselinux(
+        "master", reason="Test needs SELinux enabled"
+    )
     def test_full_backup_and_restore_with_selinux_booleans_off(self):
         """regression test for https://fedorahosted.org/freeipa/ticket/4157"""
         with restore_checker(self.master):
