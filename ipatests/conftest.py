@@ -73,6 +73,14 @@ MARKERS = [
         "index of host within hosts list if required(default: None), "
         "reason): Skip integration test on remote host in FIPS mode"
     ),
+    (
+        "skip_if_host(host's attribute name within IntegrationTest "
+        "(for example, 'master', 'clients', 'replicas'), "
+        "index of host within hosts list if required(default: None), "
+        "condition callback, reason): "
+        "Skip integration test on remote host based on condition callback "
+        "result"
+    ),
 ]
 
 
@@ -202,7 +210,10 @@ def pytest_runtest_call(item):
     # all the host markers have been handled in mh fixture before this hook
     for mark in item.own_markers:
         if mark.name in [
-            "skip_if_hostplatform", "skip_if_hostcontainer", "skip_if_hostfips"
+            "skip_if_hostplatform",
+            "skip_if_hostcontainer",
+            "skip_if_hostfips",
+            "skip_if_host",
         ]:
             hostattr = mark.kwargs.get("host")
             if hostattr is None:
@@ -241,6 +252,13 @@ def pytest_runtest_call(item):
                         f"'{host.hostname}' running in FIPS mode: {reason}"
                     )
 
+            if mark.name == "skip_if_host":
+                condition_cb = mark.kwargs["condition_cb"]
+                if condition_cb(host):
+                    pytest.skip(
+                        f"{item.nodeid}: Skip test on remote host "
+                        f"'{host.hostname}': {reason}"
+                    )
 
 @pytest.fixture
 def tempdir(request):

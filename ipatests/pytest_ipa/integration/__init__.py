@@ -379,7 +379,10 @@ def integration_logs(class_integration_logs, request):
 def process_hostmarkers(request):
     for mark in request.node.iter_markers():
         if mark.name in [
-            "skip_if_hostplatform", "skip_if_hostcontainer", "skip_if_hostfips"
+            "skip_if_hostplatform",
+            "skip_if_hostcontainer",
+            "skip_if_hostfips",
+            "skip_if_host",
         ]:
             hostattr = mark.kwargs.get("host")
             if hostattr is None:
@@ -415,7 +418,13 @@ def process_hostmarkers(request):
                         f"{request.node.nodeid}: Skip test on remote host "
                         f"'{host.hostname}' running in FIPS mode: {reason}"
                     )
-
+            if mark.name == "skip_if_host":
+                condition_cb = mark.kwargs["condition_cb"]
+                if condition_cb(host):
+                    pytest.skip(
+                        f"{request.node.nodeid}: Skip test on remote host "
+                        f"'{host.hostname}': {reason}"
+                    )
 
 @pytest.fixture(scope='class')
 def mh(request, class_integration_logs):
