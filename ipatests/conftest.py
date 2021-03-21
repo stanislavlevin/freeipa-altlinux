@@ -193,7 +193,14 @@ def pytest_runtest_setup(item):
             if item.config.option.skip_ipaapi:
                 pytest.skip("Skip tests that needs an IPA API")
     if osinfo is not None:
+        tests_dir = item.nodeid.split(os.sep, 1)[0]
         for mark in item.iter_markers(name="skip_if_platform"):
+            if tests_dir == "test_integration":
+                raise ValueError(
+                    f"Marker '{mark.name}' is not intended for "
+                    f"test_integration. Please, consider host markers:\n"
+                    "ipa-run-tests --markers"
+                )
             platform = mark.kwargs.get("platform")
             if platform is None:
                 platform = mark.args[0]
@@ -201,6 +208,12 @@ def pytest_runtest_setup(item):
             if platform in osinfo.platform_ids:
                 pytest.skip(f"Skip test on platform {platform}: {reason}")
         for mark in item.iter_markers(name="skip_if_container"):
+            if tests_dir == "test_integration":
+                raise ValueError(
+                    f"Marker '{mark.name}' is not intended for "
+                    f"test_integration. Please, consider host markers:\n"
+                    "ipa-run-tests --markers"
+                )
             container = mark.kwargs.get("container")
             if container is None:
                 container = mark.args[0]
@@ -222,6 +235,12 @@ def pytest_runtest_call(item):
             "skip_if_not_hostselinux",
             "skip_if_host",
         ]:
+            tests_dir = item.nodeid.split(os.sep, 1)[0]
+            if tests_dir != "test_integration":
+                raise ValueError(
+                    f"Marker '{mark.name}' is intended only for "
+                    f"test_integration and can't be applied for '{tests_dir}'"
+                )
             hostattr = mark.kwargs.get("host")
             if hostattr is None:
                 hostattr = mark.args[0]
