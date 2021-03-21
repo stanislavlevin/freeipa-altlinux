@@ -382,6 +382,7 @@ def process_hostmarkers(request):
             "skip_if_hostplatform",
             "skip_if_hostcontainer",
             "skip_if_hostfips",
+            "skip_if_not_hostselinux",
             "skip_if_host",
         ]:
             hostattr = mark.kwargs.get("host")
@@ -417,6 +418,13 @@ def process_hostmarkers(request):
                     pytest.skip(
                         f"{request.node.nodeid}: Skip test on remote host "
                         f"'{host.hostname}' running in FIPS mode: {reason}"
+                    )
+            if mark.name == "skip_if_not_hostselinux":
+                if not host.is_selinux_enabled:
+                    pytest.skip(
+                        f"{request.node.nodeid}: Skip test on remote host "
+                        f"'{host.hostname}' not running in SELinux mode: "
+                        f"{reason}"
                     )
             if mark.name == "skip_if_host":
                 condition_cb = mark.kwargs["condition_cb"]

@@ -81,6 +81,12 @@ MARKERS = [
         "Skip integration test on remote host based on condition callback "
         "result"
     ),
+    (
+        "skip_if_not_hostselinux(host's attribute name within IntegrationTest "
+        "(for example, 'master', 'clients', 'replicas'), "
+        "index of host within hosts list if required(default: None), "
+        "reason): Skip integration test on remote host not at SELinux mode"
+    ),
 ]
 
 
@@ -213,6 +219,7 @@ def pytest_runtest_call(item):
             "skip_if_hostplatform",
             "skip_if_hostcontainer",
             "skip_if_hostfips",
+            "skip_if_not_hostselinux",
             "skip_if_host",
         ]:
             hostattr = mark.kwargs.get("host")
@@ -250,6 +257,14 @@ def pytest_runtest_call(item):
                     pytest.skip(
                         f"{item.nodeid}: Skip test on remote host "
                         f"'{host.hostname}' running in FIPS mode: {reason}"
+                    )
+
+            if mark.name == "skip_if_not_hostselinux":
+                if not host.is_selinux_enabled:
+                    pytest.skip(
+                        f"{item.nodeid}: Skip test on remote host "
+                        f"'{host.hostname}' not running in SELinux mode: "
+                        f"{reason}"
                     )
 
             if mark.name == "skip_if_host":
