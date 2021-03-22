@@ -19,7 +19,11 @@ from ipalib import x509
 from ipapython.dn import DN
 from ipapython.certdb import NSS_SQL_FILES
 from ipatests.pytest_ipa.integration import tasks
+
+# pylint: disable=ipa-forbidden-import
 from ipaserver.install.installutils import resolve_ip_addresses_nss
+# pylint: enable=ipa-forbidden-import
+
 from ipatests.test_integration.base import IntegrationTest
 from pkg_resources import parse_version
 from ipatests.test_integration.test_cert import get_certmonger_fs_id

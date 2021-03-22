@@ -643,6 +643,8 @@ AstroidBuilder(MANAGER).string_build(
     HostPlatformPaths.SSS_SSH_AUTHORIZEDKEYS=""
     HostPlatformPaths.SSSD_CONF=""
     HostPlatformPaths.SYSRESTORE=""
+    HostPlatformPaths.SYSUPGRADE_STATEFILE_DIR=""
+    HostPlatformPaths.SYSUPGRADE_STATEFILE_FILE=""
     HostPlatformPaths.TMP=""
     HostPlatformPaths.VAR_LIB_PKI_TOMCAT_DIR=""
     HostPlatformPaths.VAR_LIB_SLAPD_INSTANCE_DIR_TEMPLATE=""

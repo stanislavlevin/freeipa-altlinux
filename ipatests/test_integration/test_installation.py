@@ -29,7 +29,9 @@ from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.env_config import get_global_config
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.test_integration.test_caless import CALessBase, ipa_certs_cleanup
-from ipaserver.install import krainstance
+from ipaserver.install import (  # pylint: disable=ipa-forbidden-import
+    krainstance
+)
 
 config = get_global_config()
 

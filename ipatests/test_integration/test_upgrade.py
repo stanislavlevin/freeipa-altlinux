@@ -16,8 +16,9 @@ import pytest
 
 from ipapython.dn import DN
 from ipapython.ipautil import template_str
-from ipaserver.install import bindinstance
-from ipaserver.install.sysupgrade import STATEFILE_FILE
+from ipaserver.install import (  # pylint: disable=ipa-forbidden-import
+    bindinstance
+)
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 
@@ -81,7 +82,8 @@ def named_test_template(host):
 def clear_sysupgrade(host, *sections):
     # get state file
     statefile = os.path.join(
-        host.ipaplatform.paths.STATEFILE_DIR, STATEFILE_FILE
+        host.ipaplatform.paths.SYSUPGRADE_STATEFILE_DIR,
+        host.ipaplatform.paths.SYSUPGRADE_STATEFILE_FILE,
     )
     state = host.get_file_contents(statefile, encoding="utf-8")
     # parse it
