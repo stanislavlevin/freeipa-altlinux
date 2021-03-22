@@ -19,7 +19,6 @@ from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.tasks import clear_sssd_cache
 from ipatests.util import xfail_context
-from ipaplatform.tasks import tasks as platform_tasks
 from ipapython.dn import DN
 
 
@@ -321,10 +320,8 @@ class TestSSSDWithAdTrust(IntegrationTest):
         in group with same name of nonprivate ipa user and possix id, then
         lookup of aduser and group should be successful when cache is empty.
         """
-        cmd = self.master.run_command(['sssd', '--version'])
-        sssd_version = platform_tasks.parse_ipa_version(
-            cmd.stdout_text.strip())
-        if sssd_version <= platform_tasks.parse_ipa_version('2.2.2'):
+        sssd_version = tasks.get_sssd_version(self.master)
+        if sssd_version <= tasks.parse_version("2.2.2"):
             pytest.skip("Fix for https://pagure.io/SSSD/sssd/issue/4073 "
                         "unavailable with sssd-2.2.2")
         client = self.clients[0]

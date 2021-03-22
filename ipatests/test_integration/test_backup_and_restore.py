@@ -25,7 +25,6 @@ import re
 import contextlib
 import pytest
 
-from ipaplatform.tasks import tasks as platformtasks
 from ipapython.dn import DN
 from ipapython import ipautil
 from ipatests.test_integration.base import IntegrationTest
@@ -119,7 +118,7 @@ def check_pkcs11_modules(host):
     # Return a dictionary with key = filename, value = file content
     # containing all the PKCS11 modules modified by the installer
     result = dict()
-    for filename in platformtasks.get_pkcs11_modules():
+    for filename in host.ipaplatform.tasks.get_pkcs11_modules():
         assert host.transport.file_exists(filename)
         result[filename] = host.get_file_contents(filename)
     return result

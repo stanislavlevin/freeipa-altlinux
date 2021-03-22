@@ -31,7 +31,6 @@ from ipapython.certdb import get_ca_nickname
 from ipatests.test_integration.base import IntegrationTest
 
 from ipatests.pytest_ipa.integration import tasks
-from ipaplatform.tasks import tasks as platform_tasks
 from ipatests.create_external_ca import ExternalCA
 from ipatests.test_ipalib.test_x509 import good_pkcs7, badcert
 from ipapython.ipautil import realm_to_suffix, ipa_generate_password
@@ -945,10 +944,8 @@ class TestIPACommand(IntegrationTest):
         4. ssh from controller to master using the user created in step 3
         """
 
-        cmd = self.master.run_command(['sssd', '--version'])
-        sssd_version = platform_tasks.parse_ipa_version(
-            cmd.stdout_text.strip())
-        if sssd_version < platform_tasks.parse_ipa_version('2.2.0'):
+        sssd_version = tasks.get_sssd_version(self.master)
+        if sssd_version < tasks.parse_version("2.2.0"):
             pytest.xfail(reason="sssd 2.2.0 unavailable in F29 nightly")
 
         # add ldap_deref_threshold=0 to /etc/sssd/sssd.conf
