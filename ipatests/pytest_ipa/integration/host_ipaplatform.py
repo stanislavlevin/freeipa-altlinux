@@ -37,6 +37,37 @@ class HostPlatformKnownservices(HostPlatformNameSpace):
     pass
 
 
+class HostPlatformTasks:
+    def __init__(self, run_command):
+        self.run_command = run_command
+        self._get_pkcs11_modules = None
+
+    def get_pkcs11_modules(self):
+        if self._get_pkcs11_modules is None:
+            code = textwrap.dedent(
+                """\
+                    import base64
+                    import json
+
+                    from ipaplatform.tasks import tasks
+
+
+                    pkcs11_modules = tasks.get_pkcs11_modules()
+                    json_data = json.dumps(pkcs11_modules)
+                    json_base64 = base64.b64encode(
+                        json_data.encode("utf-8")
+                    ).decode("ascii")
+                    print(json_base64)
+                """
+            )
+            cmd = ["python3", "-c", code]
+            res = self.run_command(cmd, log_stdout=False)
+            json_data = base64.b64decode(res.stdout_bytes).decode("utf-8")
+            self._get_pkcs11_modules = json.loads(json_data)
+
+        return self._get_pkcs11_modules
+
+
 class HostIPAPlatform:
     """Expose locally remote ipaplatform"""
 
@@ -46,6 +77,7 @@ class HostIPAPlatform:
         self._constants = None
         self._knownservices = None
         self._osinfo = None
+        self._tasks = None
 
     @property
     def paths(self):
@@ -202,3 +234,9 @@ class HostIPAPlatform:
             )
 
         return self._knownservices
+
+    @property
+    def tasks(self):
+        if self._tasks is None:
+            self._tasks = HostPlatformTasks(self.run_command)
+        return self._tasks
