@@ -32,6 +32,7 @@ from .fips import (
     is_fips_enabled, enable_userspace_fips, disable_userspace_fips
 )
 from .host_ipaplatform import HostIPAPlatform
+from .host_systemctl import HostSystemctl
 from .transport import IPAOpenSSHTransport
 from .resolver import resolver
 
@@ -82,6 +83,7 @@ class Host(pytest_multihost.host.Host):
         self._userspace_fips = False
         self.resolver = resolver(self)
         self._ipaplatform = None
+        self._systemctl = None
 
     @property
     def ipaplatform(self):
@@ -92,6 +94,12 @@ class Host(pytest_multihost.host.Host):
     def invalidate_ipaplatform(self) -> None:
         """Invalidate ipaplatform cache, next call will re-read ipaplatform"""
         self._ipaplatform = None
+
+    @property
+    def systemctl(self):
+        if self._systemctl is None:
+            self._systemctl = HostSystemctl(self)
+        return self._systemctl
 
     @property
     def is_fips_mode(self):
