@@ -31,6 +31,7 @@ from ipapython import ipaldap
 from .fips import (
     is_fips_enabled, enable_userspace_fips, disable_userspace_fips
 )
+from .host_ipaplatform import HostIPAPlatform
 from .transport import IPAOpenSSHTransport
 from .resolver import resolver
 
@@ -80,6 +81,17 @@ class Host(pytest_multihost.host.Host):
         self._fips_mode = None
         self._userspace_fips = False
         self.resolver = resolver(self)
+        self._ipaplatform = None
+
+    @property
+    def ipaplatform(self):
+        if self._ipaplatform is None:
+            self._ipaplatform = HostIPAPlatform(self.run_command)
+        return self._ipaplatform
+
+    def invalidate_ipaplatform(self) -> None:
+        """Invalidate ipaplatform cache, next call will re-read ipaplatform"""
+        self._ipaplatform = None
 
     @property
     def is_fips_mode(self):
