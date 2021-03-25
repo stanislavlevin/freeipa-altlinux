@@ -253,7 +253,7 @@ endif
 	        $(PYTHON) -m pycodestyle --diff || exit $$?; \
 	    echo -e "\npylint"; \
 	    echo "------"; \
-	    PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON) -m pylint \
+	    PYTHONPATH=$(abspath $(top_srcdir)) pylint.py3 \
 	        --rcfile=$(top_srcdir)/pylintrc \
 	        --load-plugins pylint_plugins \
 	        $${FILES} || exit $$?; \
@@ -350,7 +350,7 @@ pylint: $(GENERATED_PYTHON_FILES) ipasetup.py python_scripts
 		-type f -exec grep -qsm1 '^#!.*\bpython' '{}' \; -print`; \
 	FILES=`echo -e "$${FILES}\n$(AZURE_PYTHON_SCRIPT_SUBDIR)"`; \
 	echo -e "Pylint on $(PYTHON) is running over files:\n$${FILES}\nPlease wait ...\n"; \
-	PYTHONPATH=$(top_srcdir) $(PYTHON) -m pylint \
+	PYTHONPATH=$(top_srcdir) pylint.py3 \
 		--rcfile=$(top_srcdir)/pylintrc \
 		--load-plugins pylint_plugins \
 		$${FILES}
