@@ -182,6 +182,13 @@ vms:
     tests:
     - test_integration/test_external_ca.py::TestSelfExternalSelf
 
+  # requires nothing, installs nothing
+  - container_job: hostplatform
+    containers:
+      replicas: 1
+    tests:
+    - test_integration/test_hostplatform.py
+
 - vm_jobs:
   - container_job: upgrade
     containers:
