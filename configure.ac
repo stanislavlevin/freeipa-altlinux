@@ -504,6 +504,34 @@ AC_ARG_ENABLE([i18ntests],
 AC_SUBST([i18ntests])
 AM_CONDITIONAL([WITH_POLINT], [test "x${enable_i18ntests}" == "xyes"])
 
+
+AC_ARG_ENABLE([mypy],
+              AS_HELP_STRING([--enable-mypy],
+                             [Require mypy. Default is autodetection with
+                              "python -m mypy".]),
+              [MYPY=$enableval],
+              [MYPY=check]
+)
+
+if test x$MYPY != xno; then
+    AC_MSG_CHECKING([for mypy])
+    $PYTHON -m mypy --version >/dev/null 2>&1
+    if test "$?" != "0"; then
+        if test x$MYPY = xcheck; then
+            MYPY=no
+            AC_MSG_NOTICE([cannot find optional mypy for $PYTHON])
+        else
+            AC_MSG_ERROR([cannot find mypy for $PYTHON])
+        fi
+    else
+        MYPY=yes
+        AC_MSG_RESULT([yes])
+    fi
+fi
+AC_SUBST([MYPY])
+AM_CONDITIONAL([WITH_MYPY], [test "x${MYPY}" != "xno"])
+
+
 AC_ARG_ENABLE([pylint],
 	    AS_HELP_STRING([--enable-pylint],
 			   [Require pylint. Default is autodetection with
@@ -687,6 +715,7 @@ echo "
         compiler:                 ${CC}
         cflags:                   ${CFLAGS}
         Python:                   ${PYTHON} (${PYTHON_VERSION})
+        mypy:                     ${MYPY}
         pylint:                   ${PYLINT}
         jslint:                   ${JSLINT}
         rpmlint:                  ${ENABLE_RPMLINT}

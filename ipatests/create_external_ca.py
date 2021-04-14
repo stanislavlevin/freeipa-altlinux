@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from __future__ import absolute_import, print_function
+from __future__ import annotations
 
 import argparse
 
@@ -27,6 +27,18 @@ from cryptography.hazmat.primitives import serialization
 
 import datetime
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Iterable, Optional
+
+    from cryptography.x509 import Name, Certificate, CertificateBuilder
+    from cryptography.x509.extensions import ExtensionType
+    from cryptography.hazmat.primitives.asymmetric.rsa import (
+        RSAPrivateKey,
+        RSAPublicKey,
+    )
+
 ISSUER_CN = 'example.test'
 
 
@@ -34,15 +46,17 @@ class ExternalCA:
     """Provide external CA for testing
     """
 
-    def __init__(self, days=365, key_size=None):
+    def __init__(
+        self, days: int = 365, key_size: Optional[int] = None
+    ) -> None:
         self.now = datetime.datetime.utcnow()
         self.delta = datetime.timedelta(days=days)
-        self.ca_key = None
-        self.ca_public_key = None
-        self.issuer = None
+        self.ca_key: Optional[RSAPrivateKey] = None
+        self.ca_public_key: Optional[RSAPublicKey] = None
+        self.issuer: Optional[Name] = None
         self.key_size = key_size or 2048
 
-    def create_ca_key(self):
+    def create_ca_key(self) -> None:
         """Create private and public key for CA
 
         Note: The test still creates 2048 although IPA CA uses 3072 bit RSA
@@ -56,20 +70,30 @@ class ExternalCA:
         )
         self.ca_public_key = self.ca_key.public_key()
 
-    def sign(self, builder):
+    def sign(self, builder: CertificateBuilder) -> Certificate:
+        assert self.ca_key is not None  # cast out Optional mypy#645
         return builder.sign(
             private_key=self.ca_key,
             algorithm=hashes.SHA256(),
             backend=default_backend(),
         )
 
-    def create_ca(self, cn=ISSUER_CN, path_length=None, extensions=()):
+    def create_ca(
+        self,
+        cn: str = ISSUER_CN,
+        path_length: Optional[int] = None,
+        extensions: Iterable[ExtensionType] = (),
+    ) -> bytes:
         """Create root CA.
 
         :returns: bytes -- Root CA in PEM format.
         """
-        if self.ca_key is None:
+        if self.ca_key is None or self.ca_public_key is None:
             self.create_ca_key()
+
+        assert self.ca_key is not None  # cast out Optional mypy#645
+        assert self.ca_public_key is not None  # cast out Optional mypy#645
+
         subject = self.issuer = x509.Name([
             x509.NameAttribute(NameOID.COMMON_NAME, str(cn)),
         ])
@@ -121,13 +145,18 @@ class ExternalCA:
 
         return cert.public_bytes(serialization.Encoding.PEM)
 
-    def sign_csr(self, ipa_csr, path_length=1):
+    def sign_csr(
+        self, ipa_csr: bytes, path_length: Optional[int] = 1
+    ) -> bytes:
         """Sign certificate CSR.
 
         :param ipa_csr: CSR in PEM format.
         :type ipa_csr: bytes.
         :returns: bytes -- Signed CA in PEM format.
         """
+        assert self.issuer is not None  # cast out Optional mypy#645
+        assert self.ca_public_key is not None  # cast out Optional mypy#645
+
         csr_tbs = x509.load_pem_x509_csr(ipa_csr, default_backend())
 
         csr_public_key = csr_tbs.public_key()
@@ -178,7 +207,7 @@ class ExternalCA:
         return cert.public_bytes(serialization.Encoding.PEM)
 
 
-def main():
+def main() -> None:
     IPA_CSR = '/root/ipa.csr'
     ROOT_CA = '/tmp/rootca.pem'
     IPA_CA = '/tmp/ipaca.pem'

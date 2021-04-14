@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 import re
 from contextlib import contextmanager
@@ -5,18 +7,25 @@ from contextlib import contextmanager
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import Host
+
 
 class TestResolverManager(IntegrationTest):
     topology = 'line'
     num_clients = 1
     invalid_resolver = '2.3.4.5'
+    client: Host
+    test_record: str
+    test_record_address = "1.2.3.4"
 
     @classmethod
     def install(cls, mh):
         test_record = 'test1234'
         cls.client = cls.clients[0]
         cls.test_record = '{}.{}'.format(test_record, cls.master.domain.name)
-        cls.test_record_address = '1.2.3.4'
 
         if cls.domain_level is not None:
             domain_level = cls.domain_level

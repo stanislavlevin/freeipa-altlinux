@@ -1,6 +1,7 @@
 #
 # Copyright (C) 2015  FreeIPA Contributors see COPYING for license
 #
+from __future__ import annotations
 
 import re
 
@@ -106,7 +107,9 @@ class TestTopologyOptions(IntegrationTest):
         tasks.uninstall_master(self.replicas[1])
         result5 = self.master.run_command(['ipa', 'topologysegment-find',
                                            DOMAIN_SUFFIX_NAME])
-        num_entries = self.noentries_re.search(result5.stdout_text).group(1)
+        num_entries_search = self.noentries_re.search(result5.stdout_text)
+        assert num_entries_search is not None  # cast out Optional mypy#645
+        num_entries = num_entries_search.group(1)
         assert(num_entries == "1"), "Incorrect number of entries displayed"
 
     def test_add_remove_segment(self):
@@ -125,6 +128,7 @@ class TestTopologyOptions(IntegrationTest):
                                             self.replicas[0],
                                             self.replicas[1])
         assert err == "", err
+        assert segment is not None  # cast out Optional mypy#645
         # Make sure the new segment is shown by `ipa topologysegment-find`
         result1 = self.master.run_command(['ipa', 'topologysegment-find',
                                            DOMAIN_SUFFIX_NAME]).stdout_text

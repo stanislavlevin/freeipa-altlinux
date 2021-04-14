@@ -1,6 +1,7 @@
 #
 # Copyright (C) 2020  FreeIPA Contributors see COPYING for license
 #
+from __future__ import annotations
 
 import time
 
@@ -16,6 +17,11 @@ from ipatests.test_integration.test_external_ca import (
     install_server_external_ca_step1,
     install_server_external_ca_step2,
 )
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import Host
 
 
 IPA_CA = "ipa_ca.crt"
@@ -60,7 +66,7 @@ def server_install_teardown(func):
     return wrapped
 
 
-def prepare_acme_client(master, client):
+def prepare_acme_client(master: Host, client: Host) -> str:
     # cache the acme service uri
     acme_host = f'{IPA_CA_RECORD}.{master.domain.name}'
     acme_server = f'https://{acme_host}/acme/directory'
@@ -144,6 +150,7 @@ class TestACME(CALessBase):
     """
     num_replicas = 1
     num_clients = 1
+    acme_server: str
 
     @classmethod
     def install(cls, mh):
@@ -225,6 +232,7 @@ class TestACME(CALessBase):
             except Exception as e:
                 exc = e
         else:
+            assert exc is not None  # cast out Optional mypy#645
             raise exc
 
     def test_centralize_acme_enable(self):
@@ -541,6 +549,7 @@ class TestACMEwithExternalCA(TestACME):
 class TestACMERenew(IntegrationTest):
 
     num_clients = 1
+    acme_server: str
 
     @classmethod
     def install(cls, mh):

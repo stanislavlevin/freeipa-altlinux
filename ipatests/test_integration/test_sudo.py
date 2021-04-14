@@ -16,6 +16,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import pytest
 
@@ -24,6 +25,11 @@ from ipatests.pytest_ipa.integration.tasks import (
     clear_sssd_cache, get_host_ip_with_hostmask, remote_sssd_config,
     FileBackup)
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import Host
+
 class TestSudo(IntegrationTest):
     """
     Test Sudo
@@ -31,6 +37,10 @@ class TestSudo(IntegrationTest):
     """
     num_clients = 1
     topology = 'line'
+    client: Host
+    clientname: str
+    client_sssd_conf_backup: FileBackup
+    skip_hostmask_based: bool
 
     @classmethod
     def install(cls, mh):
@@ -391,6 +401,7 @@ class TestSudo(IntegrationTest):
 
         # Detect the hostmask first to delete the hostmask based rule
         full_ip = get_host_ip_with_hostmask(self.client)
+        assert full_ip is not None
 
         # Remove the client's hostmask from the rule
         self.master.run_command(['ipa', '-n', 'sudorule-remove-host',

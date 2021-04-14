@@ -3,7 +3,7 @@
 #
 """Misc test for 'ipa' CLI regressions
 """
-from __future__ import absolute_import
+from __future__ import annotations
 
 import base64
 import re
@@ -707,13 +707,15 @@ class TestIPACommand(IntegrationTest):
         # we are ok with whatever certificate for this test
         external_ca = ExternalCA()
         for _dummy in range(3):
-            cert = external_ca.create_ca()
-            cert = tasks.strip_cert_header(cert.decode('utf-8'))
+            cert_b = external_ca.create_ca()
+            cert = tasks.strip_cert_header(cert_b.decode('utf-8'))
             certs.append('"{}"'.format(cert))
 
         cert_args = list(
             chain.from_iterable(list(zip(repeat('--certificate'), certs))))
-        cmd = 'ipa user-add-cert {} {}'.format(test_user, ' '.join(cert_args))
+        cmd = "ipa user-add-cert {} {}".format(
+            test_user, " ".join(cert_args)
+        )
         self.master.run_command(cmd)
 
         tasks.clear_sssd_cache(self.master)
@@ -1501,7 +1503,7 @@ class TestIPACommand(IntegrationTest):
 
         certfile = os.path.join(self.master.config.test_dir, 'cert.pem')
         self.master.put_file_contents(certfile, isrgrootx1)
-        result = self.master.run_command(
+        self.master.run_command(
             [
                 self.master.ipaplatform.paths.IPA_CACERT_MANAGE,
                 "install",

@@ -7,7 +7,7 @@ Module provides tests which testing ability of various subsystems to be
 installed.
 """
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import os
 import re
@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 
 import pytest
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from cryptography import x509 as crypto_x509
 
 from ipalib import x509
@@ -85,7 +86,7 @@ class InstallTestBase1(IntegrationTest):
         tasks.install_ca(self.replicas[0])
 
     def test_replica0_ipa_kra_install(self):
-        tasks.install_kra(self.replicas[0], first_instance=True)
+        tasks.install_kra(self.replicas[0])
 
     def test_replica0_ipa_dns_install(self):
         tasks.install_dns(self.replicas[0])
@@ -655,7 +656,7 @@ class TestInstallWithCA_KRA1(InstallTestBase1):
                              setup_kra=True)
 
     def test_replica0_ipa_kra_install(self):
-        tasks.install_kra(self.replicas[0], first_instance=False)
+        tasks.install_kra(self.replicas[0])
 
 
 class TestInstallWithCA_KRA2(InstallTestBase2):
@@ -775,7 +776,7 @@ class TestInstallWithCA_KRA_DNS1(InstallTestBase1):
                              setup_kra=True)
 
     def test_replica0_ipa_kra_install(self):
-        tasks.install_kra(self.replicas[0], first_instance=False)
+        tasks.install_kra(self.replicas[0])
 
 
 class TestInstallWithCA_KRA_DNS2(InstallTestBase2):
@@ -875,7 +876,7 @@ class TestInstallMaster(IntegrationTest):
         assert 'schema-compat-lookup-nsswitch' not in entry_list
 
     def test_install_kra(self):
-        tasks.install_kra(self.master, first_instance=True)
+        tasks.install_kra(self.master)
 
     def test_install_dns(self):
         tasks.install_dns(
@@ -1049,11 +1050,14 @@ class TestInstallMaster(IntegrationTest):
                 self.master.ipaplatform.paths.PKI_TOMCAT_ALIAS_PWDFILE_TXT,
                 nickname
             )
-            key_size = cert.public_key().key_size
+            cert_pubkey = cert.public_key()
+            assert isinstance(cert_pubkey, RSAPublicKey)
+            key_size = cert_pubkey.key_size
             if nickname == 'caSigningCert cert-pki-ca':
                 assert key_size == 3072
             else:
                 assert key_size == 2048
+            assert cert.signature_hash_algorithm is not None
             assert cert.signature_hash_algorithm.name == hashes.SHA256.name
 
     def test_http_cert(self):
@@ -1273,12 +1277,12 @@ class TestInstallMaster(IntegrationTest):
         )
 
         # Positive tests. Both hosts can serve these.
-        urls = (
+        urls = [
             'http://{host}/ipa/crl/MasterCRL.bin',
             'http://{host}/ca/ocsp',
             'https://{host}/ca/admin/ca/getCertChain',
             'https://{host}/acme/',
-        )
+        ]
         for url in urls:
             for host in hosts:
                 run_request(
@@ -1288,13 +1292,13 @@ class TestInstallMaster(IntegrationTest):
 
         # Negative tests. ipa-ca cannot serve these and will redirect and
         # test that existing redirect for unencrypted still works
-        urls = (
+        urls = [
             'http://{host}/',
             'http://{host}/ipa/json',
             'http://{carecord}.{domain}/ipa/json',
             'https://{carecord}.{domain}/ipa/json',
             'http://{carecord}.{domain}/ipa/config/ca.crt',
-        )
+        ]
         for url in urls:
             run_request(
                 url.format(host=self.master.hostname,
@@ -1533,7 +1537,7 @@ class TestInstallMasterDNS(IntegrationTest):
         )
 
     def test_install_kra(self):
-        tasks.install_kra(self.master, first_instance=True)
+        tasks.install_kra(self.master)
 
     def test_installer_wizard_prompts_for_DNS(self, server_cleanup):
         """
@@ -1735,6 +1739,7 @@ class TestMaskInstall(IntegrationTest):
     related ticket: https://pagure.io/freeipa/issue/7193
     """
     topology = 'star'
+    bashrc_file: bytes
 
     @classmethod
     def install(cls, mh):

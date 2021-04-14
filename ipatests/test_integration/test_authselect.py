@@ -6,13 +6,18 @@
 Module provides tests to verify that the authselect code works.
 """
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import os
 import pytest
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import Host
 
 default_profile = 'sssd'
 preconfigured_profile = 'winbind'
@@ -70,6 +75,8 @@ class TestClientInstallation(IntegrationTest):
         "WARNING: Unable to revert to the pre-installation "
         "state ('authconfig' tool has been deprecated in favor of "
         "'authselect'). The default sssd profile will be used instead.")
+
+    client: Host
 
     @classmethod
     def install(cls, mh):

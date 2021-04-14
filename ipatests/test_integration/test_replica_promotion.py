@@ -2,7 +2,7 @@
 # Copyright (C) 2016  FreeIPA Contributors see COPYING for license
 #
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import os
 import time
@@ -41,9 +41,7 @@ class ReplicaPromotionBase(IntegrationTest):
         tasks.install_master(cls.master, domain_level=cls.domain_level)
 
     def test_kra_install_master(self):
-        result1 = tasks.install_kra(self.master,
-                                    first_instance=True,
-                                    raiseonerr=False)
+        result1 = tasks.install_kra(self.master, raiseonerr=False)
         assert result1.returncode == 0, result1.stderr_text
         tasks.kinit_admin(self.master)
         result2 = self.master.run_command(["ipa", "vault-find"],
@@ -134,13 +132,13 @@ class TestUnprivilegedUserPermissions(IntegrationTest):
     """
     num_replicas = 1
     domain_level = DOMAIN_LEVEL_1
+    username = "testuser"
+    new_password = "$ome0therPaaS"
 
     @classmethod
     def install(cls, mh):
-        cls.username = 'testuser'
         tasks.install_master(cls.master, domain_level=cls.domain_level)
         password = cls.master.config.dirman_password
-        cls.new_password = '$ome0therPaaS'
         adduser_stdin_text = "%s\n%s\n" % (cls.master.config.admin_password,
                                            cls.master.config.admin_password)
         user_kinit_stdin_text = "%s\n%s\n%s\n" % (password, cls.new_password,

@@ -27,7 +27,7 @@ class TestInstallFIPS(IntegrationTest):
     def install(cls, mh):
         super(TestInstallFIPS, cls).install(mh)
         # sanity check
-        for host in cls.get_all_hosts():
+        for host in cls.get_all_ipa_hosts():
             assert host.is_fips_mode
             assert fips.is_fips_enabled(host)
         # patch named-pkcs11 crypto policy

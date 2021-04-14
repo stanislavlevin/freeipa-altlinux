@@ -1,6 +1,7 @@
 #
 # Copyright (C) 2021  FreeIPA Contributors. See COPYING for license
 #
+from __future__ import annotations
 
 """Expose locally remote ipaplatform"""
 
@@ -8,41 +9,26 @@ import base64
 import json
 import textwrap
 
+from .host_namespaces import (
+    HostPlatformPaths,
+    HostPlatformOSInfo,
+    HostPlatformConstants,
+    HostPlatformKnownservices,
+)
 
-class HostPlatformNameSpace:
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
+from typing import TYPE_CHECKING
 
-    def __getitem__(self, key):
-        return self.__dict__[key]
-
-    def __repr__(self):
-        items = (f"{k}={v!r}" for k, v in self.__dict__.items())
-        return "{}({})".format(type(self).__name__, ", ".join(items))
-
-
-class HostPlatformPaths(HostPlatformNameSpace):
-    pass
-
-
-class HostPlatformOSInfo(HostPlatformNameSpace):
-    pass
-
-
-class HostPlatformConstants(HostPlatformNameSpace):
-    pass
-
-
-class HostPlatformKnownservices(HostPlatformNameSpace):
-    pass
+if TYPE_CHECKING:
+    from typing import Optional, Tuple
+    from ipatests.pytest_ipa.integration._types import RunCommandCb
 
 
 class HostPlatformTasks:
-    def __init__(self, run_command):
+    def __init__(self, run_command: RunCommandCb) -> None:
         self.run_command = run_command
-        self._get_pkcs11_modules = None
+        self._get_pkcs11_modules: Optional[Tuple[str, ...]] = None
 
-    def get_pkcs11_modules(self):
+    def get_pkcs11_modules(self) -> Tuple[str, ...]:
         if self._get_pkcs11_modules is None:
             code = textwrap.dedent(
                 """\
@@ -71,16 +57,16 @@ class HostPlatformTasks:
 class HostIPAPlatform:
     """Expose locally remote ipaplatform"""
 
-    def __init__(self, run_command):
+    def __init__(self, run_command: RunCommandCb) -> None:
         self.run_command = run_command
-        self._paths = None
-        self._constants = None
-        self._knownservices = None
-        self._osinfo = None
-        self._tasks = None
+        self._paths: Optional[HostPlatformPaths] = None
+        self._constants: Optional[HostPlatformConstants] = None
+        self._knownservices: Optional[HostPlatformKnownservices] = None
+        self._osinfo: Optional[HostPlatformOSInfo] = None
+        self._tasks: Optional[HostPlatformTasks] = None
 
     @property
-    def paths(self):
+    def paths(self) -> HostPlatformPaths:
         if self._paths is None:
             code = textwrap.dedent(
                 """\
@@ -118,7 +104,7 @@ class HostIPAPlatform:
         return self._paths
 
     @property
-    def constants(self):
+    def constants(self) -> HostPlatformConstants:
         if self._constants is None:
             code = textwrap.dedent(
                 """\
@@ -155,7 +141,7 @@ class HostIPAPlatform:
         return self._constants
 
     @property
-    def osinfo(self):
+    def osinfo(self) -> HostPlatformOSInfo:
         if self._osinfo is None:
             code = textwrap.dedent(
                 """\
@@ -193,7 +179,7 @@ class HostIPAPlatform:
         return self._osinfo
 
     @property
-    def knownservices(self):
+    def knownservices(self) -> HostPlatformKnownservices:
         if self._knownservices is None:
             code = textwrap.dedent(
                 """\
@@ -230,13 +216,16 @@ class HostIPAPlatform:
             res = self.run_command(cmd, log_stdout=False)
             json_data = base64.b64decode(res.stdout_bytes).decode("utf-8")
             self._knownservices = json.loads(
-                json_data, object_hook=lambda x: HostPlatformKnownservices(**x)
+                json_data,
+                object_hook=lambda x: (
+                    HostPlatformKnownservices(**x)  # type: ignore[misc]
+                ),
             )
 
         return self._knownservices
 
     @property
-    def tasks(self):
+    def tasks(self) -> HostPlatformTasks:
         if self._tasks is None:
             self._tasks = HostPlatformTasks(self.run_command)
         return self._tasks

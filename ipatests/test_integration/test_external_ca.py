@@ -30,7 +30,7 @@ from ipalib import x509 as ipa_x509
 from ipapython.dn import DN
 
 from itertools import chain, repeat
-from ipatests.create_external_ca import ExternalCA, ISSUER_CN
+from ipatests.create_external_ca import ExternalCA, ISSUER_CN as ISSUER_CN
 
 IPA_CA = 'ipa_ca.crt'
 ROOT_CA = 'root_ca.crt'

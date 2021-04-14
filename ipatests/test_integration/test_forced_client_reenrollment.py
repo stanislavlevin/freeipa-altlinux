@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import logging
 import os
@@ -37,6 +37,8 @@ class TestForcedClientReenrollment(IntegrationTest):
     """
     num_replicas = 1
     num_clients = 1
+    BACKUP_KEYTAB: str
+    client_dom: str
 
     @classmethod
     def install(cls, mh):
@@ -48,7 +50,7 @@ class TestForcedClientReenrollment(IntegrationTest):
             # In cases where client is managed by upstream DNS server we
             # overlap its zone so we can save DNS records (e.g. SSHFP) for
             # comparison.
-            servers = [cls.master] + cls.replicas
+            servers = [cls.master] + list(cls.replicas)
             tasks.add_dns_zone(cls.master, cls.client_dom,
                                skip_overlap_check=True,
                                dynamic_update=True,
@@ -286,11 +288,11 @@ class TestForcedClientReenrollment(IntegrationTest):
 
         assert sshfp_record, 'SSHFP record not found'
 
-        sshfp_record = set(sshfp_record.split(', '))
+        sshfp_record_set = set(sshfp_record.split(', '))
         logger.debug("SSHFP record for host %s: %s",
-                     client_host, str(sshfp_record))
+                     client_host, str(sshfp_record_set))
 
-        return sshfp_record
+        return sshfp_record_set
 
     def backup_keytab(self):
         contents = self.clients[0].get_file_contents(

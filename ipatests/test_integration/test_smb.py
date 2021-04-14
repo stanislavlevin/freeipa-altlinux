@@ -6,7 +6,7 @@
    configuring Samba file server and mounting SMB file system
 """
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 from functools import partial
 import textwrap
@@ -18,8 +18,14 @@ import pytest
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 
+from typing import TYPE_CHECKING
 
-def wait_smbd_functional(host):
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import Host, WinHost
+    from ipatests.pytest_ipa.integration._types import IpaMHFixture
+
+
+def wait_smbd_functional(host: Host) -> None:
     """Wait smbd is functional after (re)start
 
     After start of smbd there is a 2-3 seconds delay before daemon is
@@ -43,8 +49,13 @@ class TestSMB(IntegrationTest):
     ipa_test_group = 'ipa_testgroup'
     ad_test_group = 'testgroup'
 
+    ad: WinHost
+    smbserver: Host
+    smbclient: Host
+    ad_user: str
+
     @classmethod
-    def install(cls, mh):
+    def install(cls, mh: IpaMHFixture) -> None:
         if cls.domain_level is not None:
             domain_level = cls.domain_level
         else:

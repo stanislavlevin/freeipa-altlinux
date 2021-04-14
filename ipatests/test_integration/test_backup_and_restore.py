@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function, absolute_import
+from __future__ import annotations
 
 import logging
 import os
@@ -34,16 +34,29 @@ from ipatests.test_integration.test_simple_replication import check_replication
 from ipatests.util import assert_deepequal
 from ldap.dn import escape_dn_chars
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import (
+        Any, Callable, Dict, Iterable, Iterator, Sequence, Tuple
+    )
+    from _pytest.fixtures import FixtureRequest
+    from pytest_multihost.transport import SSHCommand
+
+    from ipapython.ipaldap import LDAPEntry
+    from ipatests.pytest_ipa.integration.host import Host
+    from ipatests.test_integration._types import ResultDict
+
 logger = logging.getLogger(__name__)
 
 
-def assert_entries_equal(a, b):
+def assert_entries_equal(a: LDAPEntry, b: LDAPEntry) -> None:
     assert_deepequal(a.dn, b.dn)
     assert_deepequal(dict(a), dict(b))
 
 
-def assert_results_equal(a, b):
-    def to_dict(r):
+def assert_results_equal(a: SSHCommand, b: SSHCommand) -> None:
+    def to_dict(r: SSHCommand) -> ResultDict:
         return {
             'stdout': r.stdout_text,
             'stderr': r.stderr_text,
@@ -53,11 +66,11 @@ def assert_results_equal(a, b):
     assert_deepequal(to_dict(a), to_dict(b))
 
 
-def check_admin_in_ldap(host):
+def check_admin_in_ldap(host: Host) -> LDAPEntry:
     ldap = host.ldap_connect()
     basedn = host.domain.basedn
     user_dn = DN(('uid', 'admin'), ('cn', 'users'), ('cn', 'accounts'), basedn)
-    entry = ldap.get_entry(user_dn)
+    entry: LDAPEntry = ldap.get_entry(user_dn)
     print(entry)
     assert entry.dn == user_dn
     assert entry['uid'] == ['admin']
@@ -67,7 +80,7 @@ def check_admin_in_ldap(host):
     return entry
 
 
-def check_admin_in_cli(host):
+def check_admin_in_cli(host: Host) -> SSHCommand:
     result = host.run_command(['ipa', 'user-show', 'admin'])
     assert 'User login: admin' in result.stdout_text, result.stdout_text
 
@@ -82,49 +95,49 @@ def check_admin_in_cli(host):
     return result
 
 
-def check_admin_in_id(host):
+def check_admin_in_id(host: Host) -> SSHCommand:
     result = host.run_command(['id', 'admin'])
     assert 'admin' in result.stdout_text, result.stdout_text
     return result
 
 
-def check_certs(host):
+def check_certs(host: Host) -> SSHCommand:
     result = host.run_command(['ipa', 'cert-find'])
     assert re.search(r'^Number of entries returned [1-9]\d*$',
                      result.stdout_text, re.MULTILINE), result.stdout_text
     return result
 
 
-def check_dns(host):
+def check_dns(host: Host) -> SSHCommand:
     result = host.run_command(['host', host.hostname, 'localhost'])
     return result
 
 
-def check_kinit(host):
+def check_kinit(host: Host) -> SSHCommand:
     result = host.run_command(['kinit', 'admin'],
                               stdin_text=host.config.admin_password)
     return result
 
 
-def check_custodia_files(host):
+def check_custodia_files(host: Host) -> bool:
     """regression test for https://pagure.io/freeipa/issue/7247"""
     assert host.transport.file_exists(host.ipaplatform.paths.IPA_CUSTODIA_KEYS)
     assert host.transport.file_exists(host.ipaplatform.paths.IPA_CUSTODIA_CONF)
     return True
 
 
-def check_pkcs11_modules(host):
+def check_pkcs11_modules(host: Host) -> Dict[str, bytes]:
     """regression test for https://pagure.io/freeipa/issue/8073"""
     # Return a dictionary with key = filename, value = file content
     # containing all the PKCS11 modules modified by the installer
-    result = dict()
+    result: Dict[str, bytes] = dict()
     for filename in host.ipaplatform.tasks.get_pkcs11_modules():
         assert host.transport.file_exists(filename)
         result[filename] = host.get_file_contents(filename)
     return result
 
 
-CHECKS = [
+CHECKS: Sequence[Tuple[Callable[..., Any], Callable[..., Any]]] = [
     (check_admin_in_ldap, assert_entries_equal),
     (check_admin_in_cli, assert_results_equal),
     (check_admin_in_id, assert_results_equal),
@@ -137,7 +150,7 @@ CHECKS = [
 
 
 @contextlib.contextmanager
-def restore_checker(host):
+def restore_checker(host: Host) -> Iterator[None]:
     """Check that the IPA at host works the same at context enter and exit"""
     tasks.kinit_admin(host)
 
@@ -159,9 +172,9 @@ def restore_checker(host):
 
 
 @pytest.fixture
-def cert_sign_request(request):
-    master = request.instance.master
-    hosts = [master] + request.instance.replicas
+def cert_sign_request(request: FixtureRequest) -> Iterable[Dict[str, str]]:
+    master: Host = request.instance.master
+    hosts: Sequence[Host] = [master] + request.instance.replicas
     csrs = {}
     for host in hosts:
         request_path = host.run_command(['mktemp']).stdout_text.strip()
@@ -513,6 +526,8 @@ class TestBackupAndRestoreWithReplica(IntegrationTest):
     """
     num_replicas = 2
     topology = "star"
+    replica1: Host
+    replica2: Host
 
     @classmethod
     def install(cls, mh):
@@ -563,7 +578,9 @@ class TestBackupAndRestoreWithReplica(IntegrationTest):
             assert (1 == res.returncode and
                     '[Errno 111] Connection refused' in res.stderr_text)
 
-    def test_full_backup_and_restore_with_replica(self, cert_sign_request):
+    def test_full_backup_and_restore_with_replica(
+        self, cert_sign_request: Dict[str, str]
+    ) -> None:
         # check prerequisites
         self.check_replication_success(self.master)
         self.check_replication_success(self.replica1)
@@ -682,6 +699,7 @@ class TestUserRootFilesOwnershipPermission(IntegrationTest):
 
     related ticket: https://pagure.io/freeipa/issue/6844
     """
+    bashrc_file: bytes
 
     @classmethod
     def install(cls, mh):
@@ -1001,7 +1019,7 @@ class TestBackupRoles(IntegrationTest):
         self._check_rolecheck_backup_success(self.replicas[0])
 
         # install KRA on replica
-        tasks.install_kra(self.replicas[0], first_instance=True)
+        tasks.install_kra(self.replicas[0])
         assert self._ipa_replica_role_check(
             self.replicas[0].hostname, self.serverroles['KRA']
         )

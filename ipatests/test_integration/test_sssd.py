@@ -4,7 +4,7 @@
 
 """This module provides tests for SSSD as used in IPA"""
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import time
 from contextlib import contextmanager
@@ -20,6 +20,11 @@ from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.tasks import clear_sssd_cache
 from ipatests.util import xfail_context
 from ipapython.dn import DN
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import WinHost
 
 
 class TestSSSDWithAdTrust(IntegrationTest):
@@ -53,6 +58,8 @@ class TestSSSDWithAdTrust(IntegrationTest):
     intermed_user = 'user2'
     ad_user_tmpl = 'testuser@{domain}'
     ad_user_password = 'Secret123'
+    ad: WinHost
+    child_ad: WinHost
 
     @classmethod
     def install(cls, mh):
@@ -279,6 +286,7 @@ class TestSSSDWithAdTrust(IntegrationTest):
                 ['sssctl', '{}-show'.format(obj_kind), obj_name])
             m = re.search(r'Cache entry last update time:\s+([^\n]+)',
                           res.stdout_text)
+            assert m is not None  # cast out Optional mypy#645
             update_time = m.group(1).strip()
             assert update_time
             return update_time

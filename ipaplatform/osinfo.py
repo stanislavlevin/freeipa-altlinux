@@ -20,9 +20,9 @@ The platform ids for ipaplatform providers are based on:
 3) ID field of /etc/os-release (Linux)
 4) ID_LIKE fields of /etc/os-release (Linux)
 """
-from __future__ import absolute_import
+from __future__ import annotations
 
-from collections.abc import Mapping
+from typing import Any, Mapping
 import importlib
 import re
 import os
@@ -36,6 +36,11 @@ try:
 except ImportError:
     OVERRIDE = None
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Dict
+
 
 _osrelease_line = re.compile(
     u"^(?!#)(?P<name>[a-zA-Z0-9_]+)="
@@ -43,12 +48,12 @@ _osrelease_line = re.compile(
 )
 
 
-def _parse_osrelease(filename='/etc/os-release'):
+def _parse_osrelease(filename: str = "/etc/os-release") -> Dict[str, Any]:
     """Parser for /etc/os-release for Linux distributions
 
     https://www.freedesktop.org/software/systemd/man/os-release.html
     """
-    release = {}
+    release: Dict[str, Any] = {}
     with open(filename) as f:
         for line in f:
             mo = _osrelease_line.match(line)
@@ -70,7 +75,7 @@ def _parse_osrelease(filename='/etc/os-release'):
     return release
 
 
-class OSInfo(Mapping):
+class OSInfo(Mapping[str, Any]):
     __slots__ = ('_info', '_platform', '_container')
 
     bsd_family = (

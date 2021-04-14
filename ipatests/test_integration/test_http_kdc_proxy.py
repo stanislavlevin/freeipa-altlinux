@@ -2,7 +2,7 @@
 # Copyright (C) 2016  FreeIPA Contributors see COPYING for license
 #
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import re
 from contextlib import contextmanager
@@ -13,11 +13,17 @@ from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.firewall import Firewall
 from ipatests.test_integration.base import IntegrationTest
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import Host, WinHost
 
 class TestHttpKdcProxy(IntegrationTest):
     topology = "line"
     num_clients = 1
     num_ad_domains = 1
+    ad: WinHost
+    client: Host
 
     @classmethod
     def install(cls, mh):

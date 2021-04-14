@@ -23,7 +23,7 @@ This base module contains default implementations of IPA interface for
 interacting with system services.
 '''
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import os
 import json
@@ -37,12 +37,7 @@ from ipapython import ipautil
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
 
-# pylint: disable=no-name-in-module, import-error
-if six.PY3:
-    from collections.abc import Mapping
-else:
-    from collections import Mapping
-# pylint: enable=no-name-in-module, import-error
+from typing import Any, Mapping
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +96,7 @@ wellknownports = {
 SERVICE_POLL_INTERVAL = 0.1 # seconds
 
 
-class KnownServices(Mapping):
+class KnownServices(Mapping[str, Any]):
     """
     KnownServices is an abstract class factory that should give out instances
     of well-known platform services. Actual implementation must create these

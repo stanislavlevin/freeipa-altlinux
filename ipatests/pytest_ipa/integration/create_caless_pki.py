@@ -11,9 +11,8 @@
 # DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+from __future__ import annotations
 
-
-import collections
 import datetime
 import itertools
 import os
@@ -31,6 +30,27 @@ from pyasn1.type import univ, char, namedtype, tag
 from pyasn1.codec.der import encoder as der_encoder
 from pyasn1.codec.native import decoder as native_decoder
 
+from typing import Iterator, NamedTuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import (
+        Any, List, Optional, Protocol, TypeVar
+    )
+    from cryptography.x509.general_name import GeneralName
+    from cryptography.x509 import Certificate, CertificateBuilder, Name
+    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+
+    class Profile(Protocol):
+        def __call__(
+            self,
+            builder: CertificateBuilder,
+            ca_nick: str,
+            ca: Optional[CertInfo],
+            **kwargs: Any,
+        ) -> CertificateBuilder:
+            ...
+
+
 if six.PY3:
     unicode = str
 
@@ -38,15 +58,20 @@ DAY = datetime.timedelta(days=1)
 YEAR = 365 * DAY
 
 # we get the variables from ca_less test
-domain = None
-realm = None
-server1 = None
-server2 = None
-client = None
-password = None
-cert_dir = None
+domain: Optional[str] = None
+realm: Optional[str] = None
+server1: Optional[str] = None
+server2: Optional[str] = None
+client: Optional[str] = None
+password: Optional[str] = None
+cert_dir: Optional[str] = None
 
-CertInfo = collections.namedtuple('CertInfo', 'nick key cert counter')
+
+class CertInfo(NamedTuple):
+    nick: str
+    key: RSAPrivateKey
+    cert: Certificate
+    counter: Iterator[int]
 
 
 class PrincipalName(univ.Sequence):
@@ -101,7 +126,14 @@ class KRB5PrincipalName(univ.Sequence):
     )
 
 
-def profile_ca(builder, ca_nick, ca):
+def profile_ca(
+    builder: CertificateBuilder,
+    ca_nick: str,
+    ca: Optional[CertInfo],
+    **kwargs: Any,
+) -> CertificateBuilder:
+    assert cert_dir is not None  # cast out Optional mypy#645
+
     now = datetime.datetime.utcnow()
 
     builder = builder.not_valid_before(now)
@@ -165,15 +197,26 @@ def profile_ca(builder, ca_nick, ca):
         if (parse_version(cryptography_version) >= parse_version('2.7')):
             extension = auth_keyidentifier(ski_ext.value)
         else:
-            extension = auth_keyidentifier(ski_ext)
+            extension = auth_keyidentifier(ski_ext)  # type: ignore[arg-type]
 
         builder = builder.add_extension(extension, critical=False)
     return builder
 
 
-def profile_server(builder, ca_nick, ca,
-                   warp=datetime.timedelta(days=0), dns_name=None,
-                   badusage=False, wildcard=False):
+def profile_server(
+    builder: CertificateBuilder,
+    ca_nick: str,
+    ca: Optional[CertInfo],
+    **kwargs: Any,
+) -> CertificateBuilder:
+    warp: datetime.timedelta = kwargs.get("warp", datetime.timedelta(days=0))
+    dns_name: Optional[str] = kwargs.get("dns_name")
+    badusage: bool = kwargs.get("badusage", False)
+    wildcard: bool = kwargs.get("wildcard", False)
+    assert cert_dir is not None  # cast out Optional mypy#645
+    assert domain is not None  # cast out Optional mypy#645
+    assert server1 is not None  # cast out Optional mypy#645
+
     now = datetime.datetime.utcnow() + warp
 
     builder = builder.not_valid_before(now)
@@ -228,9 +271,19 @@ def profile_server(builder, ca_nick, ca,
     return builder
 
 
-def profile_kdc(builder, ca_nick, ca,
-                warp=datetime.timedelta(days=0), dns_name=None,
-                badusage=False):
+def profile_kdc(
+    builder: CertificateBuilder,
+    ca_nick: str,
+    ca: Optional[CertInfo],
+    **kwargs: Any,
+) -> CertificateBuilder:
+    warp: datetime.timedelta = kwargs.get("warp", datetime.timedelta(days=0))
+    dns_name: Optional[str] = kwargs.get("dns_name")
+    badusage: bool = kwargs.get("badusage", False)
+
+    assert cert_dir is not None  # cast out Optional mypy#645
+    assert realm is not None  # cast out Optional mypy#645
+
     now = datetime.datetime.utcnow() + warp
 
     builder = builder.not_valid_before(now)
@@ -251,9 +304,11 @@ def profile_kdc(builder, ca_nick, ca,
         },
     }
     name = native_decoder.decode(name, asn1Spec=KRB5PrincipalName())
-    name = der_encoder.encode(name)
+    name_der: bytes = der_encoder.encode(name)
 
-    names = [x509.OtherName(x509.ObjectIdentifier('1.3.6.1.5.2.2'), name)]
+    names: List[GeneralName] = [
+        x509.OtherName(x509.ObjectIdentifier('1.3.6.1.5.2.2'), name_der)
+    ]
     if dns_name is not None:
         names += [x509.DNSName(dns_name)]
 
@@ -293,7 +348,16 @@ def profile_kdc(builder, ca_nick, ca,
     return builder
 
 
-def gen_cert(profile, nick_base, subject, ca=None, **kwargs):
+def gen_cert(
+    profile: Profile,
+    nick_base: str,
+    subject: Name,
+    ca: Optional[CertInfo] = None,
+    **kwargs: Any,
+) -> CertInfo:
+    assert cert_dir is not None  # cast out Optional mypy#645
+    assert password is not None  # cast out Optional mypy#645
+
     key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
@@ -346,7 +410,8 @@ def gen_cert(profile, nick_base, subject, ca=None, **kwargs):
     return CertInfo(nick, key, cert, counter)
 
 
-def revoke_cert(ca, serial):
+def revoke_cert(ca: CertInfo, serial: int) -> None:
+    assert cert_dir is not None  # cast out Optional mypy#645
     now = datetime.datetime.utcnow()
 
     crl_builder = x509.CertificateRevocationListBuilder()
@@ -389,7 +454,9 @@ def revoke_cert(ca, serial):
         f.write(crl_pem)
 
 
-def gen_server_certs(nick_base, hostname, org, ca=None):
+def gen_server_certs(
+    nick_base: str, hostname: str, org: str, ca: CertInfo
+) -> None:
     gen_cert(profile_server, nick_base,
              x509.Name([
                 x509.NameAttribute(NameOID.ORGANIZATION_NAME, org),
@@ -450,7 +517,9 @@ def gen_server_certs(nick_base, hostname, org, ca=None):
     revoke_cert(ca, revoked.cert.serial_number)
 
 
-def gen_kdc_certs(nick_base, hostname, org, ca=None):
+def gen_kdc_certs(
+    nick_base: str, hostname: str, org: str, ca: CertInfo
+) -> None:
     gen_cert(profile_kdc, nick_base + u'-kdc',
              x509.Name([
                 x509.NameAttribute(NameOID.ORGANIZATION_NAME, org),
@@ -505,7 +574,14 @@ def gen_kdc_certs(nick_base, hostname, org, ca=None):
     revoke_cert(ca, revoked.cert.serial_number)
 
 
-def gen_subtree(nick_base, org, ca=None):
+def gen_subtree(
+    nick_base: str, org: str, ca: Optional[CertInfo] = None
+) -> CertInfo:
+    assert domain is not None  # cast out Optional mypy#645
+    assert server1 is not None  # cast out Optional mypy#645
+    assert server2 is not None  # cast out Optional mypy#645
+    assert client is not None  # cast out Optional mypy#645
+
     subca = gen_cert(profile_ca, nick_base,
                      x509.Name([
                         x509.NameAttribute(NameOID.ORGANIZATION_NAME, org),
@@ -536,7 +612,10 @@ def gen_subtree(nick_base, org, ca=None):
     return subca
 
 
-def create_pki():
+def create_pki() -> None:
+    assert cert_dir is not None  # cast out Optional mypy#645
+    assert server1 is not None  # cast out Optional mypy#645
+    assert server2 is not None  # cast out Optional mypy#645
 
     gen_cert(profile_server, u'server-selfsign',
              x509.Name([

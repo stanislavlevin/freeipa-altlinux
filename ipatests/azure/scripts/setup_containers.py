@@ -30,6 +30,12 @@ IPA_TEST_CONFIG_TEMPLATE = os.environ.get(
     "IPA_TEST_CONFIG_TEMPLATE", "./templates/ipa-test-config-template.yaml"
 )
 
+if IPA_TESTS_ENV_WORKING_DIR is None:
+    raise TypeError("IPA_TESTS_ENV_WORKING_DIR is required")
+
+if IPA_TESTS_ENV_NAME is None:
+    raise TypeError("IPA_TESTS_ENV_NAME is required")
+
 IPA_TESTS_ENV_DIR = os.path.join(IPA_TESTS_ENV_WORKING_DIR, IPA_TESTS_ENV_NAME)
 IPA_TEST_CONFIG = "ipa-test-config.yaml"
 
@@ -323,7 +329,7 @@ class Controller(Container):
                     master_containers_group = containers_group
                     break
             if master_containers_group is None:
-                raise ValueError(
+                raise TypeError(
                     "There must be container group with master role"
                 )
             # assume the only master

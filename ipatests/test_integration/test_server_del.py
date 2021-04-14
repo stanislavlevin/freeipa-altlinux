@@ -1,6 +1,7 @@
 #
 # Copyright (C) 2016  FreeIPA Contributors see COPYING for license
 #
+from __future__ import annotations
 
 from itertools import permutations
 
@@ -8,6 +9,11 @@ from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.firewall import Firewall
 from ipalib.constants import DOMAIN_LEVEL_1, DOMAIN_SUFFIX_NAME, CA_SUFFIX_NAME
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import Host
 
 REMOVAL_ERR_TEMPLATE = ("Removal of '{hostname}' leads to disconnected "
                         "topology in suffix '{suffix}'")
@@ -75,6 +81,9 @@ class ServerDelBase(IntegrationTest):
     num_clients = 1
     domain_level = DOMAIN_LEVEL_1
     topology = 'star'
+    client: Host
+    replica1: Host
+    replica2: Host
 
     @classmethod
     def install(cls, mh):

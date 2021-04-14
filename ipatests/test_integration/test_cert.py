@@ -6,6 +6,8 @@
 Module provides tests which testing ability of various certificate
 related scenarios.
 """
+from __future__ import annotations
+
 import os
 
 import ipaddress
@@ -18,6 +20,7 @@ import time
 from cryptography import x509
 from cryptography.x509.oid import ExtensionOID
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
@@ -60,6 +63,7 @@ def get_certmonger_request_value(host, requestid, state):
 class TestInstallMasterClient(IntegrationTest):
     num_clients = 1
     topology = 'line'
+    since: str
 
     @classmethod
     def install(cls, mh):
@@ -390,7 +394,9 @@ class TestCertmongerRekey(IntegrationTest):
         cert = x509.load_pem_x509_certificate(
             certdata, default_backend()
         )
-        assert cert.public_key().key_size == 2048
+        cert_pubkey = cert.public_key()
+        assert isinstance(cert_pubkey, RSAPublicKey)
+        assert cert_pubkey.key_size == 2048
 
         # rekey with key size 3072
         self.master.run_command(['getcert', 'rekey',
@@ -410,7 +416,9 @@ class TestCertmongerRekey(IntegrationTest):
             certdata, default_backend()
         )
         # check if rekey command updated the key size
-        assert cert.public_key().key_size == 3072
+        cert_pubkey = cert.public_key()
+        assert isinstance(cert_pubkey, RSAPublicKey)
+        assert cert_pubkey.key_size == 3072
 
     def test_rekey_keytype_RSA(self, request_cert):
         """Test certmonger rekey command works fine

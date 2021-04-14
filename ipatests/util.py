@@ -21,7 +21,7 @@
 Common utility functions and classes for unit tests.
 """
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import inspect
 import os
@@ -43,17 +43,22 @@ from ipalib.request import context
 from ipapython.dn import DN
 from ipapython.ipautil import run
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Optional, Type
+
 try:
     # not available with client-only wheel packages
     from ipalib.install.kinit import kinit_keytab, kinit_password
 except ImportError:
-    kinit_keytab = kinit_password = None
+    kinit_keytab = kinit_password = None  # type: ignore
 
 try:
     # not available with client-only wheel packages
     from ipaplatform.paths import paths
 except ImportError:
-    paths = None
+    paths = None  # type: ignore
 
 try:
     # not available with optional python-ldap
@@ -68,11 +73,12 @@ else:
 if six.PY3:
     unicode = str
 
+from typing import Optional
 
 # settings are configured by conftest
-IPACLIENT_UNITTESTS = None
-SKIP_IPAAPI = None
-PRETTY_PRINT = None
+IPACLIENT_UNITTESTS: Optional[bool] = None
+SKIP_IPAAPI: Optional[bool] = None
+PRETTY_PRINT: Optional[bool] = None
 
 
 def check_ipaclient_unittests(reason="Skip in ipaclient unittest mode"):
@@ -91,15 +97,19 @@ def check_no_ipaapi(reason="Skip tests that needs an IPA API"):
 
 class TempDir:
     def __init__(self):
-        self.__path = tempfile.mkdtemp(prefix='ipa.tests.')
+        self.__path: Optional[str] = tempfile.mkdtemp(prefix='ipa.tests.')
         assert self.path == self.__path
 
     def __get_path(self):
+        if self.__path is None:
+            return None
+
         assert path.abspath(self.__path) == self.__path
         assert self.__path.startswith(path.join(tempfile.gettempdir(),
                                                 'ipa.tests.'))
         assert path.isdir(self.__path) and not path.islink(self.__path)
         return self.__path
+
     path = property(__get_path)
 
     def rmtree(self):
@@ -260,7 +270,7 @@ class Fuzzy:
     Fuzzy('.+', <... 'str'>, <function <lambda> at 0x...>)
     """
 
-    __hash__ = None
+    __hash__ = None  # type: ignore
 
     def __init__(self, regex=None, type=None, test=None):
         r"""
@@ -518,6 +528,7 @@ class ClassChecker:
     __subcls = None
 
     def __get_cls(self):
+        self._cls: type
         if self.__cls is None:
             self.__cls = self._cls  # pylint: disable=E1101
         assert inspect.isclass(self.__cls)
@@ -578,6 +589,8 @@ class PluginTester:
     __plugin = None
 
     def __get_plugin(self):
+        self._plugin: Type[Plugin]
+
         if self.__plugin is None:
             self.__plugin = self._plugin  # pylint: disable=E1101
         assert issubclass(self.__plugin, Plugin)

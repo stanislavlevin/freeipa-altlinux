@@ -233,7 +233,8 @@ def normalize_zonemgr(zonemgr):
 
     return zonemgr
 
-def normalize_zone(zone):
+
+def normalize_zone(zone: str) -> str:
     if zone[-1] != '.':
         return zone + '.'
     else:
@@ -722,7 +723,8 @@ REVERSE_DNS_ZONES = {
 def zone_is_reverse(zone_name):
     return DNSName(zone_name).is_reverse()
 
-def get_reverse_zone_default(ip_address):
+
+def get_reverse_zone_default(ip_address: str) -> str:
     ip = netaddr.IPAddress(str(ip_address))
     items = ip.reverse_dns.split('.')
 

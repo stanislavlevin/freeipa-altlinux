@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import functools
 import logging
@@ -144,12 +144,17 @@ def replica_install_teardown(func):
 
 
 class CALessBase(IntegrationTest):
+    cert_password: str
+    cert_dir: str
+    pem_filename: str
+    crl_path: str
+    ca2_kdc_crt = "ca2_kdc_crt.pem"
+    ca2_crt = "ca2_crt.pem"
+
     @classmethod
     def install(cls, mh):
         cls.cert_dir = tempfile.mkdtemp(prefix="ipatest-")
         cls.pem_filename = os.path.join(cls.cert_dir, 'root.pem')
-        cls.ca2_crt = 'ca2_crt.pem'
-        cls.ca2_kdc_crt = 'ca2_kdc_crt.pem'
         cls.cert_password = cls.master.config.admin_password
         cls.crl_path = os.path.join(cls.master.config.test_dir, 'crl')
 
@@ -174,7 +179,7 @@ class CALessBase(IntegrationTest):
         logger.info('Generating certificates to %s', cls.cert_dir)
         create_caless_pki.create_pki()
 
-        for host in cls.get_all_hosts():
+        for host in cls.get_all_ipa_hosts():
             tasks.apply_common_fixes(host)
 
             # Copy CRLs over
@@ -406,10 +411,10 @@ class CALessBase(IntegrationTest):
         Called from every positive server install test
         """
         with open(self.pem_filename, 'rb') as f:
-            expected_cacrt = f.read()
+            expected_cacrt_pem = f.read()
         logger.debug('Expected /etc/ipa/ca.crt contents:\n%s',
-                     expected_cacrt.decode('utf-8'))
-        expected_cacrt = x509.load_unknown_x509_certificate(expected_cacrt)
+                     expected_cacrt_pem.decode('utf-8'))
+        expected_cacrt = x509.load_unknown_x509_certificate(expected_cacrt_pem)
         logger.debug('Expected CA cert:\n%r',
                      expected_cacrt.public_bytes(x509.Encoding.PEM))
         for host in [self.master] + self.replicas:
@@ -440,7 +445,7 @@ class CALessBase(IntegrationTest):
             result = host.run_command(['getcert', 'list'], raiseonerr=False)
             assert result.returncode == 0
 
-        for host in self.get_all_hosts():
+        for host in self.get_all_ipa_hosts():
             # Check the cert PEM file
             remote_cacrt = host.get_file_contents(
                 host.ipaplatform.paths.IPA_CA_CRT
@@ -1227,6 +1232,10 @@ class TestClientInstall(CALessBase):
 
 
 class TestIPACommands(CALessBase):
+    test_hostname: str
+    test_service: str
+    client_pem: str
+
     @classmethod
     def install(cls, mh):
         super(TestIPACommands, cls).install(mh)

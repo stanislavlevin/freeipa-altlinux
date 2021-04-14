@@ -4,6 +4,8 @@
 """
 Module provides tests for the ipa-winsync-migrate command.
 """
+from __future__ import annotations
+
 import os
 import base64
 import re
@@ -12,6 +14,11 @@ import pytest
 
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import WinHost
 
 
 def get_windows_certificate(ad_host):
@@ -65,6 +72,12 @@ class TestWinsyncMigrate(IntegrationTest):
     collision_role2 = 'collision, role'
     collision_role3 = 'collision_role'
     collision_role_normalized = 'collision_role'
+    ad: WinHost
+    trust_test_user: str
+    default_shell: str
+    test_user_uid: str
+    test_user_gid: str
+    selinuxuser: str
 
     @classmethod
     def install(cls, mh):
@@ -92,6 +105,7 @@ class TestWinsyncMigrate(IntegrationTest):
             )
         )
         m = re.match(testuser_regex, result.stdout_text)
+        assert m is not None  # cast out Optional mypy#645
         cls.test_user_uid, cls.test_user_gid = m.groups()
 
     @classmethod

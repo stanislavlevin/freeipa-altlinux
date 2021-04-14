@@ -1,6 +1,6 @@
 # Copyright (C) 2019 FreeIPA Contributors see COPYING for license
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import re
 import textwrap
@@ -13,6 +13,11 @@ from ipatests.pytest_ipa.integration import tasks
 from ipapython.dn import DN
 from collections import namedtuple
 from contextlib import contextmanager
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import Host, WinHost
 
 TestDataRule = namedtuple('TestDataRule',
                           ['name', 'ruletype', 'user', 'subject'])
@@ -32,6 +37,18 @@ class BaseTestTrust(IntegrationTest):
     upn_password = 'Secret123456'
 
     shared_secret = 'qwertyuiopQq!1'
+    ad: WinHost
+    tree_ad: WinHost
+    child_ad: WinHost
+    ad_domain: str
+    ad_subdomain: str
+    ad_treedomain: str
+
+    # values used in workaround for
+    # https://bugzilla.redhat.com/show_bug.cgi?id=1711958
+    srv_gc_record_name = "_ldap._tcp.Default-First-Site-Name._sites.gc._msdcs"
+    srv_gc_record_value: str
+    default_shell: str
 
     @classmethod
     def install(cls, mh):
@@ -50,10 +67,6 @@ class BaseTestTrust(IntegrationTest):
         cls.tree_ad = cls.ad_treedomains[0]
         cls.ad_treedomain = cls.tree_ad.domain.name
 
-        # values used in workaround for
-        # https://bugzilla.redhat.com/show_bug.cgi?id=1711958
-        cls.srv_gc_record_name = \
-            '_ldap._tcp.Default-First-Site-Name._sites.gc._msdcs'
         cls.srv_gc_record_value = '0 100 389 {}.'.format(cls.master.hostname)
         cls.default_shell = cls.master.ipaplatform.constants.DEFAULT_SHELL
 
@@ -68,7 +81,7 @@ class BaseTestTrust(IntegrationTest):
         stdout_re = re.escape('  ipaNTSecurityIdentifier: ') + sid_regex
 
         tasks.run_repeatedly(cls.master, command,
-                             test=lambda x: re.search(stdout_re, x))
+                             test=lambda x: bool(re.search(stdout_re, x)))
 
     def check_trustdomains(self, realm, expected_ad_domains):
         """Check that ipa trustdomain-find lists all expected domains"""
@@ -682,7 +695,7 @@ class TestTrust(BaseTestTrust):
             ], stdin_text=self.master.config.ad_admin_password,
                 raiseonerr=False)
 
-            assert result != 0
+            assert result.returncode != 0
             assert ("Domain '{0}' is not a root domain".format(
                 self.ad_subdomain) in result.stderr_text)
         finally:
@@ -734,7 +747,7 @@ class TestTrust(BaseTestTrust):
             ], stdin_text=self.master.config.ad_admin_password,
                 raiseonerr=False)
 
-            assert result != 0
+            assert result.returncode != 0
             assert ("Domain '{0}' is not a root domain".format(
                 self.ad_treedomain) in result.stderr_text)
         finally:

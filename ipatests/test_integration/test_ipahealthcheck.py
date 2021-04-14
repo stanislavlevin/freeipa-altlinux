@@ -5,7 +5,7 @@
 Tests to verify that the ipa-healthcheck scenarios
 """
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 from datetime import datetime, timedelta
 import json
@@ -32,6 +32,13 @@ from ipatests.test_integration.test_external_ca import (
     install_server_external_ca_step2,
     ISSUER_CN,
 )
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Callable, Iterable, List
+    from ipatests.pytest_ipa.integration.host import Host, WinHost
+    from ipatests.test_integration._types import ServiceDict
 
 HEALTHCHECK_LOG = "/var/log/ipa/healthcheck/healthcheck.log"
 HEALTHCHECK_SYSTEMD_FILE = (
@@ -189,12 +196,12 @@ def run_healthcheck(host, source=None, check=None, output_type="json",
 
 
 @pytest.fixture
-def restart_service():
+def restart_service() -> Iterable[Callable[[Host, str], None]]:
     """Shut down and restart a service as a fixture"""
 
-    service = dict()
+    service: ServiceDict = dict()
 
-    def _stop_service(host, service_name):
+    def _stop_service(host: Host, service_name: str) -> None:
         if 'host' not in service:
             service['host'] = host
             service['name'] = [service_name]
@@ -207,7 +214,9 @@ def restart_service():
     if service.get('name'):
         service.get('name', []).reverse()
         for name in service.get('name', []):
-            service.get('host').systemctl.start(name)
+            host = service.get("host")
+            assert host is not None  # cast out Optional mypy#645
+            host.systemctl.start(name)
 
 
 class TestIpaHealthCheck(IntegrationTest):
@@ -1502,6 +1511,12 @@ class TestIpaHealthCheckWithADtrust(IntegrationTest):
     num_ad_domains = 1
     num_ad_treedomains = 1
     num_ad_subdomains = 1
+    ad_domain: str
+    ad_treedomain: str
+    ad_subdomain: str
+    ad: WinHost
+    tree_ad: WinHost
+    child_ad: WinHost
 
     @classmethod
     def install(cls, mh):
@@ -1756,6 +1771,7 @@ class TestIpaHealthCheckFileCheck(IntegrationTest):
     """
 
     num_replicas = 1
+    master_nssdb_testfiles: List[str]
 
     @classmethod
     def install(cls, mh):
@@ -2217,6 +2233,7 @@ class TestIpaHealthCLI(IntegrationTest):
     Run as a separate class so there is a "clean" system to test
     against.
     """
+    master_base_cmd: List[str]
 
     @classmethod
     def install(cls, mh):

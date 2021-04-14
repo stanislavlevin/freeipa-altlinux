@@ -22,7 +22,7 @@
 # reflect a product bug. -- fcami
 ######
 
-from __future__ import print_function, absolute_import
+from __future__ import annotations
 
 import base64
 import datetime
@@ -309,6 +309,7 @@ class TestEPN(IntegrationTest):
 
     num_clients = 1
     notify_ttls = (28, 14, 7, 3, 1)
+    pkg: str
 
     def _check_epn_output(
         self,

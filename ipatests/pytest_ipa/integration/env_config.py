@@ -23,19 +23,29 @@
 This is here to support tests configured for Beaker,
 such as the ones at https://github.com/freeipa/tests/
 """
+from __future__ import annotations
 
 import os
 import json
 import collections
+import random
 
 from ipapython import ipautil
 from ipatests.pytest_ipa.integration.config import Config, Domain
 from ipalib.constants import MAX_DOMAIN_LEVEL
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import (
+        Any, Dict, Iterator, Mapping, MutableMapping, Optional, Union
+    )
+    from .host import Host, WinHost
+
 TESTHOST_PREFIX = 'TESTHOST_'
 
 
-_SettingInfo = collections.namedtuple('Setting', 'name var_name default')
+_SettingInfo = collections.namedtuple('_SettingInfo', 'name var_name default')
 _setting_infos = (
     # Directory on which test-specific files will be stored,
     _SettingInfo('test_dir', 'IPATEST_DIR', '/root/ipatests'),
@@ -49,12 +59,14 @@ _setting_infos = (
     _SettingInfo('admin_name', 'ADMINID', 'admin'),
     _SettingInfo('admin_password', 'ADMINPW', 'Secret123'),
     _SettingInfo('dirman_dn', 'ROOTDN', 'cn=Directory Manager'),
-    _SettingInfo('dirman_password', 'ROOTDNPWD', None),
+    _SettingInfo('dirman_password', 'ROOTDNPWD', 'Secret123'),
 
     # 8.8.8.8 is probably the best-known public DNS
     _SettingInfo('dns_forwarder', 'DNSFORWARD', '8.8.8.8'),
     _SettingInfo('nis_domain', 'NISDOMAIN', 'ipatest'),
-    _SettingInfo('ntp_server', 'NTPSERVER', None),
+    _SettingInfo(
+        'ntp_server', 'NTPSERVER', "%s.pool.ntp.org" % random.randint(0, 3)
+    ),
     _SettingInfo('ad_admin_name', 'ADADMINID', 'Administrator'),
     _SettingInfo('ad_admin_password', 'ADADMINPW', 'Secret123'),
 
@@ -68,7 +80,7 @@ _setting_infos = (
 )
 
 
-def get_global_config(env=None):
+def get_global_config(env: Optional[Mapping[str, str]] = None) -> Config:
     """Create a test config from environment variables
 
     If env is None, uses os.environ; otherwise env is an environment dict.
@@ -111,7 +123,7 @@ def get_global_config(env=None):
     return config_from_env(env)
 
 
-def config_from_env(env):
+def config_from_env(env: Mapping[str, str]) -> Config:
     if 'IPATEST_YAML_CONFIG' in env:
         try:
             import yaml
@@ -127,10 +139,13 @@ def config_from_env(env):
             confdict = json.load(file)
             return Config.from_dict(confdict)
 
-    env_normalize(env)
+    nenv = dict(env)
+    env_normalize(nenv)
 
-    kwargs = {s.name: env.get(s.var_name, s.default)
-                for s in _setting_infos}
+    kwargs: Dict[str, Any] = {
+        s.name: nenv.get(s.var_name, s.default)
+        for s in _setting_infos
+    }
     kwargs['domains'] = []
 
     # $IPv6SETUP needs to be 'TRUE' to enable ipv6
@@ -142,20 +157,20 @@ def config_from_env(env):
     # Either IPA master or AD can define a domain
 
     domain_index = 1
-    while (env.get('MASTER_env%s' % domain_index) or
-           env.get('AD_env%s' % domain_index) or
-           env.get('AD_SUBDOMAIN_env%s' % domain_index) or
-           env.get('AD_TREEDOMAIN_env%s' % domain_index)):
+    while (nenv.get('MASTER_env%s' % domain_index)
+           or nenv.get('AD_env%s' % domain_index)
+           or nenv.get('AD_SUBDOMAIN_env%s' % domain_index)
+           or nenv.get('AD_TREEDOMAIN_env%s' % domain_index)):
 
-        if env.get('MASTER_env%s' % domain_index):
+        if nenv.get('MASTER_env%s' % domain_index):
             # IPA domain takes precedence to AD domain in case of conflict
-            config.domains.append(domain_from_env(env, config, domain_index,
+            config.domains.append(domain_from_env(nenv, config, domain_index,
                                                   domain_type='IPA'))
         else:
             for domain_type in ('AD', 'AD_SUBDOMAIN', 'AD_TREEDOMAIN'):
-                if env.get('%s_env%s' % (domain_type, domain_index)):
+                if nenv.get('%s_env%s' % (domain_type, domain_index)):
                     config.domains.append(
-                        domain_from_env(env, config, domain_index,
+                        domain_from_env(nenv, config, domain_index,
                                         domain_type=domain_type))
                     break
         domain_index += 1
@@ -163,13 +178,9 @@ def config_from_env(env):
     return config
 
 
-def config_to_env(config, simple=True):
+def config_to_env(config: Config, simple: bool = True) -> Dict[str, str]:
     """Convert this test config into environment variables"""
-    try:
-        env = collections.OrderedDict()
-    except AttributeError:
-        # Older Python versions
-        env = {}
+    env = collections.OrderedDict()
 
     for setting in _setting_infos:
         value = getattr(config, setting.name)
@@ -237,7 +248,7 @@ def config_to_env(config, simple=True):
     return env
 
 
-def env_normalize(env):
+def env_normalize(env: MutableMapping[str, str]) -> None:
     """Fill env variables from alternate variable names
 
     MASTER_env1 <- MASTER
@@ -247,7 +258,7 @@ def env_normalize(env):
 
     CLIENT_env1 gets extended with CLIENT2 or CLIENT2_env1
     """
-    def coalesce(name, *other_names):
+    def coalesce(name: str, *other_names: str) -> None:
         """If name is not set, set it to first existing env[other_name]"""
         if name not in env:
             for other_name in other_names:
@@ -267,7 +278,7 @@ def env_normalize(env):
     coalesce('BEAKERREPLICA1_env1', 'BEAKERREPLICA', 'BEAKERSLAVE')
     coalesce('BEAKERCLIENT1_env1', 'BEAKERCLIENT')
 
-    def extend(name, name2):
+    def extend(name: str, name2: str) -> None:
         value = env.get(name2)
         if value and value not in env[name].split(' '):
             env[name] += ' ' + value
@@ -275,7 +286,12 @@ def env_normalize(env):
     extend('CLIENT_env1', 'CLIENT2_env1')
 
 
-def domain_from_env(env, config, index, domain_type):
+def domain_from_env(
+    env: Mapping[str, str],
+    config: Config,
+    index: int,
+    domain_type: str,
+) -> Domain:
     # Roles available in the domain depend on the type of the domain
     # Unix machines are added only to the IPA domains, Windows machines
     # only to the AD domains
@@ -305,7 +321,9 @@ def domain_from_env(env, config, index, domain_type):
     return domain
 
 
-def _roles_from_env(domain, env, env_suffix):
+def _roles_from_env(
+    domain: Domain, env: Mapping[str, str], env_suffix: str
+) -> Iterator[str]:
     for role in domain.static_roles:
         yield role
 
@@ -321,7 +339,7 @@ def _roles_from_env(domain, env, env_suffix):
         yield role
 
 
-def domain_to_env(domain, **kwargs):
+def domain_to_env(domain: Domain, **kwargs: Any) -> Dict[str, str]:
     """Return environment variables specific to this domain"""
     env = domain.config.to_env(**kwargs)
 
@@ -332,7 +350,14 @@ def domain_to_env(domain, **kwargs):
     return env
 
 
-def host_from_env(env, domain, hostname, role, index, domain_index):
+def host_from_env(
+    env: Mapping[str, str],
+    domain: Domain,
+    hostname: str,
+    role: str,
+    index: int,
+    domain_index: int,
+) -> Union[Host, WinHost]:
     ip = env.get('BEAKER%s%s_IP_env%s' %
                  (role.upper(), index, domain_index), None)
     external_hostname = env.get(
@@ -344,7 +369,7 @@ def host_from_env(env, domain, hostname, role, index, domain_index):
                external_hostname=external_hostname)
 
 
-def host_to_env(host, **kwargs):
+def host_to_env(host: Host, **kwargs: Any) -> Dict[str, str]:
     """Return environment variables specific to this host"""
     env = host.domain.to_env(**kwargs)
 
@@ -368,6 +393,6 @@ def host_to_env(host, **kwargs):
     return env
 
 
-def env_to_script(env):
+def env_to_script(env: Mapping[str, str]) -> str:
     return ''.join(['export %s=%s\n' % (key, ipautil.shell_quote(value))
                     for key, value in env.items()])

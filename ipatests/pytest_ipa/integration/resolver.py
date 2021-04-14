@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import abc
 import logging
@@ -7,19 +9,35 @@ import time
 
 from . import tasks
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from types import TracebackType
+    from typing import Iterable, List, Optional, Type, Union
+    from .host import Host
+    from ipatests.pytest_ipa.integration._types import (
+        ResolverState,
+        ResolvedState,
+        ResolvConfState,
+        NMState,
+    )
 
 logger = logging.getLogger(__name__)
 
 
 class Resolver(abc.ABC):
-    def __init__(self, host):
+    def __init__(self, host: Host) -> None:
         self.host = host
-        self.backups = []
+        self.backups: List[ResolverState] = []
         self.current_state = self._get_state()
         logger.info('Obtained initial resolver state for host %s: %s',
                     self.host, self.current_state)
 
-    def setup_resolver(self, nameservers, searchdomains=None):
+    def setup_resolver(
+        self,
+        nameservers: Union[Iterable[str], str],
+        searchdomains: Union[Iterable[str], str, None] = None,
+    ) -> None:
         """Configure DNS resolver
 
         :param nameservers: IP address of nameserver or a list of addresses
@@ -48,7 +66,7 @@ class Resolver(abc.ABC):
         state = self._make_state_from_args(nameservers, searchdomains)
         self._set_state(state)
 
-    def backup(self):
+    def backup(self) -> None:
         """Saves current configuration to stack
 
         Raises exception if configuration was changed externally since last call
@@ -61,7 +79,7 @@ class Resolver(abc.ABC):
             self.host, len(self.backups)
         )
 
-    def restore(self):
+    def restore(self) -> None:
         """Restore configuration from stack of backups.
 
         Raises exception if configuration was changed externally since last call
@@ -78,11 +96,11 @@ class Resolver(abc.ABC):
             self.host, len(self.backups)
         )
 
-    def has_backups(self):
+    def has_backups(self) -> bool:
         """Checks if stack of backups is not empty"""
         return bool(self.backups)
 
-    def check_state_expected(self):
+    def check_state_expected(self) -> None:
         """Checks if resolver configuration has not changed.
 
         Raises AssertionError if actual configuration has changed since last
@@ -91,25 +109,33 @@ class Resolver(abc.ABC):
         assert self._get_state() == self.current_state, (
             'Resolver state changed unexpectedly at host {}'.format(self.host))
 
-    def __enter__(self):
+    def __enter__(self) -> Resolver:
         self.backup()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         self.restore()
 
-    def _set_state(self, state):
+    def _set_state(self, state: ResolverState) -> None:
         self._apply_state(state)
         logger.info('Applying resolver state for host %s: %s', self.host, state)
         self.current_state = state
 
-    @abc.abstractclassmethod
-    def is_our_resolver(cls, host):
+    @classmethod
+    @abc.abstractmethod
+    def is_our_resolver(cls, host: Host) -> bool:
         """Checks if the class is appropriate for managing resolver on the host.
         """
 
     @abc.abstractmethod
-    def _make_state_from_args(self, nameservers, searchdomains):
+    def _make_state_from_args(
+        self, nameservers: Iterable[str], searchdomains: Iterable[str]
+    ) -> ResolverState:
         """
 
         :param nameservers: list of ip addresses of nameservers
@@ -118,20 +144,20 @@ class Resolver(abc.ABC):
         """
 
     @abc.abstractmethod
-    def _get_state(self):
+    def _get_state(self) -> ResolverState:
         """Acquire actual host configuration.
 
         :return: internal state object  specific to subclass implementaion
         """
 
     @abc.abstractmethod
-    def _apply_state(self, state):
+    def _apply_state(self, state: ResolverState) -> None:
         """Apply configuration to host.
 
         :param state: internal state object  specific to subclass implementaion
         """
 
-    def uses_localhost_as_dns(self):
+    def uses_localhost_as_dns(self) -> bool:
         """Return true if the localhost is set as DNS server.
 
         Default implementation checks the content of /etc/resolv.conf
@@ -161,7 +187,7 @@ class ResolvedResolver(Resolver):
     ''')
 
     @classmethod
-    def is_our_resolver(cls, host):
+    def is_our_resolver(cls, host: Host) -> bool:
         res = host.run_command(
             ['stat', '--format', '%F', host.ipaplatform.paths.RESOLV_CONF])
         filetype = res.stdout_text.strip()
@@ -172,7 +198,7 @@ class ResolvedResolver(Resolver):
             return (res.stdout_text.strip() in cls.RESOLVED_RESOLV_CONF)
         return False
 
-    def _restart_resolved(self):
+    def _restart_resolved(self) -> None:
         # Restarting service at rapid pace (which is what happens in some test
         # scenarios) can exceed the threshold configured in systemd option
         # StartLimitIntervalSec. In that case restart fails, but we can simply
@@ -189,14 +215,16 @@ class ResolvedResolver(Resolver):
             timeout=15,
         )
 
-    def _make_state_from_args(self, nameservers, searchdomains):
+    def _make_state_from_args(
+        self, nameservers: Iterable[str], searchdomains: Iterable[str]
+    ) -> ResolvedState:
         return {
             'resolved_config': self.RESOLVED_CONF.format(
                 nameservers=' '.join(nameservers),
                 searchdomains=' '.join(searchdomains))
         }
 
-    def _get_state(self):
+    def _get_state(self) -> ResolvedState:
         exists = self.host.transport.file_exists(self.RESOLVED_CONF_FILE)
         return {
             'resolved_config':
@@ -204,7 +232,9 @@ class ResolvedResolver(Resolver):
                 if exists else None
         }
 
-    def _apply_state(self, state):
+    def _apply_state(  # type: ignore[override]
+        self, state: ResolvedState
+    ) -> None:
         if state['resolved_config'] is None:
             self.host.run_command(['rm', '-f', self.RESOLVED_CONF_FILE])
         else:
@@ -214,7 +244,7 @@ class ResolvedResolver(Resolver):
                 self.RESOLVED_CONF_FILE, state['resolved_config'])
         self._restart_resolved()
 
-    def uses_localhost_as_dns(self):
+    def uses_localhost_as_dns(self) -> bool:
         """Return true if the localhost is set as DNS server.
 
         When systemd-resolved is in use, the DNS can be found using
@@ -230,7 +260,7 @@ class PlainFileResolver(Resolver):
     IPATESTS_RESOLVER_COMMENT = '# created by ipatests'
 
     @classmethod
-    def is_our_resolver(cls, host):
+    def is_our_resolver(cls, host: Host) -> bool:
         res = host.run_command(
             ['stat', '--format', '%F', host.ipaplatform.paths.RESOLV_CONF])
         filetype = res.stdout_text.strip()
@@ -258,7 +288,9 @@ class PlainFileResolver(Resolver):
             ])
         return False
 
-    def _make_state_from_args(self, nameservers, searchdomains):
+    def _make_state_from_args(
+        self, nameservers: Iterable[str], searchdomains: Iterable[str]
+    ) -> ResolvConfState:
         contents_lines = [self.IPATESTS_RESOLVER_COMMENT]
         contents_lines.extend('nameserver {}'.format(r) for r in nameservers)
         if searchdomains:
@@ -266,14 +298,16 @@ class PlainFileResolver(Resolver):
         contents = '\n'.join(contents_lines)
         return {'resolv_conf': contents}
 
-    def _get_state(self):
+    def _get_state(self) -> ResolvConfState:
         return {
             'resolv_conf': self.host.get_file_contents(
                 self.host.ipaplatform.paths.RESOLV_CONF, "utf-8"
             )
         }
 
-    def _apply_state(self, state):
+    def _apply_state(  # type: ignore[override]
+        self, state: ResolvConfState
+    ) -> None:
         self.host.put_file_contents(
             self.host.ipaplatform.paths.RESOLV_CONF, state["resolv_conf"]
         )
@@ -294,7 +328,7 @@ class NetworkManagerResolver(Resolver):
     ''')
 
     @classmethod
-    def is_our_resolver(cls, host):
+    def is_our_resolver(cls, host: Host) -> bool:
         res = host.run_command(
             ['stat', '--format', '%F', host.ipaplatform.paths.RESOLV_CONF])
         filetype = res.stdout_text.strip()
@@ -305,7 +339,7 @@ class NetworkManagerResolver(Resolver):
             return resolv_conf.startswith('# Generated by NetworkManager')
         return False
 
-    def _restart_network_manager(self):
+    def _restart_network_manager(self) -> None:
         # Restarting service at rapid pace (which is what happens in some test
         # scenarios) can exceed the threshold configured in systemd option
         # StartLimitIntervalSec. In that case restart fails, but we can simply
@@ -322,12 +356,14 @@ class NetworkManagerResolver(Resolver):
             timeout=15,
         )
 
-    def _make_state_from_args(self, nameservers, searchdomains):
+    def _make_state_from_args(
+        self, nameservers: Iterable[str], searchdomains: Iterable[str]
+    ) -> NMState:
         return {'nm_config': self.NM_CONF.format(
             nameservers=','.join(nameservers),
             searchdomains=','.join(searchdomains))}
 
-    def _get_state(self):
+    def _get_state(self) -> NMState:
         exists = self.host.transport.file_exists(self.NM_CONF_FILE)
         return {
             'nm_config':
@@ -335,8 +371,8 @@ class NetworkManagerResolver(Resolver):
                 if exists else None
         }
 
-    def _apply_state(self, state):
-        def get_resolv_conf_mtime():
+    def _apply_state(self, state: NMState) -> None:  # type: ignore[override]
+        def get_resolv_conf_mtime() -> str:
             """Get mtime of /etc/resolv.conf.
 
             Returns mtime with sub-second precision as a string with format
@@ -373,9 +409,17 @@ class NetworkManagerResolver(Resolver):
                             'in 10 seconds after restart')
 
 
-def resolver(host):
-    for cls in [ResolvedResolver, NetworkManagerResolver,
-                PlainFileResolver]:
+def resolver(
+    host: Host,
+) -> Union[ResolvedResolver, NetworkManagerResolver, PlainFileResolver]:
+    resolver_classes: Iterable[
+        Union[
+            Type[ResolvedResolver],
+            Type[NetworkManagerResolver],
+            Type[PlainFileResolver],
+        ]
+    ] = [ResolvedResolver, NetworkManagerResolver, PlainFileResolver]
+    for cls in resolver_classes:
         if cls.is_our_resolver(host):
             logger.info('Detected DNS resolver manager for host %s is %s',
                         host.hostname, cls)

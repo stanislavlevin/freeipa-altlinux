@@ -1,23 +1,29 @@
 #
 # Copyright (C) 2017  FreeIPA Contributors see COPYING for license
 #
+from __future__ import annotations
 
 import pytest
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration.tasks import clear_sssd_cache
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.test_integration._types import NetGroupDataDict
 
 test_data = []
 for i in range(3):
-    data = {
-        'user': {
-            'login': 'testuser_{}'.format(i),
-            'first': 'Test_{}'.format(i),
-            'last': 'User_{}'.format(i),
+    data: NetGroupDataDict = {
+        "user": {
+            "login": f"testuser_{i}",
+            "first": f"Test_{i}",
+            "last": f"User_{i}",
         },
-        'netgroup': 'testgroup_{}'.format(i),
-        'nested_netgroup': 'testgroup_{}'.format(i-1) if i > 0 else None
+        "netgroup": f"testgroup_{i}",
+        "nested_netgroup": f"testgroup_{i-1}" if i > 0 else None,
+        "netgroup_nested_members": [],
     }
     test_data.append(data)
     members = [d['user']['login'] for d in test_data]

@@ -1,7 +1,7 @@
 #
 # Copyright (C) 2016  FreeIPA Contributors see COPYING for license
 #
-from __future__ import print_function
+from __future__ import annotations
 
 import os
 import pprint
@@ -17,11 +17,18 @@ import ipatests.util
 
 try:
     import ipaplatform  # pylint: disable=unused-import
-except ImportError:
-    ipaplatform = None
-    osinfo = None
-else:
     from ipaplatform.osinfo import osinfo
+except ImportError:
+    ipaplatform = None  # type: ignore[assignment] # mypy#1153
+    osinfo = None  # type: ignore[assignment] # mypy#1153
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from _pytest.config import Config
+    from _pytest.config.argparsing import Parser
+    from _pytest.fixtures import FixtureRequest
+    from _pytest.nodes import Item
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -113,7 +120,7 @@ INIVALUES = {
 }
 
 
-def pytest_configure(config):
+def pytest_configure(config: Config) -> None:
     # add pytest markers
     for marker in MARKERS:
         config.addinivalue_line('markers', marker)
@@ -140,7 +147,7 @@ def pytest_configure(config):
     ipatests.util.PRETTY_PRINT = config.option.pretty_print
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: Parser) -> None:
     group = parser.getgroup("IPA integration tests")
     group.addoption(
         '--ipaclient-unittests',
@@ -154,7 +161,7 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_cmdline_main(config):
+def pytest_cmdline_main(config: Config) -> None:
     kwargs = dict(
         context=u'cli', in_server=False, fallback=False
     )
@@ -182,7 +189,7 @@ def pytest_cmdline_main(config):
         print('sys.version: {}'.format(sys.version))
 
 
-def pytest_runtest_setup(item):
+def pytest_runtest_setup(item: Item) -> None:
     if isinstance(item, pytest.Function):
         if item.get_closest_marker('skip_ipaclient_unittest'):
             # pylint: disable=no-member
@@ -224,7 +231,7 @@ def pytest_runtest_setup(item):
                         f"Skip test on '{container}' container type: {reason}")
 
 
-def pytest_runtest_call(item):
+def pytest_runtest_call(item: Item) -> None:
     # process only own_markers to avoid double checking
     # all the host markers have been handled in mh fixture before this hook
     for mark in item.own_markers:
@@ -235,6 +242,9 @@ def pytest_runtest_call(item):
             "skip_if_not_hostselinux",
             "skip_if_host",
         ]:
+            # not all deps are available on pypi
+            from ipatests.pytest_ipa.integration.host import Host
+
             tests_dir = item.nodeid.split(os.sep, 1)[0]
             if tests_dir != "test_integration":
                 raise ValueError(
@@ -245,13 +255,23 @@ def pytest_runtest_call(item):
             if hostattr is None:
                 hostattr = mark.args[0]
 
-            hosts = getattr(item.cls, hostattr)
+            if not isinstance(hostattr, str):
+                raise TypeError(
+                    f"hostattr should be str, given: {hostattr!r}"
+                )
+
+            hosts = getattr(item.cls, hostattr)  # type: ignore[attr-defined]
             hostindex = mark.kwargs.get("hostindex")
             if hostindex is not None:
                 host = hosts[int(hostindex)]
             else:
                 host = hosts
+            if not isinstance(host, Host):
+                raise TypeError(f"Supported only IPA hosts, given: {host!r}")
+
             reason = mark.kwargs["reason"]
+            if not isinstance(reason, str):
+                raise TypeError(f"Reason should be str, given: {reason!r}")
 
             if mark.name == "skip_if_hostplatform":
                 platform = mark.kwargs["platform"]
@@ -264,6 +284,10 @@ def pytest_runtest_call(item):
 
             if mark.name == "skip_if_hostcontainer":
                 container = mark.kwargs["container"]
+                if not isinstance(container, str):
+                    raise TypeError(
+                        f"container should be str, given: {container!r}"
+                    )
                 if container in ["any", host.ipaplatform.osinfo.container]:
                     pytest.skip(
                         f"{item.nodeid}: Skip test on remote host "
@@ -288,6 +312,9 @@ def pytest_runtest_call(item):
 
             if mark.name == "skip_if_host":
                 condition_cb = mark.kwargs["condition_cb"]
+                if not callable(condition_cb):
+                    raise TypeError("condition_cb should be callable")
+
                 if condition_cb(host):
                     pytest.skip(
                         f"{item.nodeid}: Skip test on remote host "
@@ -295,10 +322,10 @@ def pytest_runtest_call(item):
                     )
 
 @pytest.fixture
-def tempdir(request):
+def tempdir(request: FixtureRequest) -> str:
     tempdir = tempfile.mkdtemp()
 
-    def fin():
+    def fin() -> None:
         shutil.rmtree(tempdir)
 
     request.addfinalizer(fin)

@@ -9,14 +9,22 @@ Userspace FIPS mode fakes a Kernel in FIPS enforcing mode. User space
 programs behave like the Kernel was booted in FIPS enforcing mode. Kernel
 space code still runs in standard mode.
 """
+from __future__ import annotations
+
 import os
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .host import Host
+
 
 FIPS_OVERLAY_DIR = "/var/tmp/userspace-fips"
 FIPS_OVERLAY = os.path.join(FIPS_OVERLAY_DIR, "fips_enabled")
 SYSTEM_FIPS = "/etc/system-fips"
 
 
-def is_fips_enabled(host):
+def is_fips_enabled(host: Host) -> bool:
     """Check if host has """
     result = host.run_command(
         ["cat", host.ipaplatform.paths.PROC_FIPS_ENABLED], raiseonerr=False
@@ -30,7 +38,7 @@ def is_fips_enabled(host):
         raise RuntimeError(result.stderr_text)
 
 
-def enable_userspace_fips(host):
+def enable_userspace_fips(host: Host) -> None:
     # create /etc/system-fips
     host.put_file_contents(SYSTEM_FIPS, "# userspace fips\n")
     # fake Kernel FIPS mode with bind mount
@@ -56,7 +64,7 @@ def enable_userspace_fips(host):
     assert "EVP_DigestInit_ex:disabled for FIPS" in result.stderr_text
 
 
-def disable_userspace_fips(host):
+def disable_userspace_fips(host: Host) -> None:
     host.run_command(["rm", "-f", SYSTEM_FIPS])
     host.run_command(["update-crypto-policies", "--set", "DEFAULT"])
     result = host.run_command(

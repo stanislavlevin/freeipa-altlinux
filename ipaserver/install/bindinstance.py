@@ -17,8 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from __future__ import absolute_import
-from __future__ import print_function
+from __future__ import annotations
 
 import logging
 import tempfile
@@ -62,6 +61,11 @@ from ipalib.util import (validate_zonemgr_str, normalize_zonemgr,
                          zone_is_reverse, validate_dnssec_global_forwarder,
                          DNSSECSignatureMissingError, EDNS0UnsupportedError,
                          UnresolvableRecordError)
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Dict, Optional
 
 if six.PY3:
     unicode = str
@@ -660,7 +664,7 @@ class BindInstance(service.Service):
         self.forward_policy = None
         self.zonemgr = None
         self.no_dnssec_validation = False
-        self.sub_dict = None
+        self.sub_dict: Optional[Dict[str, str]] = None
         self.reverse_zones = ()
         self.named_conflict = services.service('named-conflict', api)
 

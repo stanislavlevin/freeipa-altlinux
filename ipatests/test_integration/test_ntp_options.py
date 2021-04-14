@@ -1,11 +1,17 @@
 #
 # Copyright (C) 2018  FreeIPA Contributors see COPYING for license
 #
+from __future__ import annotations
 
 import pytest
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import Host
 
 
 class TestNTPoptions(IntegrationTest):
@@ -17,6 +23,8 @@ class TestNTPoptions(IntegrationTest):
     """
     num_clients = 1
     num_replicas = 1
+    client: Host
+    replica: Host
 
     ntp_pool = "pool.ntp.org"
     ntp_server1 = "1.pool.ntp.org"

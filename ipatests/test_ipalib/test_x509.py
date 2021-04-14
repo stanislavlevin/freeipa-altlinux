@@ -20,6 +20,7 @@
 """
 Test the `ipalib.x509` module.
 """
+from __future__ import annotations
 
 import base64
 from binascii import hexlify
@@ -375,7 +376,7 @@ class test_ExternalCAProfile:
         configuration.
         """
         config = RawConfigParser()
-        config.optionxform = str
+        setattr(config, "optionxform", str)  # mypy#2427
         config.add_section("CA")
         config.set("CA", "pki_req_ext_oid", template.ext_oid)
         config.set("CA", "pki_req_ext_data",

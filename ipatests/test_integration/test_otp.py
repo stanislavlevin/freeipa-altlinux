@@ -3,6 +3,8 @@
 #
 """OTP token tests
 """
+from __future__ import annotations
+
 import base64
 import logging
 import paramiko
@@ -42,10 +44,14 @@ def add_otptoken(host, owner, *, otptype="hotp", digits=6, algo="sha1"):
         "--no-qrcode",
     ]
     result = host.run_command(args)
-    otpuid = re.search(
+    otpuid_search = re.search(
         r"Unique ID:\s*([a-z0-9-]*)\s+", result.stdout_text
-    ).group(1)
-    otpuristr = re.search(r"URI:\s*(.*)\s+", result.stdout_text).group(1)
+    )
+    assert otpuid_search is not None  # cast out Optional mypy#645
+    otpuid = otpuid_search.group(1)
+    otpuristr_search = re.search(r"URI:\s*(.*)\s+", result.stdout_text)
+    assert otpuristr_search is not None  # cast out Optional mypy#645
+    otpuristr = otpuristr_search.group(1)
     otpuri = urlparse(otpuristr)
     assert otpuri.netloc == otptype
 
@@ -121,6 +127,7 @@ class TestOTPToken(IntegrationTest):
     """
 
     topology = "line"
+    service_name: str
 
     @classmethod
     def install(cls, mh):

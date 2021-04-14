@@ -2,7 +2,7 @@
 # Copyright (C) 2015  FreeIPA Contributors see COPYING for license
 #
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import base64
 import logging
@@ -20,6 +20,11 @@ from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.firewall import Firewall
 from ipapython.dnsutil import DNSResolver
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -764,6 +769,7 @@ class TestInstallNoDnssecValidation(IntegrationTest):
     a replica (that is not yet setup).
     """
     num_replicas = 1
+    install_args: List[str]
 
     @classmethod
     def install(cls, mh):

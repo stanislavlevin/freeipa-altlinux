@@ -16,6 +16,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import json
 import copy
@@ -27,6 +28,12 @@ import ipatests.pytest_ipa.integration.host
 from ipapython.ipautil import write_tmp_file
 from ipatests.util import assert_deepequal
 from ipalib.constants import MAX_DOMAIN_LEVEL
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Dict
+    from ipatests.test_integration._types import ConfigDict
 
 DEFAULT_OUTPUT_DICT = {
     "nis_domain": "ipatest",
@@ -116,7 +123,10 @@ class CheckConfig:
 
     def test_dict_to_env(self):
         conf = config.Config.from_dict(self.get_input_dict())
-        assert_deepequal(self.get_output_env(), dict(conf.to_env()))
+        assert_deepequal(
+            self.get_output_env(),
+            dict(conf.to_env()),  # pylint: disable=no-member
+        )
         self.check_config(conf)
 
     def test_dict_to_dict(self):
@@ -141,25 +151,29 @@ class CheckConfig:
         self.check_config(conf)
 
     # Settings to override:
-    extra_input_dict = {}
-    extra_input_env = {}
-    extra_output_dict = {}
-    extra_output_env = {}
+    extra_input_dict: ConfigDict = {}
+    extra_input_env: Dict[str, str] = {}
+    extra_output_dict: ConfigDict = {}
+    extra_output_env: Dict[str, str] = {}
 
 
 class TestEmptyConfig(CheckConfig):
-    extra_input_dict = {}
-    extra_input_env = {}
-    extra_output_dict = {}
-    extra_output_env = {}
+    extra_input_dict: ConfigDict = {}
+    extra_input_env: Dict[str, str] = {}
+    extra_output_dict: ConfigDict = {}
+    extra_output_env: Dict[str, str] = {}
 
 
 class TestMinimalConfig(CheckConfig):
     extra_input_dict = dict(
         domains=[
-            dict(name='ipadomain.test', type='IPA', hosts=[
-                dict(name='master', ip='192.0.2.1', host_type=None),
-            ]),
+            dict(
+                name='ipadomain.test',
+                type='IPA',
+                hosts=[
+                    dict(name='master', ip='192.0.2.1', host_type=None),
+                ]
+            ),
         ],
     )
     extra_input_env = dict(
@@ -508,8 +522,10 @@ class TestComplexConfig(CheckConfig):
     def check_config(self, conf):
         assert len(conf.domains) == 5
         main_dom = conf.domains[0]
+        # mypy#9590
+        sort_key = lambda h: h.role
         (client1, client2, extra, extram1, extram2, _master,
-         replica1, replica2) = sorted(main_dom.hosts, key=lambda h: h.role)
+         replica1, replica2) = sorted(main_dom.hosts, key=sort_key)
         assert main_dom.name == 'ipadomain.test'
         assert main_dom.type == 'IPA'
 

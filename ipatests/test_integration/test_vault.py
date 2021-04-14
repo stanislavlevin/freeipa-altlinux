@@ -155,7 +155,7 @@ class TestInstallKRA(IntegrationTest):
     def test_create_and_retrieve_vault_replica_with_kra(self):
 
         # install KRA on replica
-        tasks.install_kra(self.replicas[0], first_instance=False)
+        tasks.install_kra(self.replicas[0])
 
         # create vault
         self.replicas[0].run_command([

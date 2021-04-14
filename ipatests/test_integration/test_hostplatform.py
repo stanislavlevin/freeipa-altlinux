@@ -1,6 +1,7 @@
 #
 # Copyright (C) 2021  FreeIPA Contributors see COPYING for license
 #
+from __future__ import annotations
 
 import os
 import textwrap
@@ -27,15 +28,15 @@ PATHS_CODE = textwrap.dedent(
 
 
         class TestplatformPathsNamespace(BasePathNamespace):
-            TEST_STR_PATH = "/foo/bar"
-            TEST_INT_PATH = 1
-            TEST_BOOL_PATH = True
-            TEST_NONE_PATH = None
-            TEST_LIST_PATH = ["foo", "bar"]
-            TEST_TUPLE_PATH = ("foo", "bar")
-            TEST_DICT_PATH = {"foo": "bar"}
+            STR_P = "/foo/bar"
+            INT_P = 1
+            BOOL_P = True
+            NONE_P = None
+            LIST_P = ["foo", "bar"]
+            TUPLE_P = ("foo", "bar")
+            DICT_P = {"foo": "bar"}
 
-            TEST_OBJ_PATH = object()
+            OBJ_P = object()
             def foo(self):
                 pass
 
@@ -53,18 +54,18 @@ CONSTANTS_CODE = textwrap.dedent(
 
 
         class TestplatformConstantsNamespace(BaseConstantsNamespace):
-            TEST_STR_CONST = "/foo/bar"
-            TEST_INT_CONST = 1
-            TEST_BOOL_CONST = True
-            TEST_NONE_CONST = None
-            TEST_LIST_CONST = ["foo", "bar"]
-            TEST_TUPLE_CONST = ("foo", "bar")
-            TEST_DICT_CONST = {"foo": "bar"}
+            STR_C = "/foo/bar"
+            INT_C = 1
+            BOOL_C = True
+            NONE_C = None
+            LIST_C = ["foo", "bar"]
+            TUPLE_C = ("foo", "bar")
+            DICT_C = {"foo": "bar"}
 
-            TEST_USER_CONST = User("_someuser")
-            TEST_GROUP_CONST = Group("_somegroup")
+            USER_C = User("_someuser")
+            GROUP_C = Group("_somegroup")
 
-            TEST_OBJ_CONST = object()
+            OBJ_C = object()
             def foo(self):
                 pass
 
@@ -184,45 +185,43 @@ class TestHostPlatform(IntegrationTest):
         pass
 
     def test_paths_attrs(self):
-        host_paths = self.replicas[0].ipaplatform.paths
+        hp = self.replicas[0].ipaplatform.paths
 
         # pylint: disable=no-member
-        assert host_paths.TEST_STR_PATH == "/foo/bar", host_paths
-        assert host_paths.TEST_INT_PATH == 1, host_paths
-        assert host_paths.TEST_BOOL_PATH is True, host_paths
-        assert host_paths.TEST_NONE_PATH is None, host_paths
-        assert host_paths.TEST_LIST_PATH == ["foo", "bar"], host_paths
-        assert host_paths.TEST_TUPLE_PATH == ["foo", "bar"], host_paths
-        assert host_paths.TEST_DICT_PATH == {"foo": "bar"}, host_paths
+        assert hp.STR_P == "/foo/bar", hp  # type: ignore[attr-defined]
+        assert hp.INT_P == 1, hp  # type: ignore[attr-defined]
+        assert hp.BOOL_P is True, hp  # type: ignore[attr-defined]
+        assert hp.NONE_P is None, hp  # type: ignore[attr-defined]
+        assert hp.LIST_P == ["foo", "bar"], hp  # type: ignore[attr-defined]
+        assert hp.TUPLE_P == ["foo", "bar"], hp  # type: ignore[attr-defined]
+        assert hp.DICT_P == {"foo": "bar"}, hp  # type: ignore[attr-defined]
 
         with pytest.raises(AttributeError):
-            assert host_paths.TEST_OBJ_PATH == "something"
+            assert hp.OBJ_P == "something"  # type: ignore[attr-defined]
 
         with pytest.raises(AttributeError):
-            assert host_paths.foo == "something"
+            assert hp.foo == "something"  # type: ignore[attr-defined]
         # pylint: enable=no-member
 
     def test_constants_attrs(self):
-        host_constants = self.replicas[0].ipaplatform.constants
+        hc = self.replicas[0].ipaplatform.constants
         # pylint: disable=no-member
-        assert host_constants.TEST_STR_CONST == "/foo/bar", host_constants
-        assert host_constants.TEST_INT_CONST == 1, host_constants
-        assert host_constants.TEST_BOOL_CONST is True, host_constants
-        assert host_constants.TEST_NONE_CONST is None, host_constants
-        assert host_constants.TEST_LIST_CONST == ["foo", "bar"], host_constants
-        assert (
-            host_constants.TEST_TUPLE_CONST == ["foo", "bar"]
-        ), host_constants
-        assert host_constants.TEST_DICT_CONST == {"foo": "bar"}, host_constants
+        assert hc.STR_C == "/foo/bar", hc  # type: ignore[attr-defined]
+        assert hc.INT_C == 1, hc  # type: ignore[attr-defined]
+        assert hc.BOOL_C is True, hc  # type: ignore[attr-defined]
+        assert hc.NONE_C is None, hc  # type: ignore[attr-defined]
+        assert hc.LIST_C == ["foo", "bar"], hc  # type: ignore[attr-defined]
+        assert hc.TUPLE_C == ["foo", "bar"], hc  # type: ignore[attr-defined]
+        assert hc.DICT_C == {"foo": "bar"}, hc  # type: ignore[attr-defined]
 
-        assert host_constants.TEST_USER_CONST == "_someuser", host_constants
-        assert host_constants.TEST_GROUP_CONST == "_somegroup", host_constants
+        assert hc.USER_C == "_someuser", hc  # type: ignore[attr-defined]
+        assert hc.GROUP_C == "_somegroup", hc  # type: ignore[attr-defined]
 
         with pytest.raises(AttributeError):
-            assert host_constants.TEST_OBJ_CONST == "something"
+            assert hc.OBJ_C == "something"  # type: ignore[attr-defined]
 
         with pytest.raises(AttributeError):
-            assert host_constants.foo == "something"
+            assert hc.foo == "something"  # type: ignore[attr-defined]
         # pylint: enable=no-member
 
     def test_osinfo_attrs(self):

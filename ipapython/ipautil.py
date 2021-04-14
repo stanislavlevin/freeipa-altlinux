@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from __future__ import print_function
+from __future__ import annotations
 
 import codecs
 import logging
@@ -54,6 +54,11 @@ except ImportError:
 from ipapython.dn import DN
 from ipaplatform.paths import paths
 from ipaplatform.constants import User, Group
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Union
 
 
 logger = logging.getLogger(__name__)
@@ -273,7 +278,8 @@ class CheckedIPAddressLoopback(CheckedIPAddress):
 def valid_ip(addr):
     return netaddr.valid_ipv4(addr) or netaddr.valid_ipv6(addr)
 
-def format_netloc(host, port=None):
+
+def format_netloc(host: str, port: Union[str, int, None] = None) -> str:
     """
     Format network location (host:port).
 

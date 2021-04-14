@@ -18,6 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Base class for FreeIPA integration tests"""
+from __future__ import annotations
 
 import pytest
 import subprocess
@@ -25,6 +26,17 @@ import subprocess
 from ipatests.pytest_ipa.integration import tasks
 from pytest_sourceorder import ordered
 
+from typing import Iterable, Optional, List, Sequence, TYPE_CHECKING, Union
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import Host, WinHost
+    from ipatests.pytest_ipa.integration.config import (
+        Domain, IPA_HOST_ROLES, AD_HOST_ROLES
+    )
+    from ipatests.pytest_ipa.integration._types import (
+        IpaMHFixture,
+        HOST_LOGS_ATYPE,
+    )
 
 @ordered
 @pytest.mark.usefixtures('mh')
@@ -35,43 +47,47 @@ class IntegrationTest:
     num_ad_domains = 0
     num_ad_subdomains = 0
     num_ad_treedomains = 0
-    required_extra_roles = []
-    topology = None
-    domain_level = None
-    fips_mode = None
+    required_extra_roles: List[str] = []
+    topology: Optional[str] = None
+    domain_level: Optional[int] = None
+    fips_mode: Optional[bool] = None
+    master: Host
+    clients: List[Host]
+    replicas: List[Host]
+    domain: Domain
+    logs_to_collect: HOST_LOGS_ATYPE
+
+    ad_domains: List[Domain]
+    ads: List[WinHost]
+    ad_subdomains: Sequence[WinHost]
+    ad_treedomains: Sequence[WinHost]
 
     @classmethod
-    def host_by_role(cls, role):
-        for domain in cls.get_domains():
-            try:
-                return domain.host_by_role(role)
-            except LookupError:
-                pass
-        raise LookupError(role)
+    def get_all_hosts_(cls) -> Iterable[Union[Host, WinHost]]:
+        return cls.domain.config.get_all_hosts()
 
     @classmethod
-    def get_all_hosts(cls):
-        return ([cls.master] + cls.replicas + cls.clients +
-                [cls.host_by_role(r) for r in cls.required_extra_roles])
+    def get_all_ipa_hosts(cls) -> Iterable[Host]:
+        return cls.domain.config.get_all_ipa_hosts()
 
     @classmethod
-    def get_domains(cls):
+    def get_domains(cls) -> List[Domain]:
         return [cls.domain] + cls.ad_domains
 
     @classmethod
-    def enable_fips_mode(cls):
-        for host in cls.get_all_hosts():
+    def enable_fips_mode(cls) -> None:
+        for host in cls.get_all_ipa_hosts():
             if not host.is_fips_mode:
                 host.enable_userspace_fips()
 
     @classmethod
-    def disable_fips_mode(cls):
-        for host in cls.get_all_hosts():
+    def disable_fips_mode(cls) -> None:
+        for host in cls.get_all_ipa_hosts():
             if host.is_userspace_fips:
                 host.disable_userspace_fips()
 
     @classmethod
-    def install(cls, mh):
+    def install(cls, mh: IpaMHFixture) -> None:
         if cls.domain_level is not None:
             domain_level = cls.domain_level
         else:
@@ -89,7 +105,7 @@ class IntegrationTest:
                                cls.master, cls.replicas,
                                cls.clients, domain_level)
     @classmethod
-    def uninstall(cls, mh):
+    def uninstall(cls, mh: IpaMHFixture) -> None:
         for replica in cls.replicas:
             try:
                 tasks.run_server_del(

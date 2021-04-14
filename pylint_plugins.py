@@ -9,7 +9,7 @@ import os.path
 import sys
 import textwrap
 
-from astroid import MANAGER, register_module_extender
+from astroid import MANAGER, parse, register_module_extender
 from astroid import scoped_nodes
 from pylint.checkers import BaseChecker
 from pylint.checkers.utils import check_messages
@@ -185,13 +185,62 @@ ipa_class_members = {
 }
 
 
-def fix_ipa_classes(cls):
-    class_name_with_module = "{}.{}".format(cls.root().name, cls.name)
-    if class_name_with_module in ipa_class_members:
-        fake_class(cls, ipa_class_members[class_name_with_module])
+def transform_ipa_classes(node):
+    fake_class(node, ipa_class_members[node.qname()])
 
 
-MANAGER.register_transform(scoped_nodes.ClassDef, fix_ipa_classes)
+MANAGER.register_transform(
+    scoped_nodes.ClassDef,
+    transform_ipa_classes,
+    lambda node: node.qname() in ipa_class_members,
+)
+
+
+def transform_integrationtest(node):
+    module = parse(
+        """
+    from ipatests.pytest_ipa.integration.host import Host, WinHost
+    from ipatests.pytest_ipa.integration.config import Config, Domain
+
+    class PylintIPAHosts:
+        def __getitem__(self, key):
+            return Host()
+
+    class PylintWinHosts:
+        def __getitem__(self, key):
+            return WinHost()
+
+    class PylintADDomains:
+        def __getitem__(self, key):
+            return Domain()
+
+    domain = Domain()
+    master = Host()
+    replicas = PylintIPAHosts()
+    clients = PylintIPAHosts()
+    ads = PylintWinHosts()
+    ad_treedomains = PylintWinHosts()
+    ad_subdomains = PylintWinHosts()
+    ad_domains = PylintADDomains()
+    """
+    )
+    node.locals["domain"] = module.locals["domain"]
+    node.locals["master"] = module.locals["master"]
+    node.locals["replicas"] = module.locals["replicas"]
+    node.locals["clients"] = module.locals["clients"]
+    node.locals["ads"] = module.locals["ads"]
+    node.locals["ad_treedomains"] = module.locals["ad_treedomains"]
+    node.locals["ad_subdomains"] = module.locals["ad_subdomains"]
+    node.locals["ad_domains"] = module.locals["ad_domains"]
+
+
+MANAGER.register_transform(
+    scoped_nodes.ClassDef,
+    transform_integrationtest,
+    lambda node: node.qname() == (
+        "ipatests.test_integration.base.IntegrationTest"
+    ),
+)
 
 
 def ipaplatform_constants_transform():
@@ -536,45 +585,7 @@ AstroidBuilder(MANAGER).string_build(textwrap.dedent(
 AstroidBuilder(MANAGER).string_build(
     textwrap.dedent(
         """\
-    from ipatests.test_integration.base import IntegrationTest
-    from ipatests.pytest_ipa.integration.host import Host, WinHost
-    from ipatests.pytest_ipa.integration.config import Config, Domain
-
-
-    class PylintIPAHosts:
-        def __getitem__(self, key):
-            return Host()
-
-
-    class PylintWinHosts:
-        def __getitem__(self, key):
-            return WinHost()
-
-
-    class PylintADDomains:
-        def __getitem__(self, key):
-            return Domain()
-
-
-    Host.config = Config()
-    Host.domain = Domain()
-
-    IntegrationTest.domain = Domain()
-    IntegrationTest.master = Host()
-    IntegrationTest.replicas = PylintIPAHosts()
-    IntegrationTest.clients = PylintIPAHosts()
-    IntegrationTest.ads = PylintWinHosts()
-    IntegrationTest.ad_treedomains = PylintWinHosts()
-    IntegrationTest.ad_subdomains = PylintWinHosts()
-    IntegrationTest.ad_domains = PylintADDomains()
-    """
-    )
-)
-
-AstroidBuilder(MANAGER).string_build(
-    textwrap.dedent(
-        """\
-    from ipatests.pytest_ipa.integration.host_ipaplatform import (
+    from ipatests.pytest_ipa.integration.host_namespaces import (
         HostPlatformPaths
     )
 
@@ -658,13 +669,13 @@ AstroidBuilder(MANAGER).string_build(
 AstroidBuilder(MANAGER).string_build(
     textwrap.dedent(
         """\
-    from ipatests.pytest_ipa.integration.host_ipaplatform import (
+    from ipatests.pytest_ipa.integration.host_namespaces import (
         HostPlatformOSInfo
     )
     HostPlatformOSInfo.name = ""
     HostPlatformOSInfo.platform = ""
     HostPlatformOSInfo.id = ""
-    HostPlatformOSInfo.id_like = ""
+    HostPlatformOSInfo.id_like = list()
     HostPlatformOSInfo.version = ""
     HostPlatformOSInfo.version_number = list()
     HostPlatformOSInfo.platform_ids = list()
@@ -676,7 +687,7 @@ AstroidBuilder(MANAGER).string_build(
 AstroidBuilder(MANAGER).string_build(
     textwrap.dedent(
         """\
-    from ipatests.pytest_ipa.integration.host_ipaplatform import (
+    from ipatests.pytest_ipa.integration.host_namespaces import (
         HostPlatformConstants
     )
     HostPlatformConstants.HTTPD_USER = ""

@@ -19,7 +19,7 @@
 
 """Pytest plugin for IPA Integration tests"""
 
-from __future__ import print_function, absolute_import
+from __future__ import annotations
 
 from pprint import pformat
 
@@ -37,10 +37,40 @@ from .config import Config
 from .env_config import get_global_config
 from . import tasks
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import (
+        Any,
+        Iterable,
+        Iterator,
+        List,
+        Optional,
+        Sequence,
+        Type,
+    )
+
+    from _pytest.fixtures import FixtureRequest
+    from _pytest.config import Config as PytestConfig
+    from _pytest.config.argparsing import Parser
+    from _pytest.nodes import Node
+    # currently exists only in stub file
+    # pylint: disable=no-name-in-module
+    from pytest_multihost.config import DomainDescriptionDict
+    # pylint: enable=no-name-in-module
+    from pytest_multihost.plugin import MultihostFixture
+    from .config import Domain
+    from .host import Host, WinHost
+    from ipatests.pytest_ipa.integration._types import (
+        HOST_LOGS_RTYPE, HOST_LOGS_ATYPE, IpaMHFixture
+    )
+    from ipatests.test_integration.base import IntegrationTest
+
+
 logger = logging.getLogger(__name__)
 
 
-def make_class_logs(host):
+def make_class_logs(host: Host) -> List[str]:
     host_constants = host.ipaplatform.constants
     host_paths = host.ipaplatform.paths
     logs = [
@@ -105,7 +135,7 @@ def make_class_logs(host):
     return logs
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: Parser) -> None:
     group = parser.getgroup("IPA integration tests")
 
     group.addoption(
@@ -113,7 +143,7 @@ def pytest_addoption(parser):
         help="Directory to store integration test logs in.")
 
 
-def _get_logname_from_node(node):
+def _get_logname_from_node(node: Node) -> str:
     name = node.nodeid
     name = re.sub(r'\(\)/', '', name)      # remove ()/
     name = re.sub(r'[()]', '', name)       # and standalone brackets
@@ -121,7 +151,12 @@ def _get_logname_from_node(node):
     return name
 
 
-def collect_test_logs(node, logs_dict, test_config, suffix=''):
+def collect_test_logs(
+    node: Node,
+    logs_dict: HOST_LOGS_ATYPE,
+    test_config: PytestConfig,
+    suffix: str = "",
+) -> None:
     """Collect logs from a test
 
     Calls collect_logs and collect_systemd_journal
@@ -135,7 +170,7 @@ def collect_test_logs(node, logs_dict, test_config, suffix=''):
         node=_get_logname_from_node(node),
         suffix=suffix,
     )
-    logfile_dir = test_config.getoption('logfile_dir')
+    logfile_dir: Optional[str] = test_config.getoption('logfile_dir')
     collect_logs(
         name=name,
         logs_dict=logs_dict,
@@ -147,7 +182,9 @@ def collect_test_logs(node, logs_dict, test_config, suffix=''):
     collect_systemd_journal(name, hosts, logfile_dir)
 
 
-def collect_systemd_journal(name, hosts, logfile_dir=None):
+def collect_systemd_journal(
+    name: str, hosts: Iterable[Host], logfile_dir: Optional[str] = None
+) -> None:
     """Collect systemd journal from remote hosts
 
     :param name: Name under which logs are collected, e.g. name of the test
@@ -177,7 +214,12 @@ def collect_systemd_journal(name, hosts, logfile_dir=None):
             f.write(cmd.stdout_text)
 
 
-def collect_logs(name, logs_dict, logfile_dir=None, beakerlib_plugin=None):
+def collect_logs(
+    name: str,
+    logs_dict: HOST_LOGS_ATYPE,
+    logfile_dir: Optional[str] = None,
+    beakerlib_plugin: Any = None,  # not annotated yet
+) -> None:
     """Collect logs from remote hosts
 
     Calls collect_logs
@@ -272,28 +314,28 @@ class IntegrationLogs:
     a list of logfiles which will be collected on only certain test
     completion (once).
     """
-    def __init__(self):
-        self._class_logs = {}
-        self._method_logs = {}
+    def __init__(self) -> None:
+        self._class_logs: HOST_LOGS_RTYPE = {}
+        self._method_logs: HOST_LOGS_RTYPE = {}
 
-    def set_logs(self, host, logs):
+    def set_logs(self, host: Host, logs: Sequence[str]) -> None:
         self._class_logs[host] = list(logs)
 
     @property
-    def method_logs(self):
+    def method_logs(self) -> HOST_LOGS_RTYPE:
         return self._method_logs
 
     @property
-    def class_logs(self):
+    def class_logs(self) -> HOST_LOGS_RTYPE:
         return self._class_logs
 
-    def init_method_logs(self):
+    def init_method_logs(self) -> None:
         """Initilize method logs with the class ones"""
         self._method_logs = {}
         for k in self._class_logs:
             self._method_logs[k] = list(self._class_logs[k])
 
-    def collect_class_log(self, host, filename):
+    def collect_class_log(self, host: Host, filename: str) -> None:
         """Add class scope log
         The file with the given filename will be collected from the
         host on an each test completion(within a test class).
@@ -303,7 +345,7 @@ class IntegrationLogs:
         self._class_logs.setdefault(host, []).append(filename)
         self._method_logs.setdefault(host, []).append(filename)
 
-    def collect_method_log(self, host, filename):
+    def collect_method_log(self, host: Host, filename: str) -> None:
         """Add method scope log
         The file with the given filename will be collected from the
         host on a test completion.
@@ -314,7 +356,9 @@ class IntegrationLogs:
 
 
 @pytest.fixture(scope='class')
-def class_integration_logs(request):
+def class_integration_logs(
+    request: FixtureRequest
+) -> Iterator[IntegrationLogs]:
     """Internal fixture providing class-level logs_dict
     For adjusting collection of logs, please, use 'integration_logs'
     fixture.
@@ -332,7 +376,9 @@ def class_integration_logs(request):
 
 
 @pytest.fixture
-def integration_logs(class_integration_logs, request):
+def integration_logs(
+    class_integration_logs: IntegrationLogs, request: FixtureRequest
+) -> Iterator[IntegrationLogs]:
     """Provides access to test integration logs, and collects after each test
     To collect a logfile on a test completion one should add the dependency on
     this fixture and call its 'collect_method_log' method.
@@ -375,7 +421,7 @@ def integration_logs(class_integration_logs, request):
     collect_test_logs(request.node, method_logs, request.config)
 
 
-def process_hostmarkers(request):
+def process_hostmarkers(request: FixtureRequest) -> None:
     for mark in request.node.iter_markers():
         if mark.name in [
             "skip_if_hostplatform",
@@ -384,9 +430,17 @@ def process_hostmarkers(request):
             "skip_if_not_hostselinux",
             "skip_if_host",
         ]:
+            # not all deps are available on pypi
+            from .host import Host
+
             hostattr = mark.kwargs.get("host")
             if hostattr is None:
                 hostattr = mark.args[0]
+
+            if not isinstance(hostattr, str):
+                raise TypeError(
+                    f"hostattr should be str, given: {hostattr!r}"
+                )
 
             hosts = getattr(request.cls, hostattr)
             hostindex = mark.kwargs.get("hostindex")
@@ -394,7 +448,12 @@ def process_hostmarkers(request):
                 host = hosts[int(hostindex)]
             else:
                 host = hosts
+            if not isinstance(host, Host):
+                raise TypeError(f"Supported only IPA hosts, given: {host!r}")
+
             reason = mark.kwargs["reason"]
+            if not isinstance(reason, str):
+                raise TypeError(f"Reason should be str, given: {reason!r}")
 
             if mark.name == "skip_if_hostplatform":
                 platform = mark.kwargs["platform"]
@@ -406,6 +465,10 @@ def process_hostmarkers(request):
                     )
             if mark.name == "skip_if_hostcontainer":
                 container = mark.kwargs["container"]
+                if not isinstance(container, str):
+                    raise TypeError(
+                        f"container should be str, given: {container!r}"
+                    )
                 if container in ["any", host.ipaplatform.osinfo.container]:
                     pytest.skip(
                         f"{request.node.nodeid}: Skip test on remote host "
@@ -427,6 +490,9 @@ def process_hostmarkers(request):
                     )
             if mark.name == "skip_if_host":
                 condition_cb = mark.kwargs["condition_cb"]
+                if not callable(condition_cb):
+                    raise TypeError("condition_cb should be callable")
+
                 if condition_cb(host):
                     pytest.skip(
                         f"{request.node.nodeid}: Skip test on remote host "
@@ -434,12 +500,15 @@ def process_hostmarkers(request):
                     )
 
 @pytest.fixture(scope='class')
-def mh(request, class_integration_logs):
+def mh(
+    request: FixtureRequest, class_integration_logs: IntegrationLogs
+) -> Iterator[IpaMHFixture]:
     """IPA's multihost fixture object
     """
-    cls = request.cls
+    # actually can be any class
+    cls: Type[IntegrationTest] = request.cls
 
-    domain_description = {
+    domain_description: DomainDescriptionDict = {
         'type': 'IPA',
         'hosts': {
             'master': 1,
@@ -467,13 +536,15 @@ def mh(request, class_integration_logs):
             'hosts': {'ad_treedomain': 1}
         })
 
-    mh = make_multihost_fixture(
+    # for typing dynamically added attrs, is not safe
+    mh: IpaMHFixture = make_multihost_fixture(  # type: ignore[assignment]
         request,
         domain_descriptions,
         config_class=Config,
         _config=get_global_config(),
     )
 
+    # these MultihostFixture attrs added dynamically
     mh.domain = mh.config.domains[0]
     [mh.master] = mh.domain.hosts_by_role('master')
     mh.replicas = mh.domain.hosts_by_role('replica')
@@ -507,8 +578,7 @@ def mh(request, class_integration_logs):
         logger.info('Preparing host %s', host.hostname)
         tasks.prepare_host(host)
 
-
-    def fin():
+    def fin() -> None:
         del_compat_attrs(cls)
     mh._pytestmh_request.addfinalizer(fin)
 
@@ -528,7 +598,7 @@ def mh(request, class_integration_logs):
                           suffix='-install')
 
 
-def add_compat_attrs(cls, mh):
+def add_compat_attrs(cls: Type[IntegrationTest], mh: IpaMHFixture) -> None:
     """Add convenience attributes to the test class
 
     This is deprecated in favor of the mh fixture.
@@ -536,16 +606,16 @@ def add_compat_attrs(cls, mh):
     """
     cls.domain = mh.domain
     cls.master = mh.master
-    cls.replicas = mh.replicas
-    cls.clients = mh.clients
+    cls.replicas = list(mh.replicas)
+    cls.clients = list(mh.clients)
     cls.ad_domains = mh.config.ad_domains
     if cls.ad_domains:
-        cls.ads = mh.ads
+        cls.ads = list(mh.ads)
         cls.ad_subdomains = mh.ad_subdomains
         cls.ad_treedomains = mh.ad_treedomains
 
 
-def del_compat_attrs(cls):
+def del_compat_attrs(cls: Type[IntegrationTest]) -> None:
     """Remove convenience attributes from the test class
 
     This is deprecated in favor of the mh fixture.

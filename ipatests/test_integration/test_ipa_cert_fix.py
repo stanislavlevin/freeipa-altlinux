@@ -5,6 +5,8 @@
 """
 Module provides tests for ipa-cert-fix CLI.
 """
+from __future__ import annotations
+
 import pytest
 import re
 import time
@@ -14,6 +16,10 @@ from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.test_integration.test_caless import CALessBase, ipa_certs_cleanup
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import Host
 
 logger = logging.getLogger(__name__)
 
@@ -210,10 +216,10 @@ class TestIpaCertFixThirdParty(CALessBase):
     Test that ipa-cert-fix works with an installation with custom certs.
     """
 
+    nickname = "ca1/server"
+
     @classmethod
     def install(cls, mh):
-        cls.nickname = 'ca1/server'
-
         super(TestIpaCertFixThirdParty, cls).install(mh)
         tasks.install_master(cls.master, setup_dns=True)
 

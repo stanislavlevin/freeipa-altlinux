@@ -188,6 +188,9 @@ lite-server: $(GENERATED_PYTHON_FILES)
 if WITH_POLINT
 POLINT_TARGET = polint
 endif WITH_POLINT
+if WITH_MYPY
+MYPY_TARGET = mypy
+endif  # WITH_MYPY
 if WITH_PYLINT
 PYLINT_TARGET = pylint
 endif WITH_PYLINT
@@ -197,12 +200,15 @@ endif WITH_JSLINT
 if WITH_RPMLINT
 RPMLINT_TARGET = rpmlint
 endif  # WITH_RPMLINT
-lint: acilint apilint $(POLINT_TARGET) $(PYLINT_TARGET) $(JSLINT_TARGET) $(RPMLINT_TARGET) yamllint
+lint: acilint apilint $(POLINT_TARGET) $(MYPY_TARGET) $(PYLINT_TARGET) $(JSLINT_TARGET) $(RPMLINT_TARGET) yamllint
 
 .PHONY: devcheck
 devcheck: all
 if ! WITH_POLINT
 	@echo "ERROR: polint not available"; exit 1
+endif
+if ! WITH_MYPY
+	@echo "ERROR: mypy not available"; exit 1
 endif
 if ! WITH_PYLINT
 	@echo "ERROR: pylint not available"; exit 1
@@ -213,7 +219,7 @@ endif
 	@ # just tests, aci, api and pylint on Python 3
 	PATH=$(abspath ipatests):$$PATH PYTHONPATH=$(abspath $(top_srcdir)) \
 	    $(PYTHON) ipatests/ipa-run-tests --ipaclient-unittests
-	$(MAKE) $(AM_MAKEFLAGS) acilint apilint polint pylint jslint $(RPMLINT_TARGET) yamllint check
+	$(MAKE) $(AM_MAKEFLAGS) acilint apilint polint mypy pylint jslint $(RPMLINT_TARGET) yamllint check
 	@echo "All tests passed."
 
 .PHONY: fastcheck fasttest fastlint
@@ -250,6 +256,14 @@ endif
 	    FILES="$${INFILES}" ; \
 	fi ; \
 	if [ -n "$${FILES}" ]; then \
+	    echo -e "Fast mypy files:\n$${FILES}\n"; \
+	    echo -e "\nmypy"; \
+	    echo "------"; \
+	    MYPYPATH=`$(PYTHON) $(abspath $(top_srcdir))/gen_mypypath.py`; \
+	    $(PYTHON) -m mypy --version; \
+	    echo "MYPYPATH=$${MYPYPATH}"; \
+	    PYTHONPATH=$(abspath $(top_srcdir)) MYPYPATH=$${MYPYPATH} $(PYTHON) -m mypy \
+		    --scripts-are-modules $${FILES} || exit $$?; \
 	    echo -e "Fast linting files:\n$${FILES}\n"; \
 	    echo "pycodestyle"; \
 	    echo "-----------"; \
@@ -372,6 +386,42 @@ pylint: $(GENERATED_PYTHON_FILES) ipasetup.py python_scripts
 		--load-plugins pylint_plugins \
 		$${FILES}
 endif  # WITH_PYLINT
+
+.PHONY: mypy
+
+if WITH_MYPY
+mypy: $(GENERATED_PYTHON_FILES) ipasetup.py python_scripts
+	set -e; \
+	PACKAGES=`find $(top_srcdir) \
+		-type d -exec test -e '{}/__init__.py' \; -print -prune -o \
+		-path './rpmbuild' -prune -o \
+		-path './freeipa-*' -prune -o \
+		-path './dist' -prune -o \
+		-path './pypi' -prune -o \
+		-path './.tox' -prune \
+		| sed 's/^\.\//-p /'`; \
+	echo -e "mypy on $(PYTHON) is running over packages:\n$${PACKAGES}\nPlease wait ...\n"; \
+	$(PYTHON) -m mypy --version; \
+	PYTHONPATH=$(top_srcdir) $(PYTHON) -m mypy \
+		$${PACKAGES} ; \
+	SCRIPTS=`find $(top_srcdir) \
+		-type d -exec test -e '{}/__init__.py' \; -prune -o \
+		-path './rpmbuild' -prune -o \
+		-path './freeipa-*' -prune -o \
+		-path './dist' -prune -o \
+		-path './pypi' -prune -o \
+		-path './.tox' -prune -o \
+		-name '.*' -o \
+		-name '*.in' -o \
+		-name '*~' -o \
+		-name '*.py' -print -o \
+		-type f -exec grep -qsm1 '^#!.*\bpython' '{}' \; -print`; \
+	SCRIPTS=`echo -e "$${SCRIPTS}\n$(AZURE_PYTHON_SCRIPT_SUBDIR)"`; \
+	echo -e "mypy on $(PYTHON) is running over scripts:\n$${SCRIPTS}\nPlease wait ...\n"; \
+	$(PYTHON) -m mypy --version; \
+	PYTHONPATH=$(top_srcdir) $(PYTHON) -m mypy \
+		--scripts-are-modules $${SCRIPTS}
+endif  # WITH_MYPY
 
 .PHONY: jslint jslint-ui jslint-ui-test jslint-html \
 	$(top_builddir)/install/ui/src/libs/loader.js

@@ -18,6 +18,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
+from __future__ import annotations
 
 import binascii
 import errno
@@ -52,6 +53,14 @@ from ipapython.ipautil import format_netloc, CIDict
 from ipapython.dn import DN, RDN
 from ipapython.dnsutil import DNSName
 from ipapython.kerberos import Principal
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any, Optional, TypeVar, Type
+    from ldap.ldapobject import SimpleLDAPObject
+
+    LDAPClient_T = TypeVar("LDAPClient_T", bound="LDAPClient")
 
 # pylint: disable=no-name-in-module, import-error
 if six.PY3:
@@ -105,7 +114,9 @@ def realm_to_ldapi_uri(realm_name):
     return 'ldapi://' + ldapurl.ldapUrlEscape(socketname)
 
 
-def ldap_initialize(uri, cacertfile=None):
+def ldap_initialize(
+    uri: str, cacertfile: Optional[str] = None
+) -> SimpleLDAPObject:
     """Wrapper around ldap.initialize()
 
     The function undoes global and local ldap.conf settings that may cause
@@ -812,8 +823,13 @@ class LDAPClient:
         return cls(uri, start_tls=False, cacert=None, **kwargs)
 
     @classmethod
-    def from_hostname_secure(cls, hostname, cacert=paths.IPA_CA_CRT,
-                             start_tls=True, **kwargs):
+    def from_hostname_secure(
+        cls: Type[LDAPClient_T],
+        hostname: str,
+        cacert: Optional[str] = paths.IPA_CA_CRT,
+        start_tls: bool = True,
+        **kwargs: Any,
+    ) -> LDAPClient_T:
         """Create LDAP or LDAPS connection to a remote 389-DS instance
 
         This constructor is opinionated and doesn't let you shoot yourself in

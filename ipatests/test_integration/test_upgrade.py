@@ -5,6 +5,8 @@
 """
 Module provides tests to verify that the upgrade script works.
 """
+from __future__ import annotations
+
 import base64
 import configparser
 import os
@@ -74,6 +76,7 @@ def named_test_template(host):
         realm_name=host.domain.realm,
         domain_name=host.domain.name,
     )
+    assert bind.sub_dict is not None  # cast out Optional mypy#645
     sub_dict = bind.sub_dict.copy()
     sub_dict.update(BINDKEYS_FILE="/etc/named.iscdlv.key")
     return template_str(OLD_NAMED_TEMPLATE, sub_dict)
@@ -88,7 +91,7 @@ def clear_sysupgrade(host, *sections):
     state = host.get_file_contents(statefile, encoding="utf-8")
     # parse it
     parser = configparser.ConfigParser()
-    parser.optionxform = str
+    setattr(parser, "optionxform", str)  # mypy#2427
     parser.read_string(state)
     # remove sections
     for section in sections:

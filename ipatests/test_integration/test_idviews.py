@@ -2,7 +2,7 @@
 # Copyright (C) 2016  FreeIPA Contributors see COPYING for license
 #
 
-from __future__ import absolute_import
+from __future__ import annotations
 
 import os
 import re
@@ -11,6 +11,12 @@ from SSSDConfig import ServiceAlreadyExists
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration.env_config import get_global_config
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ipatests.pytest_ipa.integration.host import WinHost
+
 config = get_global_config()
 
 
@@ -23,6 +29,17 @@ class TestCertsInIDOverrides(IntegrationTest):
     adcert2 = 'MyCert2'
     adcert1_file = adcert1 + '.crt'
     adcert2_file = adcert2 + '.crt'
+    aduser: str
+    cert1_pem: str
+    cert2_pem: str
+    cert1_base64: str
+    cert2_base64: str
+    reqdir: str
+    pwname: str
+    reqfile1: str
+    reqfile2: str
+    ad_domain: str
+    ad: WinHost
 
     @classmethod
     def uninstall(cls, mh):
@@ -183,6 +200,9 @@ class TestRulesWithServicePrincipals(IntegrationTest):
     keytab = "replica.keytab"
     csr = "my.csr"
     csr_conf = "replica.cnf"
+    replica: str
+    service_name: str
+    replica_service_name: str
 
     @classmethod
     def prepare_config(cls):

@@ -1,6 +1,8 @@
 #
 # Copyright (C) 2016  FreeIPA Contributors see COPYING for license
 #
+from __future__ import annotations
+
 import logging
 import re
 import time
@@ -43,6 +45,7 @@ IPA_CA_A_REC = (
 )
 
 
+# pylint: disable=inconsistent-return-statements
 def resolve_records_from_server(rname, rtype, nameserver):
     error = None
     res = DNSResolver()
@@ -61,7 +64,7 @@ def resolve_records_from_server(rname, rtype, nameserver):
 
     pytest.fail("Query: {} {}, nameserver {} failed due to {}".format(
         rname, rtype, nameserver, error))
-    return None
+# pylint: enable=inconsistent-return-statements
 
 
 def _gen_expected_srv_rrset(rname, port, servers, ttl=86400):
