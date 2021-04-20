@@ -21,6 +21,7 @@ from cryptography.hazmat.primitives.twofactor.totp import TOTP
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.sssd import clear_sssd_cache
 
 
 PASSWORD = "DummyPassword123"
@@ -119,7 +120,7 @@ def set_sssd_conf(host, add_contents):
     host.put_file_contents(
         host.ipaplatform.paths.SSSD_CONF, file_contents
     )
-    tasks.clear_sssd_cache(host)
+    clear_sssd_cache(host)
 
 
 class TestOTPToken(IntegrationTest):

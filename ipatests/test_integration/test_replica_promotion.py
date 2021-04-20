@@ -16,6 +16,7 @@ from ipatests.test_integration.test_ipahealthcheck import (
     run_healthcheck, HEALTHCHECK_PKG
 )
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.sssd import remote_sssd_config
 from ipatests.pytest_ipa.integration.tasks import (
     assert_error, replicas_cleanup
 )
@@ -57,7 +58,7 @@ def sssd_config_allows_ipaapi_access_to_ifp(host):
     :param host the machine on which to check that sssd allows ipaapi
     access to ifp
     """
-    with tasks.remote_sssd_config(host) as sssd_conf:
+    with remote_sssd_config(host) as sssd_conf:
         ifp = sssd_conf.get_service('ifp')
         uids = [
             uid.strip() for uid in ifp.get_option('allowed_uids').split(',')

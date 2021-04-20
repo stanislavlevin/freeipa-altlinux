@@ -29,6 +29,9 @@ from ipapython.dn import DN
 from ipapython import ipautil
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.sssd import (
+    wait_for_sssd_domain_status_online
+)
 from ipatests.test_integration.test_dnssec import wait_until_record_is_signed
 from ipatests.test_integration.test_simple_replication import check_replication
 from ipatests.util import assert_deepequal
@@ -162,7 +165,7 @@ def restore_checker(host: Host) -> Iterator[None]:
     yield
 
     # Wait for SSSD to become online before doing any other check
-    tasks.wait_for_sssd_domain_status_online(host)
+    wait_for_sssd_domain_status_online(host)
     tasks.kinit_admin(host)
 
     for (check, assert_func), expected in zip(CHECKS, results):

@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from ipatests.test_integration.base import IntegrationTest
-from ipatests.pytest_ipa.integration.tasks import clear_sssd_cache
+from ipatests.pytest_ipa.integration.sssd import clear_sssd_cache
 
 from typing import TYPE_CHECKING
 

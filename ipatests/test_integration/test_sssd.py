@@ -17,7 +17,9 @@ import textwrap
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
-from ipatests.pytest_ipa.integration.tasks import clear_sssd_cache
+from ipatests.pytest_ipa.integration.sssd import (
+    remote_sssd_config, clear_sssd_cache, get_sssd_version
+)
 from ipatests.util import xfail_context
 from ipapython.dn import DN
 
@@ -88,16 +90,16 @@ class TestSSSDWithAdTrust(IntegrationTest):
         sssd_conf_backup = tasks.FileBackup(
             self.master, self.master.ipaplatform.paths.SSSD_CONF
         )
-        with tasks.remote_sssd_config(self.master) as sssd_conf:
+        with remote_sssd_config(self.master) as sssd_conf:
             sssd_conf.edit_domain(self.master.domain, 'cached_auth_timeout',
                                   cached_auth_timeout)
             sssd_conf.edit_service('pam', 'pam_verbosity', '2')
         try:
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
             yield
         finally:
             sssd_conf_backup.restore()
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
 
     def is_auth_cached(self, user):
         cmd = ['su', '-l', user['name'], '-c', 'true']
@@ -154,14 +156,14 @@ class TestSSSDWithAdTrust(IntegrationTest):
             self.master, self.master.ipaplatform.paths.SSSD_CONF
         )
         try:
-            with tasks.remote_sssd_config(self.master) as sssd_conf:
+            with remote_sssd_config(self.master) as sssd_conf:
                 sssd_conf.edit_service("nss",
                                       'filter_users', self.users[user]['name'])
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
             yield
         finally:
             sssd_conf_backup.restore()
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
 
     @pytest.mark.parametrize('user', ['ad', 'fakeuser'])
     def test_is_user_filtered(self, user):
@@ -205,9 +207,9 @@ class TestSSSDWithAdTrust(IntegrationTest):
             client, client.ipaplatform.paths.SSSD_CONF
         )
         for host in hosts:
-            with tasks.remote_sssd_config(host) as sssd_conf:
+            with remote_sssd_config(host) as sssd_conf:
                 sssd_conf.edit_service('sssd', 're_expression', expression)
-            tasks.clear_sssd_cache(host)
+            clear_sssd_cache(host)
         try:
             cmd = ['getent', 'group', ad_group]
             result = self.master.run_command(cmd)
@@ -217,8 +219,8 @@ class TestSSSDWithAdTrust(IntegrationTest):
         finally:
             master_conf_backup.restore()
             client_conf_backup.restore()
-            tasks.clear_sssd_cache(self.master)
-            tasks.clear_sssd_cache(client)
+            clear_sssd_cache(self.master)
+            clear_sssd_cache(client)
 
     def test_external_group_paging(self):
         """SSSD should fetch external groups without any limit.
@@ -249,10 +251,10 @@ class TestSSSDWithAdTrust(IntegrationTest):
         # default ldap_page_size is '1000', adding workaround as
         # ldap_page_size < nsslapd-sizelimit in sssd.conf
         # Related issue : https://pagure.io/389-ds-base/issue/50888
-        with tasks.remote_sssd_config(self.master) as sssd_conf:
+        with remote_sssd_config(self.master) as sssd_conf:
             sssd_conf.edit_domain(
                 self.master.domain, 'ldap_page_size', ldap_page_size)
-        tasks.clear_sssd_cache(master)
+        clear_sssd_cache(master)
         tasks.kinit_admin(master)
         for i in range(group_count):
             master.run_command(['ipa', 'group-add', '--external',
@@ -300,12 +302,12 @@ class TestSSSDWithAdTrust(IntegrationTest):
             self.master, self.master.ipaplatform.paths.SSSD_CONF
         )
         try:
-            with tasks.remote_sssd_config(self.master) as sssd_conf:
+            with remote_sssd_config(self.master) as sssd_conf:
                 sssd_conf.edit_domain(
                     self.master.domain, 'refresh_expired_interval', 1)
                 sssd_conf.edit_domain(
                     self.master.domain, 'entry_cache_timeout', 1)
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
 
             start = time.time()
             self.master.run_command(['id', user])
@@ -317,7 +319,7 @@ class TestSSSDWithAdTrust(IntegrationTest):
                     group_update_time)
         finally:
             sssd_conf_backup.restore()
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
 
     def test_ext_grp_with_ldap(self):
         """User and group with same name should not break reading AD user data.
@@ -328,7 +330,7 @@ class TestSSSDWithAdTrust(IntegrationTest):
         in group with same name of nonprivate ipa user and possix id, then
         lookup of aduser and group should be successful when cache is empty.
         """
-        sssd_version = tasks.get_sssd_version(self.master)
+        sssd_version = get_sssd_version(self.master)
         if sssd_version <= tasks.parse_version("2.2.2"):
             pytest.skip("Fix for https://pagure.io/SSSD/sssd/issue/4073 "
                         "unavailable with sssd-2.2.2")
@@ -348,8 +350,8 @@ class TestSSSDWithAdTrust(IntegrationTest):
         self.master.run_command([
             'ipa', '-n', 'group-add-member', '--external',
             self.users['ad']['name'], ext_group])
-        tasks.clear_sssd_cache(self.master)
-        tasks.clear_sssd_cache(client)
+        clear_sssd_cache(self.master)
+        clear_sssd_cache(client)
         try:
             result = client.run_command(['id', self.users['ad']['name']])
             assert '{uid}({name})'.format(uid=userid,
@@ -366,7 +368,7 @@ class TestSSSDWithAdTrust(IntegrationTest):
         members in 'ipa group-add-member foo --external bar'.
         """
         master = self.master
-        tasks.clear_sssd_cache(master)
+        clear_sssd_cache(master)
         tasks.kinit_admin(master)
         master.run_command(['ipa', 'group-add', '--external',
                             'ext-ipatest'])
@@ -387,13 +389,13 @@ class TestSSSDWithAdTrust(IntegrationTest):
         ad_subdomain_name = self.child_ad.domain.name
         self.master.run_command(['ipa', 'trustdomain-disable',
                                  ad_domain_name, ad_subdomain_name])
-        tasks.clear_sssd_cache(self.master)
+        clear_sssd_cache(self.master)
         try:
             yield
         finally:
             self.master.run_command(['ipa', 'trustdomain-enable',
                                      ad_domain_name, ad_subdomain_name])
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
 
     @pytest.mark.parametrize('user_origin', ['ipa', 'ad'])
     def test_trustdomain_disable_does_not_disable_root_domain(self,
@@ -425,7 +427,7 @@ class TestSSSDWithAdTrust(IntegrationTest):
             assert user in result.stdout_text
 
         # verify the user can be retrieved initially
-        tasks.clear_sssd_cache(self.master)
+        clear_sssd_cache(self.master)
         self.master.run_command(['id', user])
         self.master.run_command(['ipa', 'idview-add', idview])
         self.master.run_command(['ipa', 'idoverrideuser-add', idview, user])
@@ -435,7 +437,7 @@ class TestSSSDWithAdTrust(IntegrationTest):
                                  '--uid=10001', '--gid=10000'])
         try:
             clear_sssd_cache(client)
-            sssd_version = tasks.get_sssd_version(client)
+            sssd_version = get_sssd_version(client)
             with xfail_context(sssd_version < tasks.parse_version('2.3.0'),
                                'https://pagure.io/SSSD/sssd/issue/4173'):
                 verify_retrieved_users_domain()
@@ -453,7 +455,7 @@ class TestSSSDWithAdTrust(IntegrationTest):
         self.master.run_command(['id', user])
         with self.disabled_trustdomain():
             res = self.master.run_command(['id', user], raiseonerr=False)
-            sssd_version = tasks.get_sssd_version(self.master)
+            sssd_version = get_sssd_version(self.master)
             with xfail_context(sssd_version < tasks.parse_version('2.2.3'),
                                'https://pagure.io/SSSD/sssd/issue/4078'):
                 assert res.returncode == 1
@@ -484,7 +486,7 @@ class TestSSSDWithAdTrust(IntegrationTest):
             "--domain={}".format(self.master.domain.name)
         ])
         try:
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
             # verify the user can be retrieved after the certmaprule is added
             second_res = self.master.run_command(
                 ['id', self.users['ad']['name']])
@@ -503,14 +505,14 @@ class TestSSSDWithAdTrust(IntegrationTest):
             self.master, self.master.ipaplatform.paths.SSSD_CONF
         )
         try:
-            with tasks.remote_sssd_config(self.master) as sssd_conf:
+            with remote_sssd_config(self.master) as sssd_conf:
                 sssd_conf.edit_domain(self.master.domain,
                                       'override_gid', gid)
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
             yield
         finally:
             sssd_conf_backup.restore()
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
 
     def test_override_gid_subdomain(self):
         """Test that override_gid is working for subdomain
@@ -518,14 +520,14 @@ class TestSSSDWithAdTrust(IntegrationTest):
         This is a regression test for sssd bug:
         https://pagure.io/SSSD/sssd/issue/4061
         """
-        tasks.clear_sssd_cache(self.master)
+        clear_sssd_cache(self.master)
         user = self.users['child_ad']['name']
         gid = 10264
         # verify the user can be retrieved initially
         self.master.run_command(['id', user])
         with self.override_gid_setup(gid):
             test_gid = self.master.run_command(['id', user])
-            sssd_version = tasks.get_sssd_version(self.master)
+            sssd_version = get_sssd_version(self.master)
             with xfail_context(sssd_version < tasks.parse_version('2.3.0'),
                                'https://pagure.io/SSSD/sssd/issue/4061'):
                 assert 'gid={id}'.format(id=gid) in test_gid.stdout_text

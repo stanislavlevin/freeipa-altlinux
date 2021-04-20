@@ -13,6 +13,7 @@ import re
 import pytest
 
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.sssd import clear_sssd_cache
 from ipatests.test_integration.base import IntegrationTest
 
 from typing import TYPE_CHECKING
@@ -158,7 +159,7 @@ class TestWinsyncMigrate(IntegrationTest):
             '--server', self.ad.hostname])
         assert ('The ipa-winsync-migrate command was successful'
                 in result.stderr_text)
-        tasks.clear_sssd_cache(self.master)
+        clear_sssd_cache(self.master)
 
     def test_replication_agreement_deleted(self):
         self.check_replication_agreement_exists(self.ad.hostname, False)

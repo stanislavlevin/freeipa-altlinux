@@ -10,6 +10,10 @@ import pytest
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.base_tasks import create_temp_file
+from ipatests.pytest_ipa.integration.sssd import (
+    remote_sssd_config, clear_sssd_cache
+)
 from ipapython.dn import DN
 from collections import namedtuple
 from contextlib import contextmanager
@@ -106,7 +110,7 @@ class BaseTestTrust(IntegrationTest):
     def remove_trust(self, ad):
         tasks.remove_trust_with_ad(self.master,
                                    ad.domain.name, ad.hostname)
-        tasks.clear_sssd_cache(self.master)
+        clear_sssd_cache(self.master)
 
 
 class TestTrust(BaseTestTrust):
@@ -301,12 +305,12 @@ class TestTrust(BaseTestTrust):
             self.master, self.master.ipaplatform.paths.SSSD_CONF
         )
         try:
-            with tasks.remote_sssd_config(self.master) as sssd_conf:
+            with remote_sssd_config(self.master) as sssd_conf:
                 sssd_conf.edit_domain(
                     self.master.domain, 'refresh_expired_interval', 1)
                 sssd_conf.edit_domain(
                     self.master.domain, 'entry_cache_timeout', 1)
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
 
             # Sleep some time so that SSSD settles down
             # cache updates
@@ -319,7 +323,7 @@ class TestTrust(BaseTestTrust):
                 assert expected in result.stdout_text
         finally:
             sssd_conf_backup.restore()
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
 
         commands = [['ipa', 'sudorule-del', sudorule],
                     ['ipa', 'sudocmd-del', 'ALL'],
@@ -538,11 +542,11 @@ class TestTrust(BaseTestTrust):
 
         try:
             testuser = 'testuser@%s' % self.ad_domain
-            with tasks.remote_sssd_config(self.master) as sssd_conf:
+            with remote_sssd_config(self.master) as sssd_conf:
                 sssd_conf.edit_domain(self.master.domain,
                                       'subdomain_homedir', '%o')
 
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
             # The initgroups operation now uses the LDAP connection because
             # the LDAP AD DS server contains the POSIX attributes
             self.master.run_command(['getent', 'initgroups', '-s', 'sss',
@@ -556,7 +560,7 @@ class TestTrust(BaseTestTrust):
             assert b'get_subdomain_homedir_of_user failed' not in sssd_log2
         finally:
             tasks.restore_files(self.master)
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
 
     def test_extdom_plugin(self):
         """Extdom plugin should not return error (32)/'No such object'
@@ -593,7 +597,7 @@ class TestTrust(BaseTestTrust):
         conn.update_entry(entry)  # pylint: disable=no-member
         self.master.run_command(['ipactl', 'restart'])
 
-        with tasks.remote_sssd_config(self.master) as sssd_conf:
+        with remote_sssd_config(self.master) as sssd_conf:
             sssd_conf.edit_domain(self.master.domain, 'timeout', '999999')
 
         remove_cache = 'sss_cache -E'
@@ -990,7 +994,7 @@ class TestTrust(BaseTestTrust):
             ad_ip=self.ad.ip, unreachable='192.168.254.254',
             ad_host=self.ad.hostname, ad_dom=self.ad.domain.name,
             ad_short=self.ad.shortname))
-        ad_zone_file = tasks.create_temp_file(self.master, directory='/etc')
+        ad_zone_file = create_temp_file(self.master, directory='/etc')
         self.master.put_file_contents(ad_zone_file, ad_zone)
         self.master.run_command(
             [
@@ -1058,7 +1062,7 @@ class TestTrust(BaseTestTrust):
         finally:
             tasks.restore_files(self.master)
             tasks.restart_named(self.master)
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
             self.master.run_command(['rm', '-f', ad_zone_file])
             tasks.configure_dns_for_trust(self.master, self.ad)
             self.remove_trust(self.ad)

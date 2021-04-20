@@ -9,6 +9,7 @@ import re
 import string
 from SSSDConfig import ServiceAlreadyExists
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.sssd import remote_sssd_config
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration.env_config import get_global_config
 
@@ -62,7 +63,7 @@ class TestCertsInIDOverrides(IntegrationTest):
             % master.ipaplatform.paths.SSSD_CONF,
             raiseonerr=False,
         )
-        with tasks.remote_sssd_config(master) as sssd_config:
+        with remote_sssd_config(master) as sssd_config:
             try:
                 sssd_config.new_service('ifp')
             except ServiceAlreadyExists:

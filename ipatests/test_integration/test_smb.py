@@ -17,6 +17,7 @@ import pytest
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.base_tasks import create_temp_file
 
 from typing import TYPE_CHECKING
 
@@ -264,7 +265,7 @@ class TestSMB(IntegrationTest):
         alias = '{netbiosname}@{realm}'.format(
             netbiosname=netbiosname, realm=copier.realm)
         replacement = {principal: alias}
-        tmpname = tasks.create_temp_file(self.smbserver, create_file=False)
+        tmpname = create_temp_file(self.smbserver, create_file=False)
         try:
             copier.copy_keys(
                 self.smbserver.ipaplatform.paths.SAMBA_KEYTAB,
