@@ -415,6 +415,7 @@ endif  # WITH_PYLINT
 if WITH_MYPY
 mypy: $(GENERATED_PYTHON_FILES) ipasetup.py python_scripts
 	set -e; \
+	MYPYPATH=`$(PYTHON) $(top_srcdir)/gen_mypypath.py`; \
 	PACKAGES=`find $(top_srcdir) \
 		-type d -exec test -e '{}/__init__.py' \; -print -prune -o \
 		-path './rpmbuild' -prune -o \
@@ -425,7 +426,8 @@ mypy: $(GENERATED_PYTHON_FILES) ipasetup.py python_scripts
 		| sed 's/^\.\//-p /'`; \
 	echo -e "mypy on $(PYTHON) is running over packages:\n$${PACKAGES}\nPlease wait ...\n"; \
 	$(PYTHON) -m mypy --version; \
-	PYTHONPATH=$(top_srcdir) $(PYTHON) -m mypy \
+	echo "MYPYPATH=$${MYPYPATH}"; \
+	PYTHONPATH=$(top_srcdir) MYPYPATH=$${MYPYPATH} $(PYTHON) -m mypy \
 		$${PACKAGES} ; \
 	SCRIPTS=`find $(top_srcdir) \
 		-type d -exec test -e '{}/__init__.py' \; -prune -o \
@@ -442,7 +444,8 @@ mypy: $(GENERATED_PYTHON_FILES) ipasetup.py python_scripts
 	SCRIPTS=`echo -e "$${SCRIPTS}\n$(AZURE_PYTHON_SCRIPT_SUBDIR)"`; \
 	echo -e "mypy on $(PYTHON) is running over scripts:\n$${SCRIPTS}\nPlease wait ...\n"; \
 	$(PYTHON) -m mypy --version; \
-	PYTHONPATH=$(top_srcdir) $(PYTHON) -m mypy \
+	echo "MYPYPATH=$${MYPYPATH}"; \
+	PYTHONPATH=$(top_srcdir) MYPYPATH=$${MYPYPATH} $(PYTHON) -m mypy \
 		--scripts-are-modules $${SCRIPTS}
 endif  # WITH_MYPY
 
