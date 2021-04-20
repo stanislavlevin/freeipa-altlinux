@@ -10,6 +10,7 @@ from contextlib import contextmanager
 import pytest
 
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.sssd import clear_sssd_cache
 from ipatests.pytest_ipa.integration.firewall import Firewall
 from ipatests.test_integration.base import IntegrationTest
 
@@ -48,7 +49,7 @@ class TestHttpKdcProxy(IntegrationTest):
     @pytest.fixture(autouse=True, scope='function')
     def cleanup_credentials(self):
         tasks.kdestroy_all(self.client)
-        tasks.clear_sssd_cache(self.client)
+        clear_sssd_cache(self.client)
 
     @pytest.fixture(scope='class')
     def users(self, mh):

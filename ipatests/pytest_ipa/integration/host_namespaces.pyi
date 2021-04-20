@@ -54,6 +54,7 @@ class HostPlatformPaths(HostPlatformNameSpace):
     IPACLIENT_UNINSTALL_LOG: str
     IPACLIENTSAMBA_INSTALL_LOG: str
     IPACLIENTSAMBA_UNINSTALL_LOG: str
+    IPACTL: str
     IPAEPN_LOG: str
     IPAREPLICA_INSTALL_LOG: str
     IPAREPLICA_CONNCHECK_LOG: str

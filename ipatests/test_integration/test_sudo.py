@@ -22,8 +22,11 @@ import pytest
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration.tasks import (
-    clear_sssd_cache, get_host_ip_with_hostmask, remote_sssd_config,
-    FileBackup)
+    get_host_ip_with_hostmask, FileBackup
+)
+from ipatests.pytest_ipa.integration.sssd import (
+    remote_sssd_config, clear_sssd_cache
+)
 
 from typing import TYPE_CHECKING
 

@@ -17,6 +17,7 @@ from ipalib.constants import IPAAPI_USER
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.test_integration.test_otp import add_otptoken, del_otptoken
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.base_tasks import create_temp_file
 
 PASSWORD = "Secret123"
 USER1 = "testuser1"
@@ -162,7 +163,7 @@ class TestPWPolicy(IntegrationTest):
                             '--user-auth-type', 'otp'])
         master.run_command(['ipa', 'krbtpolicy-mod', USER1,
                             '--otp-maxrenew=90', '--otp-maxlife=60'])
-        armor = tasks.create_temp_file(self.master, create_file=False)
+        armor = create_temp_file(self.master, create_file=False)
         otpuid, totp = add_otptoken(master, USER1, otptype="totp")
         otpvalue = totp.generate(int(time.time())).decode("ascii")
         reset_to_default_policy(master, USER1)

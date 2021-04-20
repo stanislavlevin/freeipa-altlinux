@@ -31,6 +31,10 @@ from ipapython.certdb import get_ca_nickname
 from ipatests.test_integration.base import IntegrationTest
 
 from ipatests.pytest_ipa.integration import tasks
+from ipatests.pytest_ipa.integration.base_tasks import create_temp_file
+from ipatests.pytest_ipa.integration.sssd import (
+    remote_sssd_config, clear_sssd_cache, get_sssd_version
+)
 from ipatests.create_external_ca import ExternalCA
 from ipatests.test_ipalib.test_x509 import good_pkcs7, badcert
 from ipapython.ipautil import realm_to_suffix, ipa_generate_password
@@ -718,7 +722,7 @@ class TestIPACommand(IntegrationTest):
         )
         self.master.run_command(cmd)
 
-        tasks.clear_sssd_cache(self.master)
+        clear_sssd_cache(self.master)
 
         num_of_pipes = count_pipes()
 
@@ -946,7 +950,7 @@ class TestIPACommand(IntegrationTest):
         4. ssh from controller to master using the user created in step 3
         """
 
-        sssd_version = tasks.get_sssd_version(self.master)
+        sssd_version = get_sssd_version(self.master)
         if sssd_version < tasks.parse_version("2.2.0"):
             pytest.xfail(reason="sssd 2.2.0 unavailable in F29 nightly")
 
@@ -954,7 +958,7 @@ class TestIPACommand(IntegrationTest):
         sssd_conf_backup = tasks.FileBackup(
             self.master, self.master.ipaplatform.paths.SSSD_CONF
         )
-        with tasks.remote_sssd_config(self.master) as sssd_config:
+        with remote_sssd_config(self.master) as sssd_config:
             sssd_config.edit_domain(
                 self.master.domain, 'ldap_deref_threshold', 0)
 
@@ -1072,8 +1076,8 @@ class TestIPACommand(IntegrationTest):
         """
         user = 'testsshuser'
         passwd = 'Secret123'
-        user_key = tasks.create_temp_file(self.master, create_file=False)
-        pem_file = tasks.create_temp_file(self.master)
+        user_key = create_temp_file(self.master, create_file=False)
+        pem_file = create_temp_file(self.master)
         # Create a user with a password
         tasks.create_active_user(self.master, user, passwd, extra_args=[
             '--homedir', '/home/{}'.format(user)])
@@ -1099,7 +1103,7 @@ class TestIPACommand(IntegrationTest):
             self.master.run_command([
                 'ipa', 'user-add-cert', user, '--certificate', cert_b64])
             # clear cache to avoid SSSD to check the user in old lookup
-            tasks.clear_sssd_cache(self.master)
+            clear_sssd_cache(self.master)
             result = self.master.run_command(
                 [
                     self.master.ipaplatform.paths.SSS_SSH_AUTHORIZEDKEYS,
@@ -1236,7 +1240,7 @@ class TestIPACommand(IntegrationTest):
         related: https://github.com/SSSD/sssd/issues/5139
         """
         # try to login with wrong password
-        sssd_version = tasks.get_sssd_version(self.master)
+        sssd_version = get_sssd_version(self.master)
         if (sssd_version < tasks.parse_version('2.3.0')):
             pytest.xfail('Fix is part of sssd 2.3.0 and is'
                          ' available from fedora32 onwards')
