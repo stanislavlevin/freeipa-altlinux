@@ -106,6 +106,9 @@ disable=
     super-with-arguments,  # pylint 2.6.0, zero-length form is syntactic sugar
     raise-missing-from,  # pylint 2.6.0, implicit exception chaining is ok
     old-division, # there is no Python2 anymore
+    consider-using-with,  # pylint 2.8.0, contextmanager is not mandatory
+    consider-using-max-builtin,  # pylint 2.8.0, can be more readable
+    consider-using-min-builtin,  # pylint 2.8.0, can be more readable
 
 [REPORTS]
 
