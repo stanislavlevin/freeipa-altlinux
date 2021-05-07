@@ -105,6 +105,9 @@ jobs:
         export LANG=en_US.utf8
         export LC_CTYPE=en_US.utf8
         locale
+        cat /run/systemd/container ||:
+        id
+        cat /proc/1/environ ||:
         $(TOX_COMMAND) -e py3,pypi,pylint3 -vv
       displayName: Tox
     - task: PublishTestResults@2
