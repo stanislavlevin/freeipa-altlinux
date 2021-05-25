@@ -184,6 +184,11 @@ def prepare_dse_changes(host, log_level=8192):
         changetype: modify
         replace: nsslapd-accesslog-logbuffering
         nsslapd-accesslog-logbuffering: off
+
+        dn: cn=bdb,cn=config,cn=ldbm database,cn=plugins,cn=config
+        changetype: modify
+        replace: nsslapd-cache-autosize
+        nsslapd-cache-autosize: 2
         """
     ).format(log_level=log_level)
     host.put_file_contents(ipatests_dse_path, ldif)

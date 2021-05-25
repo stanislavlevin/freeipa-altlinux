@@ -90,6 +90,30 @@ class IntegrationTest:
                                cls.clients, domain_level)
     @classmethod
     def uninstall(cls, mh):
+        # check DS cache
+        cls.master.run_command(
+            [
+                "dsconf",
+                "-w", "Secret123",
+                "-D", "cn=Directory Manager",
+                f"ldap://{cls.master.hostname}",
+                "monitor",
+                "dbmon",
+            ],
+            raiseonerr=False,
+        )
+        for replica in cls.replicas:
+            replica.run_command(
+                [
+                    "dsconf",
+                    "-w", "Secret123",
+                    "-D", "cn=Directory Manager",
+                    f"ldap://{replica.hostname}",
+                    "monitor",
+                    "dbmon",
+                ],
+                raiseonerr=False,
+            )
         for replica in cls.replicas:
             try:
                 tasks.run_server_del(
