@@ -22,7 +22,7 @@ function collect_logs() {
         /var/log/pki \
         /var/log/samba \
         "$BIND_DATADIR" \
-        systemd_journal.log
+        systemd_journal.log ||:
 }
 
 server_password=Secret123
