@@ -192,6 +192,9 @@ vms:
     tests:
     - test_integration/test_upgrade.py
 
+  - container_job: krbtpolicy
+    tests:
+    - test_integration/test_krbtpolicy.py
 
   # requires external DNS configuration, this is not set up yet
   # - container_job: authselect
