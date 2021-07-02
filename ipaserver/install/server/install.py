@@ -29,6 +29,7 @@ from ipapython.admintool import ScriptError
 from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
+from ipaplatform.constants import constants
 from ipalib import api, errors, x509, createntp
 from ipalib.constants import DOMAIN_LEVEL_0
 from ipalib.facts import is_ipa_configured, is_ipa_client_configured
@@ -408,8 +409,17 @@ def install_check(installer):
 
     if TIME_SERVER is None and not options.no_ntp:
         raise ScriptError(
-            "NTP daemon not found in your system. "
-            "Please, install NTP daemon and try again or use --no-ntp flag.")
+            "NTP client/server was not found in your system. "
+            "Please, install one of supported NTP client/server ({}) "
+            "and try again or use --no-ntp flag.".format(
+                ", ".join(
+                    [
+                        ntp["package_name"]
+                        for ntp in constants.TIME_SERVER_STRUCTURE.values()
+                    ]
+                )
+            )
+        )
 
     print("======================================="
           "=======================================")
