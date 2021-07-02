@@ -165,6 +165,10 @@ vms:
     containers:
       clients: 1
 
+  - container_job: ntp_nooptions
+    tests:
+    - test_integration/test_ntp_options.py::TestNTPMissingOptionsAndNTPs
+
 - vm_jobs:
   - container_job: ntp_options_openntpd
     tests:

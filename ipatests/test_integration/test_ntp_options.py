@@ -6,6 +6,7 @@ import pytest
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
+from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 
 
@@ -495,3 +496,49 @@ class TestNTPoptions(NTPoptionsBase):
         assert client_install.returncode == 0
         assert self.exp_records_msg not in client_install.stderr_text
         assert self.exp_msg_cli_success in client_install.stdout_text
+
+
+class TestNTPMissingOptionsAndNTPs(IntegrationTest):
+    """
+    Test the case when neither `--no-ntp` option was provided nor
+    any supported NTP is installed
+    """
+    err_msg = (
+        "NTP client/server was not found in your system. "
+        "Please, install one of supported NTP client/server ({}) "
+        "and try again or use --no-ntp flag.".format(
+            ", ".join(
+                [
+                    ntp["package_name"]
+                    for ntp in constants.TIME_SERVER_STRUCTURE.values()
+                ]
+            )
+        )
+    )
+
+    @classmethod
+    def install(cls, mh):
+        pass
+
+    @classmethod
+    def uninstall(cls, mh):
+        pass
+
+    @pytest.fixture(scope="class", autouse=True)
+    def prepare_ntp_deps(self, mh):
+        """Remove all NTP packages"""
+        tasks.uninstall_packages(mh.master, ["chrony", "ntpd", "openntpd"])
+
+    def test_server_install(self):
+        server_install = self.master.run_command(
+            ["ipa-server-install"], raiseonerr=False
+        )
+        assert server_install.returncode == 1
+        assert self.err_msg in server_install.stderr_text
+
+    def test_client_install(self):
+        client_install = self.master.run_command(
+            ["ipa-client-install"], raiseonerr=False
+        )
+        assert client_install.returncode == 1
+        assert self.err_msg in client_install.stderr_text
