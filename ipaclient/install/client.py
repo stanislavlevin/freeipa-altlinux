@@ -2094,8 +2094,16 @@ def install_check(options):
 
     if TIME_SERVER is None and options.conf_ntp:
         raise ScriptError(
-            "NTP daemon not found in your system. "
-            "Please, install NTP daemon and try again or use --no-ntp flag."
+            "NTP client/server was not found in your system. "
+            "Please, install one of supported NTP client/server ({}) "
+            "and try again or use --no-ntp flag.".format(
+                ", ".join(
+                    [
+                        ntp["package_name"]
+                        for ntp in constants.TIME_SERVER_STRUCTURE.values()
+                    ]
+                )
+            )
         )
 
     check_ldap_conf()
